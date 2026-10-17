@@ -1,0 +1,14 @@
+# Temporary stock references already shipped with NetTyan, NOT a Saruman voice.
+# Replace wav paths and exact transcripts with your own licensed recordings.
+neutral:
+  wav: ../../Worshiper/Voice/neutral
+  text: Чем могу быть полезен?
+happy:
+  wav: ../../Worshiper/Voice/happy
+  text: Отличные новости, у нас всё получилось!
+sad:
+  wav: ../../Worshiper/Voice/sad
+  text: Опять ничего не вышло.
+sarcastic:
+  wav: ../../Worshiper/Voice/sarcastic
+  text: Ну надо же, какая неожиданность.

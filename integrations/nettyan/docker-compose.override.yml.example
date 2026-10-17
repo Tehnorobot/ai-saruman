@@ -1,0 +1,13 @@
+# Copy as docker-compose.override.yml — picked up automatically by docker compose.
+# docker-compose.override.yml is in .gitignore, stays local to your machine.
+include:
+  - docker-compose.yml
+  # Pick if need filter
+  # - docker-compose.filter.yml
+  # TTS — pick ONE of the options below:
+  # Fish TTS, NVIDIA GPU (Windows/Linux):
+  - docker-compose.tts.yml
+  # Fish TTS, Apple Silicon MPS (Mac):
+  # - docker-compose.tts-mac.yml
+  # Simple TTS, CPU only (no GPU):
+  # - docker-compose.simpletts.yml

@@ -1,0 +1,9 @@
+services:
+  piper-tts-server:
+    build:
+      context: docker/tts/pipertts
+      dockerfile: Dockerfile
+    container_name: nettyan_piper_tts
+    ports:
+      - "22231:22231"
+    restart: on-failure

@@ -1,0 +1,78 @@
+# Звуковые сигналы интерфейса.
+#
+# Слева — имя события, которое дёргает код (и которое видит агент в инструменте
+# воспроизведения звука), справа — файл относительно этой папки.
+#
+# Сигналы из alarms/ синтезированы скриптом tools/make_fx_sounds.py,
+# реплики из records/ — синтезом речи. Всё своё, чужих сэмплов нет.
+# Как заменить на свои — docs/help/CUSTOMIZATION.md, раздел «Звуки интерфейса».
+#
+# Внизу — составные последовательности: список имён сигналов, которые
+# проигрываются подряд. Поддерживаются элементы delay (пауза в секундах)
+# и sequence (вложенная последовательность, wait — дождаться её конца).
+
+none: none.wav
+
+# --- одиночные сигналы
+warning: alarms/warning.wav
+ready: alarms/ready.wav
+busy: alarms/busy.wav
+thinking: alarms/thinking.wav
+operation: alarms/operation.wav
+database_add: alarms/database_add.wav
+bell: alarms/bell.wav
+denied: alarms/denied.wav
+poweron: alarms/power_on.wav
+poweronloud: alarms/power_on_loud.wav
+poweroff: alarms/power_off.wav
+washover_event: alarms/event_major.wav
+core_deceased: alarms/failure.wav
+
+# --- реплики диктора
+filter: records/filter.wav
+record_deleted: records/record_deleted.wav
+error: records/error.wav
+internetact: records/internet_active.wav
+powerstarting: records/system_start.wav
+banword: records/banword.wav
+stability_decrease: records/stability_decrease.wav
+stalemale: records/stalemate.wav
+personality_remove: records/personality_wiped.wav
+request_confirm: records/request_confirm.wav
+limits_applied: records/limits_applied.wav
+
+# --- составные последовательности
+internet:
+- poweron
+- none
+- none
+- internetact
+
+filtered:
+- warning
+- filter
+
+starting:
+- poweron
+- none
+- none
+- powerstarting
+
+errored:
+- poweronloud
+- none
+- none
+- stability_decrease
+
+fatal_errored:
+- poweroff
+- delay: 1
+- warning
+
+wiped_state:
+- sequence: fatal_errored
+  delay: 4
+  wait: True
+- bell
+- sequence: starting
+  wait: True

@@ -1,0 +1,19 @@
+services:
+  fishtts-speech-nt:
+    image: fishaudio/fish-speech:v1.5.1-dev
+    container_name: nettyan_fishtts
+    ports:
+      - "22231:7860"
+    volumes:
+      - ./data/fish-tts:/app
+    environment:
+      - SPEECH_CUDA_DEVICE_ARG=${SPEECH_CUDA_DEVICE_ARG}
+    command: "python -m tools.run_webui --compile ${SPEECH_CUDA_DEVICE_ARG}"
+    restart: on-failure
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

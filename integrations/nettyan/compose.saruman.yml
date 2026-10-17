@@ -1,0 +1,68 @@
+# Host-side agent/game/OBS/VTube remain native Windows processes for this phase.
+name: saruman
+services:
+  db:
+    image: postgres:15
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-saruman}
+      POSTGRES_USER: ${POSTGRES_USER:-saruman}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.saruman}
+    ports: ["127.0.0.1:5432:5432"]
+    volumes: ["saruman_db:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports: ["127.0.0.1:6379:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  filter:
+    build: ./docker/filter/feature_filter
+    restart: unless-stopped
+    ports: ["127.0.0.1:22230:22230"]
+    volumes:
+      - ./docker/filter/feature_filter:/app
+      - ./data/filter-models:/models
+    environment:
+      PYTHONPATH: /app
+  tts-simple:
+    profiles: [simple]
+    build:
+      context: .
+      dockerfile: docker/simple-tts.Dockerfile
+    restart: unless-stopped
+    ports: ["127.0.0.1:22231:22231"]
+  tts-fish:
+    profiles: [rich]
+    image: fishaudio/fish-speech:v1.5.1-dev
+    restart: unless-stopped
+    ports: ["127.0.0.1:22231:7860"]
+    volumes:
+      - ./data/fish-tts/checkpoints:/app/checkpoints
+    command: python -m tools.run_webui --compile
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+  stt:
+    profiles: [voice]
+    build: ./docker/stt/parakeet
+    restart: unless-stopped
+    ports: ["127.0.0.1:22233:8000"]
+    volumes: ["./data/stt_pipeline:/data/model"]
+    environment:
+      NUM_THREADS: ${PARAKEET_NUM_THREADS:-4}
+      PARAKEET_LANGUAGE: ru
+volumes:
+  saruman_db:

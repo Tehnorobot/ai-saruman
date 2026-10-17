@@ -1,0 +1,15 @@
+services:
+  parakeet:
+    build:
+      context: ./docker/stt/parakeet
+      dockerfile: Dockerfile
+    container_name: nettyan_parakeet
+    ports:
+      - "${PARAKEET_PORT:-22233}:8000"
+    volumes:
+      - ./data/stt_pipeline:/data/model
+    environment:
+      - NUM_THREADS=${PARAKEET_NUM_THREADS:-4}
+      - PARAKEET_LANGUAGE=${PARAKEET_LANGUAGE:-ru}
+      - STT_DEBUG_VAD_SEGMENT=${STT_DEBUG_VAD_SEGMENT:-false}
+    restart: on-failure

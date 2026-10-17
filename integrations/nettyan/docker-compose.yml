@@ -1,0 +1,28 @@
+services:
+  db:
+    image: postgres:15
+    container_name: nettyan_db
+    restart: always
+    command: >
+      postgres
+      -c log_hostname=off
+      -c tcp_keepalives_idle=60
+      -c tcp_keepalives_interval=10
+    environment:
+      POSTGRES_DB: nettyan
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: REDACTED_DB_PASSWORD
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    container_name: nettyan_redis
+    restart: always
+    ports:
+      - "6379:6379"
+
+volumes:
+  db_data:

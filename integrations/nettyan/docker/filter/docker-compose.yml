@@ -1,0 +1,13 @@
+services:
+  filter:
+    container_name: nettyan_filter
+    build:
+      context: ./feature_filter
+      dockerfile: Dockerfile
+    ports:
+      - "22230:22230"
+    volumes:
+      - ./models:/models
+      - ./feature_filter:/app
+    environment:
+      - PYTHONPATH=/app

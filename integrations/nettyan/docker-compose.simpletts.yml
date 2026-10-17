@@ -1,0 +1,9 @@
+services:
+  simple-tts-server:
+    build:
+      context: .
+      dockerfile: docker/simple-tts.Dockerfile
+    container_name: nettyan_simple_tts
+    ports:
+      - "22231:22231"
+    restart: on-failure
