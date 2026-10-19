@@ -1,0 +1,14 @@
+# Temporary stock speech samples; these do not represent a custom Saruman voice.
+# Replace wav paths and exact transcripts with your own licensed recordings.
+neutral:
+  wav: neutral
+  text: Чем могу быть полезен?
+happy:
+  wav: happy
+  text: Отличные новости, у нас всё получилось!
+sad:
+  wav: sad
+  text: Опять ничего не вышло.
+sarcastic:
+  wav: sarcastic
+  text: Ну надо же, какая неожиданность.

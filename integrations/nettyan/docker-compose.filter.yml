@@ -1,2 +1,0 @@
-include:
-  - docker/filter/docker-compose.yml

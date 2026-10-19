@@ -3,18 +3,18 @@
 Локальная лаборатория для тестирования ИИ-персонажа Minecraft: чат, память,
 граф сущностей, история диалогов и аналитика использования моделей.
 
-Игровой runtime на базе полного NetTyan находится в
-[`integrations/nettyan/`](integrations/nettyan/). Это обычные файлы этого
+Игровой runtime Сарумана находится в
+[`integrations/saruman/`](integrations/saruman/). Это обычные файлы этого
 репозитория, не submodule и не отдельный fork.
 
 ## Minecraft: с чего начать
 
 Для запуска на Windows открой
-[инструкцию Сарумана](integrations/nettyan/docs/SARUMAN_WINDOWS.md).
-Все команды игры выполняй из `integrations/nettyan/`, например:
+[инструкцию Сарумана](integrations/saruman/docs/SARUMAN_WINDOWS.md).
+Все команды игры выполняй из `integrations/saruman/`, например:
 
 ```powershell
-cd C:\Repos\ai-saruman\integrations\nettyan
+cd C:\Repos\ai-saruman\integrations\saruman
 .\scripts\start-saruman.ps1 -Doctor
 ```
 
@@ -27,7 +27,7 @@ cd C:\Repos\ai-saruman\integrations\nettyan
 
 ## Выбор LLM игрового персонажа
 
-В `integrations/nettyan/.env.saruman.example` задано:
+В `integrations/saruman/.env.saruman.example` задано:
 
 ```dotenv
 CORE_LLM_MODEL_NAME=codex/auto
@@ -37,12 +37,12 @@ CORE_LLM_MODEL_NAME=codex/auto
 выбирает модель с `isDefault`, а если такой нет — первую доступную запись.
 `Codex` здесь обозначает backend, а не имя конкретной модели.
 
-После клонирования создай локальный `integrations/nettyan/.env.saruman` из
+После клонирования создай локальный `integrations/saruman/.env.saruman` из
 шаблона и заполни настройки. Для закрепления модели замени `auto` точным ID
 из каталога. Локальный `.env.saruman` исключён из Git и не переносится при clone.
 Выбор модели в интерфейсе лаборатории не меняет настройку игрового runtime.
 
-Подробности и пример: [LLM Сарумана](integrations/nettyan/README.md#llm-сарумана).
+Подробности и пример: [LLM Сарумана](integrations/saruman/README.md#llm-сарумана).
 
 ## Запуск лаборатории
 
@@ -156,7 +156,7 @@ src/saruman/web.py обслуживает локальный интерфейс,
   Это позволит самому реализовать вызовы инструментов и цикл действий.
 
 Игровой автономный цикл, наблюдения, действия и голос сохранены в
-`integrations/nettyan/`. Лаборатория пока не управляет этим runtime и не синхронизирует
+`integrations/saruman/`. Лаборатория пока не управляет этим runtime и не синхронизирует
 с ним память. Контракты лаборатории находятся в
 `agent-workplace/agent/saruman/TOOLS.md`. Telegram/YouTube — последующие интеграции.
 

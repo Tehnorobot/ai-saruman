@@ -1,0 +1,6 @@
+services:
+  tts-fish:
+    extends:
+      file: compose.saruman.yml
+      service: tts-fish
+    profiles: !reset []

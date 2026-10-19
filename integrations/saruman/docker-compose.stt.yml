@@ -1,0 +1,6 @@
+services:
+  stt:
+    extends:
+      file: compose.saruman.yml
+      service: stt
+    profiles: !reset []

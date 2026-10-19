@@ -2,85 +2,56 @@
 
 ```text
 ai-saruman/
-├── .git/                       # единственная история проекта
-├── src/saruman/                # лаборатория, Python 3.14+
-├── agent-workplace/            # личность, Markdown-память, скрипты
-├── integrations/nettyan/       # игровой runtime, Python 3.10.x
-│   ├── src/saruman/            # launcher, doctor и адаптер модели
-│   ├── src/agent/              # поведение и игровые инструменты
-│   ├── resources/Characters/  # профили и голосовые референсы
+├── src/saruman/                 # лаборатория, Python 3.14+
+├── agent-workplace/             # основа автономного персонажа и Markdown-память
+├── integrations/saruman/        # игровой runtime, Python 3.10.x
+│   ├── src/saruman/             # launcher, doctor, Codex-адаптер
+│   ├── src/agent/               # агентный цикл и игровые инструменты
+│   ├── resources/Characters/Saruman/
+│   ├── compose.saruman.yml
 │   ├── pyproject.toml
 │   ├── uv.lock
 │   └── scripts/start-saruman.ps1
 └── docs/
 ```
 
-## Что изменилось при переносе
+Игровой компонент включён обычными файлами, без submodule и вложенной `.git`.
+История происхождения, исходные ревизии и сведения о резервных Git-метаданных
+сохранены в [SOURCE.md](../integrations/saruman/SOURCE.md).
+Лицензии и авторство компонентов сохраняются.
 
-17 октября 2026 года полный рабочий каталог NetTyan перемещён из соседней
-папки `NetTyan` в `integrations/nettyan`. Код, ресурсы, права файлов,
-лицензии и локальные изменения сохранены. Исходный commit адаптации:
-`63cf1ea173120dedaa7ced4e72978e068e9cb72e` (`feat: saruman v1`).
+## Окружения
 
-Вложенные `.git` NetTyan и agent-workplace вынесены за пределы ai-saruman:
+Лаборатория и игровой runtime — два приложения с разными зависимостями,
+`pyproject.toml`, `uv.lock` и `.venv`. Оба содержат модуль `saruman`;
+не объединяй их окружения и не добавляй оба `src` в один `PYTHONPATH`.
 
-```text
-/home/aimihail/projects/saruman/repository-backups/2026-10-17-monorepo/
-├── nettyan.git/
-├── agent-workplace.git/
-└── README.md
-```
+Пакет лаборатории называется `saruman`, команда — `saruman`.
+Пакет игры называется `saruman-minecraft`, команды — `saruman-minecraft` и
+`saruman-runtime`. Все относительные пути игры отсчитываются от `integrations/saruman`.
 
-Это локальные резервные копии истории, они не отправляются в основной GitHub.
-Незакоммиченные изменения agent-workplace оставлены в рабочей папке.
-При новом коммите ai-saruman получит файлы компонентов, но не их прежнюю историю
-как набор отдельных коммитов. Для просмотра старой истории служат резервные `.git`.
+После перемещения папки переустанови editable-пакет через `uv sync --locked
+--python 3.10 --no-default-groups --group collectors`: сгенерированные launcher-файлы
+и editable-пути в `.venv` привязаны к местоположению установки.
 
-Исходники: [NetTyan](https://github.com/3ndetz/NetTyan) и
-[agent-workplace](https://github.com/3ndetz/agent-workplace).
-Авторские `LICENSE`, `AUTHORS` и README сохранены в соответствующих компонентах.
-Особое примечание NetTyan о звуковых ресурсах оставлено в его README;
-этот перенос не меняет условия распространения ресурсов.
+## Запуск и данные
 
-## Окружения и запуск
+Лаборатория: [корневой README](../README.md).
+Игра: [Windows-инструкция](../integrations/saruman/docs/SARUMAN_WINDOWS.md).
+Основной игровой конфиг — `.env.saruman`, выбор персонажа — `SARUMAN_CHARACTER_NAME=Saruman`.
 
-Это один Git-репозиторий, но пока два независимых Python-приложения.
-Корневые `pyproject.toml` и `uv.lock` относятся только к лаборатории.
-У NetTyan свои зависимости и отдельная `.venv` в `integrations/nettyan`.
-Оба приложения содержат модуль `saruman`, поэтому смешивать их в одном
-окружении или одновременно добавлять оба `src` в PYTHONPATH нельзя.
+Оба варианта Compose используют проект `saruman` и том `saruman_saruman_db`.
+Старые контейнеры и тома не удаляются и автоматически не переносятся;
+если в другой БД уже накоплена память, сначала сделай резервную копию и перенеси её
+отдельно. Не используй `down -v` для перезапуска с сохранением данных.
 
-Лаборатория запускается из корня по [README](../README.md).
-Игровой runtime запускается из `integrations/nettyan` по
-[Windows-инструкции](../integrations/nettyan/docs/SARUMAN_WINDOWS.md).
-Все относительные пути конфигурации, Compose, миграций и ресурсов NetTyan
-по-прежнему отсчитываются от его папки, а не от корня ai-saruman.
-Его `.github/workflows` сохранены как исходные файлы: GitHub не запускает
-workflow из вложенной папки. Общий CI этим переносом не настраивался.
+Память Markdown, SQLite лаборатории и PostgreSQL игры пока не объединены.
+Полная МАС, оркестрация, ИТ-агенты и Telegram остаются отдельными будущими задачами.
 
-Лаборатория не перезапускает игровой агент автоматически; памяти Markdown,
-SQLite и PostgreSQL пока не объединены. Контейнеризация агента, Telegram
-и YouTube также не добавляются самим переносом.
+## Git
 
-## Git и Windows
-
-Основной remote: `https://github.com/Tehnorobot/ai-saruman.git`.
-Проверяй и публикуй изменения из корня ai-saruman:
-
-```bash
-git status --short
-git diff
-# После проверки файлов и секретов:
-git add .
-git diff --cached --stat
-git commit -m "Integrate NetTyan Minecraft runtime into Saruman"
-git push -u origin HEAD
-```
-
-Перенос сам по себе не создаёт коммит и не выполняет push.
-Игнорируются локальные `.env*`, кроме example-шаблонов, окружения, кэши
-и данные лаборатории. Это не заменяет проверку содержимого перед публикацией.
-
-В Windows клонируй ai-saruman либо обнови существующую копию после push.
-Не копируй Linux `.venv`: создай Windows-окружение внутри `integrations/nettyan`
-по инструкции. Секреты `.env.saruman` настраиваются локально и не приходят из Git.
+Основной remote — `https://github.com/Tehnorobot/ai-saruman.git`.
+Работай с Git из корня репозитория. Локальные `.env*`, кроме example-шаблонов,
+окружения, модели и пользовательские данные исключены из Git.
+Вложенные `.github/workflows` — исходные файлы компонента; GitHub не запускает их
+как общий CI монорепозитория.
