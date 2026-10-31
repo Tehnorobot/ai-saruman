@@ -1,0 +1,303 @@
+{
+  "type": "object",
+  "description": "Ревьюер → контроллер и кодер. Вердикт о ревью, не о прохождении игры.",
+  "required": [
+    "contract",
+    "version",
+    "scope",
+    "request_ref",
+    "disposition",
+    "findings",
+    "unknowns",
+    "reviewed_condition_ids",
+    "evidence_refs"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "contract": {
+      "description": "Имя типа сообщения; выбирает схему.",
+      "enum": [
+        "ReviewResult"
+      ],
+      "type": "string"
+    },
+    "version": {
+      "description": "Версия формата; здесь только v1.",
+      "enum": [
+        "v1"
+      ],
+      "type": "string"
+    },
+    "scope": {
+      "description": "Проект, версия ТЗ, версия кода и раунд.",
+      "$ref": "#/$defs/Scope"
+    },
+    "request_ref": {
+      "description": "Исходный запрос этого результата.",
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "disposition": {
+      "type": "string",
+      "description": "Вердикт ревью или ответ кодера; не статус теста.",
+      "enum": [
+        "changes_requested",
+        "ready_for_verification",
+        "needs_experiment"
+      ]
+    },
+    "findings": {
+      "type": "array",
+      "description": "Замечания с местом, причиной и способом проверки.",
+      "items": {
+        "$ref": "#/$defs/Finding"
+      }
+    },
+    "unknowns": {
+      "type": "array",
+      "description": "Что обзор не подтвердил.",
+      "items": {
+        "type": "string"
+      }
+    },
+    "reviewed_condition_ids": {
+      "type": "array",
+      "description": "Conditions actually reviewed against the cited specification, code and tests; not a PASS claim.",
+      "items": {
+        "type": "string"
+      }
+    },
+    "evidence_refs": {
+      "type": "array",
+      "description": "Literal tool-observed sources supporting this review, including reviews with no findings.",
+      "items": {
+        "$ref": "#/$defs/SourceRef"
+      }
+    }
+  },
+  "$defs": {
+    "ArtifactRef": {
+      "type": "object",
+      "required": [
+        "path",
+        "sha256",
+        "media_type"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Для ArtifactRef: путь относительно корня проекта; для Issue: путь поля в JSON."
+        },
+        "sha256": {
+          "description": "Хеш точного содержимого файла; проверяется при чтении.",
+          "$ref": "#/$defs/Hash"
+        },
+        "media_type": {
+          "type": "string",
+          "description": "MIME-тип файла."
+        }
+      }
+    },
+    "Finding": {
+      "type": "object",
+      "required": [
+        "id",
+        "kind",
+        "severity",
+        "requirement_ids",
+        "code_refs",
+        "observation",
+        "consequence",
+        "suggested_check"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Уникальный ID внутри соответствующего каталога."
+        },
+        "kind": {
+          "type": "string",
+          "description": "В Action: вид работы; в Finding: класс замечания; в памяти: тип записи.",
+          "enum": [
+            "requirement_violation",
+            "technical_risk",
+            "suggestion"
+          ]
+        },
+        "severity": {
+          "type": "string",
+          "description": "Риск замечания, не новое требование продукта.",
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ]
+        },
+        "requirement_ids": {
+          "type": "array",
+          "description": "Связанные требования; ID должны существовать.",
+          "items": {
+            "type": "string",
+            "description": "Как проверить предполагаемую проблему."
+          }
+        },
+        "code_refs": {
+          "type": "array",
+          "description": "Точные места в исходниках.",
+          "items": {
+            "$ref": "#/$defs/SourceRef"
+          }
+        },
+        "observation": {
+          "type": "string",
+          "description": "Что ревьюер наблюдает в коде."
+        },
+        "consequence": {
+          "type": "string",
+          "description": "Почему это может нарушить задачу."
+        },
+        "suggested_check": {
+          "type": "string",
+          "description": "Как проверить предполагаемую проблему."
+        }
+      }
+    },
+    "Hash": {
+      "type": "string"
+    },
+    "ReviewResult": {
+      "type": "object",
+      "description": "Ревьюер → контроллер и кодер. Вердикт о ревью, не о прохождении игры.",
+      "required": [
+        "contract",
+        "version",
+        "scope",
+        "request_ref",
+        "disposition",
+        "findings",
+        "unknowns",
+        "reviewed_condition_ids",
+        "evidence_refs"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "contract": {
+          "description": "Имя типа сообщения; выбирает схему.",
+          "enum": [
+            "ReviewResult"
+          ],
+          "type": "string"
+        },
+        "version": {
+          "description": "Версия формата; здесь только v1.",
+          "enum": [
+            "v1"
+          ],
+          "type": "string"
+        },
+        "scope": {
+          "description": "Проект, версия ТЗ, версия кода и раунд.",
+          "$ref": "#/$defs/Scope"
+        },
+        "request_ref": {
+          "description": "Исходный запрос этого результата.",
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        "disposition": {
+          "type": "string",
+          "description": "Вердикт ревью или ответ кодера; не статус теста.",
+          "enum": [
+            "changes_requested",
+            "ready_for_verification",
+            "needs_experiment"
+          ]
+        },
+        "findings": {
+          "type": "array",
+          "description": "Замечания с местом, причиной и способом проверки.",
+          "items": {
+            "$ref": "#/$defs/Finding"
+          }
+        },
+        "unknowns": {
+          "type": "array",
+          "description": "Что обзор не подтвердил.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "reviewed_condition_ids": {
+          "type": "array",
+          "description": "Conditions actually reviewed against the cited specification, code and tests; not a PASS claim.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "evidence_refs": {
+          "type": "array",
+          "description": "Literal tool-observed sources supporting this review, including reviews with no findings.",
+          "items": {
+            "$ref": "#/$defs/SourceRef"
+          }
+        }
+      }
+    },
+    "Scope": {
+      "type": "object",
+      "required": [
+        "project_id",
+        "spec_revision",
+        "source_revision",
+        "round"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "description": "Устойчивый ID проекта."
+        },
+        "spec_revision": {
+          "description": "SHA-256 канонического манифеста ТЗ и явных уточнений.",
+          "$ref": "#/$defs/Hash"
+        },
+        "source_revision": {
+          "description": "SHA-256 канонического манифеста исходников снимка.",
+          "$ref": "#/$defs/Hash"
+        },
+        "round": {
+          "type": "integer",
+          "description": "Номер попытки; не процент готовности."
+        }
+      }
+    },
+    "SourceRef": {
+      "type": "object",
+      "required": [
+        "artifact",
+        "start_line",
+        "end_line",
+        "excerpt"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "artifact": {
+          "description": "Файл, из которого взята цитата.",
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        "start_line": {
+          "type": "integer",
+          "description": "Первая строка фрагмента, с 1."
+        },
+        "end_line": {
+          "type": "integer",
+          "description": "Последняя строка фрагмента включительно."
+        },
+        "excerpt": {
+          "type": "string",
+          "description": "Точная цитата из указанной версии файла."
+        }
+      }
+    }
+  }
+}

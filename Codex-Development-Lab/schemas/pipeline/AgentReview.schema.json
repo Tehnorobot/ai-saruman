@@ -1,0 +1,84 @@
+{
+  "type": "object",
+  "properties": {
+    "contract": {
+      "type": "string",
+      "const": "AgentReview"
+    },
+    "version": {
+      "type": "string",
+      "const": "v1"
+    },
+    "disposition": {
+      "type": "string",
+      "enum": [
+        "changes_requested",
+        "ready_for_verification",
+        "needs_experiment"
+      ],
+      "description": "Вердикт ревью или ответ кодера; не статус теста."
+    },
+    "reviewed_condition_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "requirement_violation",
+              "technical_risk",
+              "suggestion"
+            ],
+            "description": "В Action: вид работы; в Finding: класс замечания; в памяти: тип записи."
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "high",
+              "medium",
+              "low"
+            ],
+            "description": "Риск замечания, не новое требование продукта."
+          },
+          "requirement_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "notes_md": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "severity",
+          "requirement_ids",
+          "notes_md"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "notes_md": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "contract",
+    "version",
+    "disposition",
+    "reviewed_condition_ids",
+    "findings",
+    "notes_md"
+  ],
+  "additionalProperties": false,
+  "$defs": {},
+  "title": "AgentReview - compact agent message"
+}

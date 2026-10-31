@@ -1,0 +1,52 @@
+{
+  "contract": "AgentCatalog",
+  "version": "v1",
+  "requirements": [
+    {
+      "id": "R1",
+      "statement": "Посадить саженец",
+      "source_refs": [
+        {
+          "path": "input/spec.md",
+          "start_line": 1,
+          "end_line": 2
+        }
+      ],
+      "condition_ids": [
+        "C1"
+      ]
+    },
+    {
+      "id": "R2",
+      "statement": "Вырастить дерево",
+      "source_refs": [
+        {
+          "path": "input/spec.md",
+          "start_line": 1,
+          "end_line": 2
+        }
+      ],
+      "condition_ids": [
+        "C2"
+      ]
+    }
+  ],
+  "conditions": [
+    {
+      "id": "C1",
+      "requirement_id": "R1",
+      "expected": "В мире установлен саженец",
+      "verification": "automated"
+    },
+    {
+      "id": "C2",
+      "requirement_id": "R2",
+      "expected": "Дерево выросло",
+      "verification": "automated"
+    }
+  ],
+  "open_questions": [],
+  "unclassified_source_refs": [],
+  "question_resolutions": [],
+  "notes_md": ""
+}

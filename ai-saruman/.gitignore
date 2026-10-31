@@ -1,0 +1,23 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Local character-lab conversations and usage analytics
+.saruman/
+
+# Local credentials in every component; only example templates are public.
+.env*
+!.env.example
+!.env.*.example
+
+# Never include detached repository history or Python caches.
+*.git/
+.pytest_cache/
+.ruff_cache/

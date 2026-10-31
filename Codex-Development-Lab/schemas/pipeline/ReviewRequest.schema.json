@@ -1,0 +1,238 @@
+{
+  "type": "object",
+  "properties": {
+    "contract": {
+      "const": "ReviewRequest",
+      "description": "Имя типа сообщения; выбирает схему."
+    },
+    "version": {
+      "const": "v1",
+      "description": "Версия формата; здесь только v1."
+    },
+    "scope": {
+      "$ref": "#/$defs/Scope",
+      "description": "Проект, версия ТЗ, версия кода и раунд."
+    },
+    "subject": {
+      "type": "string",
+      "enum": [
+        "decomposition",
+        "plan",
+        "code",
+        "scenarios",
+        "catalog"
+      ],
+      "description": "Что рассматривает ревьюер: разбиение, план, код или тесты."
+    },
+    "context_ref": {
+      "$ref": "#/$defs/ArtifactRef",
+      "description": "Вход рассматриваемого этапа: DecompositionInput, PlannerInput или CoderAssignment."
+    },
+    "catalog_ref": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Принятый каталог требований; null допустим при начальной проверке."
+    },
+    "subject_refs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/ArtifactRef"
+      },
+      "description": "Документы и файлы, которые нужно проверить."
+    },
+    "diff_ref": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Изменения относительно базы; null для этапа без diff."
+    },
+    "memory_index_ref": {
+      "$ref": "#/$defs/ArtifactRef",
+      "description": "Индекс полного архива; записи читаются по необходимости."
+    },
+    "focus": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "Риски и вопросы, на которых сосредоточить обзор."
+    }
+  },
+  "required": [
+    "contract",
+    "version",
+    "scope",
+    "subject",
+    "context_ref",
+    "catalog_ref",
+    "subject_refs",
+    "diff_ref",
+    "memory_index_ref",
+    "focus"
+  ],
+  "additionalProperties": false,
+  "description": "Контроллер → ревьюер. Независимое чтение кода, условий и тестов.",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ReviewRequest — runtime v1",
+  "$defs": {
+    "ArtifactRef": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Для ArtifactRef: путь относительно корня проекта; для Issue: путь поля в JSON.",
+          "pattern": "^(?!/)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//)(?!.*[\\\\:\\x00])[^/]+(?:/[^/]+)*$"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Hash",
+          "description": "Хеш точного содержимого файла; проверяется при чтении."
+        },
+        "media_type": {
+          "type": "string",
+          "minLength": 1,
+          "description": "MIME-тип файла."
+        }
+      },
+      "required": [
+        "path",
+        "sha256",
+        "media_type"
+      ],
+      "additionalProperties": false
+    },
+    "Hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "ReviewRequest": {
+      "type": "object",
+      "properties": {
+        "contract": {
+          "const": "ReviewRequest",
+          "description": "Имя типа сообщения; выбирает схему."
+        },
+        "version": {
+          "const": "v1",
+          "description": "Версия формата; здесь только v1."
+        },
+        "scope": {
+          "$ref": "#/$defs/Scope",
+          "description": "Проект, версия ТЗ, версия кода и раунд."
+        },
+        "subject": {
+          "type": "string",
+          "enum": [
+            "decomposition",
+            "plan",
+            "code",
+            "scenarios",
+            "catalog"
+          ],
+          "description": "Что рассматривает ревьюер: разбиение, план, код или тесты."
+        },
+        "context_ref": {
+          "$ref": "#/$defs/ArtifactRef",
+          "description": "Вход рассматриваемого этапа: DecompositionInput, PlannerInput или CoderAssignment."
+        },
+        "catalog_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ArtifactRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Принятый каталог требований; null допустим при начальной проверке."
+        },
+        "subject_refs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ArtifactRef"
+          },
+          "description": "Документы и файлы, которые нужно проверить."
+        },
+        "diff_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ArtifactRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Изменения относительно базы; null для этапа без diff."
+        },
+        "memory_index_ref": {
+          "$ref": "#/$defs/ArtifactRef",
+          "description": "Индекс полного архива; записи читаются по необходимости."
+        },
+        "focus": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Риски и вопросы, на которых сосредоточить обзор."
+        }
+      },
+      "required": [
+        "contract",
+        "version",
+        "scope",
+        "subject",
+        "context_ref",
+        "catalog_ref",
+        "subject_refs",
+        "diff_ref",
+        "memory_index_ref",
+        "focus"
+      ],
+      "additionalProperties": false,
+      "description": "Контроллер → ревьюер. Независимое чтение кода, условий и тестов."
+    },
+    "Scope": {
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Устойчивый ID проекта."
+        },
+        "spec_revision": {
+          "$ref": "#/$defs/Hash",
+          "description": "SHA-256 канонического манифеста ТЗ и явных уточнений."
+        },
+        "source_revision": {
+          "$ref": "#/$defs/Hash",
+          "description": "SHA-256 канонического манифеста исходников снимка."
+        },
+        "round": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Номер попытки; не процент готовности."
+        }
+      },
+      "required": [
+        "project_id",
+        "spec_revision",
+        "source_revision",
+        "round"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

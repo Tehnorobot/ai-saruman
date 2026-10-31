@@ -1,0 +1,202 @@
+{
+  "type": "object",
+  "required": [
+    "contract",
+    "version",
+    "strategy",
+    "actions",
+    "notes_md",
+    "regression_condition_ids",
+    "deferred",
+    "manual_checks",
+    "request_graph_change",
+    "external_updates"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "contract": {
+      "type": "string",
+      "enum": [
+        "AgentPlan"
+      ]
+    },
+    "version": {
+      "type": "string",
+      "enum": [
+        "v1"
+      ]
+    },
+    "strategy": {
+      "type": "string",
+      "enum": [
+        "implement",
+        "repair",
+        "diagnose",
+        "reflect",
+        "verify",
+        "manual",
+        "wait"
+      ],
+      "description": "Выбранный режим следующей работы."
+    },
+    "actions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "kind",
+          "task_ids",
+          "condition_ids",
+          "goal",
+          "expected_observation"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "implement",
+              "repair",
+              "diagnose",
+              "verify",
+              "manual"
+            ],
+            "description": "В Action: вид работы; в Finding: класс замечания; в памяти: тип записи."
+          },
+          "task_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "condition_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "goal": {
+            "type": "string"
+          },
+          "expected_observation": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "notes_md": {
+      "type": "string"
+    },
+    "regression_condition_ids": {
+      "type": "array",
+      "description": "Previously implemented conditions whose scenarios must be rerun alongside the selected work. No fixed count.",
+      "items": {
+        "type": "string"
+      }
+    },
+    "deferred": {
+      "type": "array",
+      "description": "Задачи, перенесённые с объяснением.",
+      "items": {
+        "$ref": "#/$defs/DeferredTask"
+      }
+    },
+    "manual_checks": {
+      "type": "array",
+      "description": "Ручные проверки с инструкцией; не дают автоматического PASS.",
+      "items": {
+        "$ref": "#/$defs/ManualCheck"
+      }
+    },
+    "request_graph_change": {
+      "type": "boolean"
+    },
+    "external_updates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "task_id",
+          "state",
+          "reason",
+          "return_when"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "task_id": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "blocked",
+              "resolved"
+            ]
+          },
+          "reason": {
+            "type": "string"
+          },
+          "return_when": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "DeferredTask": {
+      "type": "object",
+      "required": [
+        "task_id",
+        "reason",
+        "return_when"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "task_id": {
+          "type": "string",
+          "description": "ID задачи."
+        },
+        "reason": {
+          "type": "string",
+          "description": "Причина переноса."
+        },
+        "return_when": {
+          "type": "string",
+          "description": "Условия возвращения; не безусловный повтор."
+        }
+      }
+    },
+    "ManualCheck": {
+      "type": "object",
+      "required": [
+        "condition_ids",
+        "steps",
+        "expected"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "condition_ids": {
+          "type": "array",
+          "description": "Проверяемые условия; ID должны существовать.",
+          "items": {
+            "type": "string",
+            "description": "Ожидаемый результат; в Checkpoint это сравниваемое значение."
+          }
+        },
+        "steps": {
+          "type": "array",
+          "description": "Последовательность действий.",
+          "items": {
+            "type": "string",
+            "description": "Ожидаемый результат; в Checkpoint это сравниваемое значение."
+          }
+        },
+        "expected": {
+          "type": "string",
+          "description": "Ожидаемый результат; в Checkpoint это сравниваемое значение."
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,438 @@
+{
+  "type": "object",
+  "description": "Планировщик → контроллер. Адаптивный пакет, гипотезы, отложенные задачи.",
+  "required": [
+    "contract",
+    "version",
+    "scope",
+    "strategy",
+    "rationale",
+    "actions",
+    "hypotheses",
+    "deferred",
+    "manual_checks",
+    "replacement_graph_ref",
+    "regression_condition_ids"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "contract": {
+      "description": "Имя типа сообщения; выбирает схему.",
+      "enum": [
+        "PlannerDecision"
+      ],
+      "type": "string"
+    },
+    "version": {
+      "description": "Версия формата; здесь только v1.",
+      "enum": [
+        "v1"
+      ],
+      "type": "string"
+    },
+    "scope": {
+      "description": "Проект, версия ТЗ, версия кода и раунд.",
+      "$ref": "#/$defs/Scope"
+    },
+    "strategy": {
+      "type": "string",
+      "description": "Выбранный режим следующей работы.",
+      "enum": [
+        "implement",
+        "repair",
+        "diagnose",
+        "reflect",
+        "verify",
+        "manual",
+        "wait"
+      ]
+    },
+    "rationale": {
+      "type": "string",
+      "description": "Краткое основание выбора пакета."
+    },
+    "actions": {
+      "type": "array",
+      "description": "Адаптивный пакет работ, без фиксированного числа действий.",
+      "items": {
+        "$ref": "#/$defs/Action"
+      }
+    },
+    "hypotheses": {
+      "type": "array",
+      "description": "Предположения, отделённые от установленных фактов.",
+      "items": {
+        "$ref": "#/$defs/Hypothesis"
+      }
+    },
+    "deferred": {
+      "type": "array",
+      "description": "Задачи, перенесённые с объяснением.",
+      "items": {
+        "$ref": "#/$defs/DeferredTask"
+      }
+    },
+    "manual_checks": {
+      "type": "array",
+      "description": "Ручные проверки с инструкцией; не дают автоматического PASS.",
+      "items": {
+        "$ref": "#/$defs/ManualCheck"
+      }
+    },
+    "replacement_graph_ref": {
+      "description": "Полный новый TaskGraph; null, если граф не меняется.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "regression_condition_ids": {
+      "type": "array",
+      "description": "Previously implemented conditions whose scenarios must be rerun alongside the selected work. No fixed count.",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "$defs": {
+    "Action": {
+      "type": "object",
+      "required": [
+        "id",
+        "task_ids",
+        "kind",
+        "goal",
+        "expected_observation",
+        "depends_on_action_ids",
+        "condition_ids"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Уникальный ID внутри соответствующего каталога."
+        },
+        "task_ids": {
+          "type": "array",
+          "description": "Задачи, затронутые сообщением.",
+          "items": {
+            "type": "string",
+            "description": "Как отличить полезный результат от повторения попытки."
+          }
+        },
+        "kind": {
+          "type": "string",
+          "description": "В Action: вид работы; в Finding: класс замечания; в памяти: тип записи.",
+          "enum": [
+            "implement",
+            "repair",
+            "diagnose",
+            "verify",
+            "manual"
+          ]
+        },
+        "goal": {
+          "type": "string",
+          "description": "Что изменить или выяснить."
+        },
+        "expected_observation": {
+          "type": "string",
+          "description": "Как отличить полезный результат от повторения попытки."
+        },
+        "depends_on_action_ids": {
+          "type": "array",
+          "description": "Порядок зависимых действий внутри пакета.",
+          "items": {
+            "type": "string",
+            "description": "Как отличить полезный результат от повторения попытки."
+          }
+        },
+        "condition_ids": {
+          "type": "array",
+          "description": "Проверяемые условия; ID должны существовать.",
+          "items": {
+            "type": "string",
+            "description": "Как отличить полезный результат от повторения попытки."
+          }
+        }
+      }
+    },
+    "ArtifactRef": {
+      "type": "object",
+      "required": [
+        "path",
+        "sha256",
+        "media_type"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Для ArtifactRef: путь относительно корня проекта; для Issue: путь поля в JSON."
+        },
+        "sha256": {
+          "description": "Хеш точного содержимого файла; проверяется при чтении.",
+          "$ref": "#/$defs/Hash"
+        },
+        "media_type": {
+          "type": "string",
+          "description": "MIME-тип файла."
+        }
+      }
+    },
+    "DeferredTask": {
+      "type": "object",
+      "required": [
+        "task_id",
+        "reason",
+        "return_when"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "task_id": {
+          "type": "string",
+          "description": "ID задачи."
+        },
+        "reason": {
+          "type": "string",
+          "description": "Причина переноса."
+        },
+        "return_when": {
+          "type": "string",
+          "description": "Условия возвращения; не безусловный повтор."
+        }
+      }
+    },
+    "Hash": {
+      "type": "string"
+    },
+    "Hypothesis": {
+      "type": "object",
+      "required": [
+        "id",
+        "statement",
+        "observation_refs",
+        "experiment",
+        "prediction"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Уникальный ID внутри соответствующего каталога."
+        },
+        "statement": {
+          "type": "string",
+          "description": "Утверждение или проверяемая гипотеза."
+        },
+        "observation_refs": {
+          "type": "array",
+          "description": "Реальные наблюдения, на которых основана гипотеза.",
+          "items": {
+            "$ref": "#/$defs/SourceRef"
+          }
+        },
+        "experiment": {
+          "type": "string",
+          "description": "Проверка, способная подтвердить или опровергнуть гипотезу."
+        },
+        "prediction": {
+          "type": "string",
+          "description": "Результат, ожидаемый при верной гипотезе."
+        }
+      }
+    },
+    "ManualCheck": {
+      "type": "object",
+      "required": [
+        "condition_ids",
+        "steps",
+        "expected"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "condition_ids": {
+          "type": "array",
+          "description": "Проверяемые условия; ID должны существовать.",
+          "items": {
+            "type": "string",
+            "description": "Ожидаемый результат; в Checkpoint это сравниваемое значение."
+          }
+        },
+        "steps": {
+          "type": "array",
+          "description": "Последовательность действий.",
+          "items": {
+            "type": "string",
+            "description": "Ожидаемый результат; в Checkpoint это сравниваемое значение."
+          }
+        },
+        "expected": {
+          "type": "string",
+          "description": "Ожидаемый результат; в Checkpoint это сравниваемое значение."
+        }
+      }
+    },
+    "PlannerDecision": {
+      "type": "object",
+      "description": "Планировщик → контроллер. Адаптивный пакет, гипотезы, отложенные задачи.",
+      "required": [
+        "contract",
+        "version",
+        "scope",
+        "strategy",
+        "rationale",
+        "actions",
+        "hypotheses",
+        "deferred",
+        "manual_checks",
+        "replacement_graph_ref",
+        "regression_condition_ids"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "contract": {
+          "description": "Имя типа сообщения; выбирает схему.",
+          "enum": [
+            "PlannerDecision"
+          ],
+          "type": "string"
+        },
+        "version": {
+          "description": "Версия формата; здесь только v1.",
+          "enum": [
+            "v1"
+          ],
+          "type": "string"
+        },
+        "scope": {
+          "description": "Проект, версия ТЗ, версия кода и раунд.",
+          "$ref": "#/$defs/Scope"
+        },
+        "strategy": {
+          "type": "string",
+          "description": "Выбранный режим следующей работы.",
+          "enum": [
+            "implement",
+            "repair",
+            "diagnose",
+            "reflect",
+            "verify",
+            "manual",
+            "wait"
+          ]
+        },
+        "rationale": {
+          "type": "string",
+          "description": "Краткое основание выбора пакета."
+        },
+        "actions": {
+          "type": "array",
+          "description": "Адаптивный пакет работ, без фиксированного числа действий.",
+          "items": {
+            "$ref": "#/$defs/Action"
+          }
+        },
+        "hypotheses": {
+          "type": "array",
+          "description": "Предположения, отделённые от установленных фактов.",
+          "items": {
+            "$ref": "#/$defs/Hypothesis"
+          }
+        },
+        "deferred": {
+          "type": "array",
+          "description": "Задачи, перенесённые с объяснением.",
+          "items": {
+            "$ref": "#/$defs/DeferredTask"
+          }
+        },
+        "manual_checks": {
+          "type": "array",
+          "description": "Ручные проверки с инструкцией; не дают автоматического PASS.",
+          "items": {
+            "$ref": "#/$defs/ManualCheck"
+          }
+        },
+        "replacement_graph_ref": {
+          "description": "Полный новый TaskGraph; null, если граф не меняется.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ArtifactRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "regression_condition_ids": {
+          "type": "array",
+          "description": "Previously implemented conditions whose scenarios must be rerun alongside the selected work. No fixed count.",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "Scope": {
+      "type": "object",
+      "required": [
+        "project_id",
+        "spec_revision",
+        "source_revision",
+        "round"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "description": "Устойчивый ID проекта."
+        },
+        "spec_revision": {
+          "description": "SHA-256 канонического манифеста ТЗ и явных уточнений.",
+          "$ref": "#/$defs/Hash"
+        },
+        "source_revision": {
+          "description": "SHA-256 канонического манифеста исходников снимка.",
+          "$ref": "#/$defs/Hash"
+        },
+        "round": {
+          "type": "integer",
+          "description": "Номер попытки; не процент готовности."
+        }
+      }
+    },
+    "SourceRef": {
+      "type": "object",
+      "required": [
+        "artifact",
+        "start_line",
+        "end_line",
+        "excerpt"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "artifact": {
+          "description": "Файл, из которого взята цитата.",
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        "start_line": {
+          "type": "integer",
+          "description": "Первая строка фрагмента, с 1."
+        },
+        "end_line": {
+          "type": "integer",
+          "description": "Последняя строка фрагмента включительно."
+        },
+        "excerpt": {
+          "type": "string",
+          "description": "Точная цитата из указанной версии файла."
+        }
+      }
+    }
+  }
+}

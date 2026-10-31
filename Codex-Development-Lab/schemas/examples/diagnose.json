@@ -1,0 +1,23 @@
+{
+  "summary": "Inspect the observed movement failure and isolate its cause.",
+  "action": {
+    "kind": "diagnose_failure",
+    "target": "movement",
+    "reason": "Inspect the observed movement failure and isolate its cause.",
+    "evidence_refs": [
+      {
+        "path": ".lab-feedback/trace.txt",
+        "start_line": 1,
+        "end_line": 1,
+        "excerpt": "Expected movement of one block but observed zero blocks."
+      }
+    ],
+    "diagnostic": "Observed no movement after valid input. Inspect the movement handler and run one bounded input-dispatch experiment."
+  },
+  "hypotheses": [
+    "The movement input handler returns before dispatching the movement command."
+  ],
+  "next_steps": [
+    "Inspect the input handler and compare dispatched events with the failing assertion."
+  ]
+}

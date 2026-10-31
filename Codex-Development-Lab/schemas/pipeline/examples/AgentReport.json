@@ -1,0 +1,11 @@
+{
+  "contract": "AgentReport",
+  "version": "v1",
+  "scenario_manifest_path": "tests/scenarios.json",
+  "notes_md": "Добавлен вызов посадки",
+  "responses": [],
+  "unverified_claims": [
+    "Посадка должна завершаться"
+  ],
+  "open_issues": []
+}

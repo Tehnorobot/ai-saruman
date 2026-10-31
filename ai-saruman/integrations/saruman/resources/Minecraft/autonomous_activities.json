@@ -1,0 +1,6 @@
+[
+  {"id": "farm", "label": "Посев и сбор спелого урожая", "weight": 3, "tool": "farm_crops", "required_tools": ["get_inventory"], "arguments": {"mode": "auto"}},
+  {"id": "hunt", "label": "Поиск строго враждебных мобов", "weight": 2, "tool": "hunt_hostiles", "required_tools": ["get_inventory", "attack_hostile"], "arguments": {}},
+  {"id": "explore", "label": "Исследование окрестностей", "weight": 2, "tool": "explore_nearby", "required_tools": ["get_inventory", "agent_action"], "arguments": {}},
+  {"id": "trees", "label": "Посадка деревьев", "weight": 2, "tool": "tend_trees", "required_tools": ["get_inventory", "agent_action", "obtain_item"], "arguments": {}}
+]

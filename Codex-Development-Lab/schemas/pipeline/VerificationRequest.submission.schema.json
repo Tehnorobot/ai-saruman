@@ -1,0 +1,198 @@
+{
+  "type": "object",
+  "description": "Контроллер → независимый исполнитель. Снимок кода и выбранные проверки.",
+  "required": [
+    "contract",
+    "version",
+    "scope",
+    "source_snapshot_ref",
+    "scenario_manifest_ref",
+    "scenario_ids",
+    "regression_scenario_ids",
+    "run_kind",
+    "runner_profile"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "contract": {
+      "description": "Имя типа сообщения; выбирает схему.",
+      "enum": [
+        "VerificationRequest"
+      ],
+      "type": "string"
+    },
+    "version": {
+      "description": "Версия формата; здесь только v1.",
+      "enum": [
+        "v1"
+      ],
+      "type": "string"
+    },
+    "scope": {
+      "description": "Проект, версия ТЗ, версия кода и раунд.",
+      "$ref": "#/$defs/Scope"
+    },
+    "source_snapshot_ref": {
+      "description": "Архив снимка исходников; состав сверяется с source_revision.",
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "scenario_manifest_ref": {
+      "description": "Версия описания сценариев для данного снимка.",
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "scenario_ids": {
+      "type": "array",
+      "description": "Целевые сценарии.",
+      "items": {
+        "type": "string"
+      }
+    },
+    "regression_scenario_ids": {
+      "type": "array",
+      "description": "Проверки ранее работавших затронутых функций.",
+      "items": {
+        "type": "string"
+      }
+    },
+    "run_kind": {
+      "type": "string",
+      "description": "Целевой, регрессионный или полный запуск.",
+      "enum": [
+        "targeted",
+        "regression",
+        "full"
+      ]
+    },
+    "runner_profile": {
+      "type": "string",
+      "description": "Имя доверенного профиля; не произвольная shell-команда модели."
+    }
+  },
+  "$defs": {
+    "ArtifactRef": {
+      "type": "object",
+      "required": [
+        "path",
+        "sha256",
+        "media_type"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Для ArtifactRef: путь относительно корня проекта; для Issue: путь поля в JSON."
+        },
+        "sha256": {
+          "description": "Хеш точного содержимого файла; проверяется при чтении.",
+          "$ref": "#/$defs/Hash"
+        },
+        "media_type": {
+          "type": "string",
+          "description": "MIME-тип файла."
+        }
+      }
+    },
+    "Hash": {
+      "type": "string"
+    },
+    "Scope": {
+      "type": "object",
+      "required": [
+        "project_id",
+        "spec_revision",
+        "source_revision",
+        "round"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "description": "Устойчивый ID проекта."
+        },
+        "spec_revision": {
+          "description": "SHA-256 канонического манифеста ТЗ и явных уточнений.",
+          "$ref": "#/$defs/Hash"
+        },
+        "source_revision": {
+          "description": "SHA-256 канонического манифеста исходников снимка.",
+          "$ref": "#/$defs/Hash"
+        },
+        "round": {
+          "type": "integer",
+          "description": "Номер попытки; не процент готовности."
+        }
+      }
+    },
+    "VerificationRequest": {
+      "type": "object",
+      "description": "Контроллер → независимый исполнитель. Снимок кода и выбранные проверки.",
+      "required": [
+        "contract",
+        "version",
+        "scope",
+        "source_snapshot_ref",
+        "scenario_manifest_ref",
+        "scenario_ids",
+        "regression_scenario_ids",
+        "run_kind",
+        "runner_profile"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "contract": {
+          "description": "Имя типа сообщения; выбирает схему.",
+          "enum": [
+            "VerificationRequest"
+          ],
+          "type": "string"
+        },
+        "version": {
+          "description": "Версия формата; здесь только v1.",
+          "enum": [
+            "v1"
+          ],
+          "type": "string"
+        },
+        "scope": {
+          "description": "Проект, версия ТЗ, версия кода и раунд.",
+          "$ref": "#/$defs/Scope"
+        },
+        "source_snapshot_ref": {
+          "description": "Архив снимка исходников; состав сверяется с source_revision.",
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        "scenario_manifest_ref": {
+          "description": "Версия описания сценариев для данного снимка.",
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        "scenario_ids": {
+          "type": "array",
+          "description": "Целевые сценарии.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "regression_scenario_ids": {
+          "type": "array",
+          "description": "Проверки ранее работавших затронутых функций.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "run_kind": {
+          "type": "string",
+          "description": "Целевой, регрессионный или полный запуск.",
+          "enum": [
+            "targeted",
+            "regression",
+            "full"
+          ]
+        },
+        "runner_profile": {
+          "type": "string",
+          "description": "Имя доверенного профиля; не произвольная shell-команда модели."
+        }
+      }
+    }
+  }
+}

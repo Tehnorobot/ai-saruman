@@ -1,0 +1,323 @@
+{
+  "type": "object",
+  "description": "Шлюз → контроллер. Публичный ответ, расход и фактическая модель.",
+  "required": [
+    "contract",
+    "version",
+    "request_id",
+    "outcome",
+    "actual_role_config",
+    "model_changed",
+    "model_change_reason",
+    "output_ref",
+    "public_transcript_ref",
+    "usage",
+    "error"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "contract": {
+      "description": "Имя типа сообщения; выбирает схему.",
+      "enum": [
+        "GatewayResult"
+      ],
+      "type": "string"
+    },
+    "version": {
+      "description": "Версия формата; здесь только v1.",
+      "enum": [
+        "v1"
+      ],
+      "type": "string"
+    },
+    "request_id": {
+      "type": "string",
+      "description": "ID запроса модели."
+    },
+    "outcome": {
+      "type": "string",
+      "description": "Для Task: результат функции; для шлюза: завершение или ошибка.",
+      "enum": [
+        "completed",
+        "incomplete",
+        "error"
+      ]
+    },
+    "actual_role_config": {
+      "description": "Фактические роль, провайдер и модель.",
+      "$ref": "#/$defs/RoleConfig"
+    },
+    "model_changed": {
+      "type": "boolean",
+      "description": "Была ли замена выбранной модели."
+    },
+    "model_change_reason": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Причина явной замены; null, если её не было."
+    },
+    "output_ref": {
+      "description": "Публичный ответ; null, если результата нет.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "public_transcript_ref": {
+      "description": "Публичный журнал запросов и инструментов, без секретов.",
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "usage": {
+      "description": "Нормализованный расход; кэш входит в input_tokens.",
+      "$ref": "#/$defs/Usage"
+    },
+    "error": {
+      "description": "Структурированная ошибка, либо null.",
+      "anyOf": [
+        {
+          "type": "object",
+          "required": [
+            "code",
+            "message",
+            "retryable"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "code": {
+              "type": "string",
+              "description": "Код ошибки для обработки программой."
+            },
+            "message": {
+              "type": "string",
+              "description": "Сообщение ошибки."
+            },
+            "retryable": {
+              "type": "boolean",
+              "description": "Имеет ли смысл повтор при изменении условий или после ожидания."
+            }
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "$defs": {
+    "ArtifactRef": {
+      "type": "object",
+      "required": [
+        "path",
+        "sha256",
+        "media_type"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Для ArtifactRef: путь относительно корня проекта; для Issue: путь поля в JSON."
+        },
+        "sha256": {
+          "description": "Хеш точного содержимого файла; проверяется при чтении.",
+          "$ref": "#/$defs/Hash"
+        },
+        "media_type": {
+          "type": "string",
+          "description": "MIME-тип файла."
+        }
+      }
+    },
+    "GatewayResult": {
+      "type": "object",
+      "description": "Шлюз → контроллер. Публичный ответ, расход и фактическая модель.",
+      "required": [
+        "contract",
+        "version",
+        "request_id",
+        "outcome",
+        "actual_role_config",
+        "model_changed",
+        "model_change_reason",
+        "output_ref",
+        "public_transcript_ref",
+        "usage",
+        "error"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "contract": {
+          "description": "Имя типа сообщения; выбирает схему.",
+          "enum": [
+            "GatewayResult"
+          ],
+          "type": "string"
+        },
+        "version": {
+          "description": "Версия формата; здесь только v1.",
+          "enum": [
+            "v1"
+          ],
+          "type": "string"
+        },
+        "request_id": {
+          "type": "string",
+          "description": "ID запроса модели."
+        },
+        "outcome": {
+          "type": "string",
+          "description": "Для Task: результат функции; для шлюза: завершение или ошибка.",
+          "enum": [
+            "completed",
+            "incomplete",
+            "error"
+          ]
+        },
+        "actual_role_config": {
+          "description": "Фактические роль, провайдер и модель.",
+          "$ref": "#/$defs/RoleConfig"
+        },
+        "model_changed": {
+          "type": "boolean",
+          "description": "Была ли замена выбранной модели."
+        },
+        "model_change_reason": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Причина явной замены; null, если её не было."
+        },
+        "output_ref": {
+          "description": "Публичный ответ; null, если результата нет.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ArtifactRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "public_transcript_ref": {
+          "description": "Публичный журнал запросов и инструментов, без секретов.",
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        "usage": {
+          "description": "Нормализованный расход; кэш входит в input_tokens.",
+          "$ref": "#/$defs/Usage"
+        },
+        "error": {
+          "description": "Структурированная ошибка, либо null.",
+          "anyOf": [
+            {
+              "type": "object",
+              "required": [
+                "code",
+                "message",
+                "retryable"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "code": {
+                  "type": "string",
+                  "description": "Код ошибки для обработки программой."
+                },
+                "message": {
+                  "type": "string",
+                  "description": "Сообщение ошибки."
+                },
+                "retryable": {
+                  "type": "boolean",
+                  "description": "Имеет ли смысл повтор при изменении условий или после ожидания."
+                }
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "Hash": {
+      "type": "string"
+    },
+    "RoleConfig": {
+      "type": "object",
+      "required": [
+        "role",
+        "provider",
+        "model",
+        "reasoning"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "role": {
+          "type": "string",
+          "description": "Роль автора сообщения модели.",
+          "enum": [
+            "planner",
+            "coder",
+            "reviewer"
+          ]
+        },
+        "provider": {
+          "type": "string",
+          "description": "Выбранный API-провайдер."
+        },
+        "model": {
+          "type": "string",
+          "description": "Точное имя модели у провайдера."
+        },
+        "reasoning": {
+          "type": "string",
+          "description": "Значение из возможностей выбранной модели; default означает штатное."
+        }
+      }
+    },
+    "Usage": {
+      "type": "object",
+      "required": [
+        "input_tokens",
+        "output_tokens",
+        "cache_read_tokens",
+        "cache_write_tokens",
+        "measurement"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "input_tokens": {
+          "type": "integer",
+          "description": "Весь вход, включая чтение и запись кэша."
+        },
+        "output_tokens": {
+          "type": "integer",
+          "description": "Выход модели."
+        },
+        "cache_read_tokens": {
+          "type": "integer",
+          "description": "Часть входа, прочитанная из кэша."
+        },
+        "cache_write_tokens": {
+          "type": "integer",
+          "description": "Часть входа, записанная в кэш."
+        },
+        "measurement": {
+          "type": "string",
+          "description": "provider: измерено; estimated: оценено; unavailable: измерения нет.",
+          "enum": [
+            "provider",
+            "estimated",
+            "unavailable"
+          ]
+        }
+      }
+    }
+  }
+}

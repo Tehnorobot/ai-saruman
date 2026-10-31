@@ -1,0 +1,258 @@
+{
+  "type": "object",
+  "properties": {
+    "contract": {
+      "const": "PreparationHandoff"
+    },
+    "version": {
+      "const": "v1"
+    },
+    "scope": {
+      "$ref": "#/$defs/Scope"
+    },
+    "catalog_ref": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "graph_ref": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "rationale": {
+      "type": "string",
+      "minLength": 1
+    },
+    "working_decisions": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "tasks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "task_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ready",
+              "experiment",
+              "needs_user",
+              "external"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1
+          },
+          "experiment": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "return_when": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "task_id",
+          "status",
+          "reason",
+          "experiment",
+          "return_when"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "unresolved_review_refs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/ArtifactRef"
+      }
+    }
+  },
+  "required": [
+    "contract",
+    "version",
+    "scope",
+    "catalog_ref",
+    "graph_ref",
+    "rationale",
+    "working_decisions",
+    "tasks",
+    "unresolved_review_refs"
+  ],
+  "additionalProperties": false,
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PreparationHandoff — runtime v1",
+  "$defs": {
+    "ArtifactRef": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Для ArtifactRef: путь относительно корня проекта; для Issue: путь поля в JSON.",
+          "pattern": "^(?!/)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//)(?!.*[\\\\:\\x00])[^/]+(?:/[^/]+)*$"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Hash",
+          "description": "Хеш точного содержимого файла; проверяется при чтении."
+        },
+        "media_type": {
+          "type": "string",
+          "minLength": 1,
+          "description": "MIME-тип файла."
+        }
+      },
+      "required": [
+        "path",
+        "sha256",
+        "media_type"
+      ],
+      "additionalProperties": false
+    },
+    "Hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "PreparationHandoff": {
+      "type": "object",
+      "properties": {
+        "contract": {
+          "const": "PreparationHandoff"
+        },
+        "version": {
+          "const": "v1"
+        },
+        "scope": {
+          "$ref": "#/$defs/Scope"
+        },
+        "catalog_ref": {
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        "graph_ref": {
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        "rationale": {
+          "type": "string",
+          "minLength": 1
+        },
+        "working_decisions": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "tasks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "task_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "ready",
+                  "experiment",
+                  "needs_user",
+                  "external"
+                ]
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1
+              },
+              "experiment": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "return_when": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "task_id",
+              "status",
+              "reason",
+              "experiment",
+              "return_when"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "unresolved_review_refs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ArtifactRef"
+          }
+        }
+      },
+      "required": [
+        "contract",
+        "version",
+        "scope",
+        "catalog_ref",
+        "graph_ref",
+        "rationale",
+        "working_decisions",
+        "tasks",
+        "unresolved_review_refs"
+      ],
+      "additionalProperties": false
+    },
+    "Scope": {
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Устойчивый ID проекта."
+        },
+        "spec_revision": {
+          "$ref": "#/$defs/Hash",
+          "description": "SHA-256 канонического манифеста ТЗ и явных уточнений."
+        },
+        "source_revision": {
+          "$ref": "#/$defs/Hash",
+          "description": "SHA-256 канонического манифеста исходников снимка."
+        },
+        "round": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Номер попытки; не процент готовности."
+        }
+      },
+      "required": [
+        "project_id",
+        "spec_revision",
+        "source_revision",
+        "round"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

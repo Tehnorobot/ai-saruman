@@ -1,0 +1,17 @@
+{
+  "contract": "MemoryResult",
+  "version": "v1",
+  "records": [
+    {
+      "record_id": "M-result-3",
+      "summary": "Место найдено; посадка не выполнена",
+      "full_record_ref": {
+        "path": "memory/records/M-result-3.json",
+        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "media_type": "application/json"
+      }
+    }
+  ],
+  "next_cursor": null,
+  "omitted_records": 0
+}

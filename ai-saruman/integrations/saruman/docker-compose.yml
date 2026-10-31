@@ -1,0 +1,13 @@
+# Shared base definitions; use --env-file .env.saruman.
+name: saruman
+services:
+  db:
+    extends:
+      file: compose.saruman.yml
+      service: db
+  redis:
+    extends:
+      file: compose.saruman.yml
+      service: redis
+volumes:
+  saruman_db:

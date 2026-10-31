@@ -1,0 +1,171 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ValidationResult — proposal-v1",
+  "$ref": "#/$defs/ValidationResult",
+  "$defs": {
+    "ArtifactRef": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "MIME-тип файла."
+        },
+        "sha256": {
+          "$ref": "#/$defs/Hash",
+          "description": "Хеш точного содержимого файла; проверяется при чтении."
+        },
+        "media_type": {
+          "type": "string",
+          "minLength": 1,
+          "description": "MIME-тип файла."
+        }
+      },
+      "required": [
+        "path",
+        "sha256",
+        "media_type"
+      ],
+      "additionalProperties": false
+    },
+    "Hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "Issue": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Как исправить конкретное нарушение."
+        },
+        "code": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Как исправить конкретное нарушение."
+        },
+        "expected": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Как исправить конкретное нарушение."
+        },
+        "received_type": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Как исправить конкретное нарушение."
+        },
+        "example_json": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Как исправить конкретное нарушение."
+        },
+        "instruction": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Как исправить конкретное нарушение."
+        }
+      },
+      "required": [
+        "path",
+        "code",
+        "expected",
+        "received_type",
+        "example_json",
+        "instruction"
+      ],
+      "additionalProperties": false
+    },
+    "Scope": {
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Устойчивый ID проекта."
+        },
+        "spec_revision": {
+          "$ref": "#/$defs/Hash",
+          "description": "SHA-256 канонического манифеста ТЗ и явных уточнений."
+        },
+        "source_revision": {
+          "$ref": "#/$defs/Hash",
+          "description": "SHA-256 канонического манифеста исходников снимка."
+        },
+        "round": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Номер попытки; не процент готовности."
+        }
+      },
+      "required": [
+        "project_id",
+        "spec_revision",
+        "source_revision",
+        "round"
+      ],
+      "additionalProperties": false
+    },
+    "ValidationResult": {
+      "type": "object",
+      "properties": {
+        "contract": {
+          "const": "ValidationResult",
+          "description": "Имя типа сообщения; выбирает схему."
+        },
+        "version": {
+          "const": "proposal-v1",
+          "description": "Версия формата; здесь только proposal-v1."
+        },
+        "scope": {
+          "$ref": "#/$defs/Scope",
+          "description": "Проект, версия ТЗ, версия кода и раунд."
+        },
+        "submission_ref": {
+          "$ref": "#/$defs/ArtifactRef",
+          "description": "Точная версия проверенного сообщения."
+        },
+        "valid": {
+          "type": "boolean",
+          "description": "Результат формальных проверок; не означает смысловую правильность."
+        },
+        "checks_passed": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Имена успешно выполненных формальных проверок."
+        },
+        "issues": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Issue"
+          },
+          "description": "Точные ошибки формата и связей."
+        },
+        "schema_ref": {
+          "$ref": "#/$defs/ArtifactRef",
+          "description": "Доверенная схема для исправления."
+        },
+        "example_ref": {
+          "$ref": "#/$defs/ArtifactRef",
+          "description": "Соответствующий схеме пример."
+        }
+      },
+      "required": [
+        "contract",
+        "version",
+        "scope",
+        "submission_ref",
+        "valid",
+        "checks_passed",
+        "issues",
+        "schema_ref",
+        "example_ref"
+      ],
+      "additionalProperties": false,
+      "description": "Контроллер → автор сообщения. Точная ошибка и материал для коррекции."
+    }
+  }
+}

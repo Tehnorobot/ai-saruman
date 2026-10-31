@@ -1,0 +1,237 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "MemoryRecord — proposal-v1",
+  "$ref": "#/$defs/MemoryRecord",
+  "$defs": {
+    "ArtifactRef": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "MIME-тип файла."
+        },
+        "sha256": {
+          "$ref": "#/$defs/Hash",
+          "description": "Хеш точного содержимого файла; проверяется при чтении."
+        },
+        "media_type": {
+          "type": "string",
+          "minLength": 1,
+          "description": "MIME-тип файла."
+        }
+      },
+      "required": [
+        "path",
+        "sha256",
+        "media_type"
+      ],
+      "additionalProperties": false
+    },
+    "Hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "MemoryLink": {
+      "type": "object",
+      "properties": {
+        "relation": {
+          "type": "string",
+          "enum": [
+            "responds_to",
+            "tests_hypothesis",
+            "changes",
+            "verifies",
+            "supersedes",
+            "returns_after"
+          ],
+          "description": "Тип связи в истории."
+        },
+        "record_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Устойчивый ID записи памяти."
+        }
+      },
+      "required": [
+        "relation",
+        "record_id"
+      ],
+      "additionalProperties": false
+    },
+    "MemoryRecord": {
+      "type": "object",
+      "properties": {
+        "contract": {
+          "const": "MemoryRecord",
+          "description": "Имя типа сообщения; выбирает схему."
+        },
+        "version": {
+          "const": "proposal-v1",
+          "description": "Версия формата; здесь только proposal-v1."
+        },
+        "record_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Устойчивый ID записи памяти."
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Время сохранения в UTC, ISO 8601."
+        },
+        "entry": {
+          "$ref": "#/$defs/MemoryWrite",
+          "description": "Полная запись MemoryWrite."
+        },
+        "index_ref": {
+          "$ref": "#/$defs/ArtifactRef",
+          "description": "Версия индекса архива."
+        }
+      },
+      "required": [
+        "contract",
+        "version",
+        "record_id",
+        "created_at",
+        "entry",
+        "index_ref"
+      ],
+      "additionalProperties": false,
+      "description": "Архив → читатели. Неизменяемая запись, время, исходник и связи."
+    },
+    "MemoryWrite": {
+      "type": "object",
+      "properties": {
+        "contract": {
+          "const": "MemoryWrite",
+          "description": "Имя типа сообщения; выбирает схему."
+        },
+        "version": {
+          "const": "proposal-v1",
+          "description": "Версия формата; здесь только proposal-v1."
+        },
+        "scope": {
+          "$ref": "#/$defs/Scope",
+          "description": "Проект, версия ТЗ, версия кода и раунд."
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "spec",
+            "catalog",
+            "graph",
+            "plan",
+            "coder",
+            "review",
+            "verification",
+            "reflection",
+            "validation",
+            "usage",
+            "manual"
+          ],
+          "description": "В Action: вид работы; в Finding: класс замечания; в памяти: тип записи."
+        },
+        "producer": {
+          "type": "string",
+          "enum": [
+            "user",
+            "controller",
+            "planner",
+            "coder",
+            "reviewer",
+            "runner",
+            "gateway"
+          ],
+          "description": "Источник записи; подтверждается каналом, не принимается на веру."
+        },
+        "payload_ref": {
+          "$ref": "#/$defs/ArtifactRef",
+          "description": "Оригинальное сообщение в файле; сохраняется без смысловой правки."
+        },
+        "task_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Задачи, затронутые сообщением."
+        },
+        "requirement_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Связанные требования; ID должны существовать."
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "proposed",
+              "verified_pass",
+              "verified_fail",
+              "untested",
+              "blocked",
+              "superseded"
+            ]
+          },
+          "description": "Теги, назначаемые контроллером по доказательствам."
+        },
+        "links": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/MemoryLink"
+          },
+          "description": "Связи с предыдущими записями."
+        }
+      },
+      "required": [
+        "contract",
+        "version",
+        "scope",
+        "kind",
+        "producer",
+        "payload_ref",
+        "task_ids",
+        "requirement_ids",
+        "tags",
+        "links"
+      ],
+      "additionalProperties": false,
+      "description": "Контроллер → архив. Публичные оригиналы и связи; агенты не назначают успех."
+    },
+    "Scope": {
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Устойчивый ID проекта."
+        },
+        "spec_revision": {
+          "$ref": "#/$defs/Hash",
+          "description": "SHA-256 канонического манифеста ТЗ и явных уточнений."
+        },
+        "source_revision": {
+          "$ref": "#/$defs/Hash",
+          "description": "SHA-256 канонического манифеста исходников снимка."
+        },
+        "round": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Номер попытки; не процент готовности."
+        }
+      },
+      "required": [
+        "project_id",
+        "spec_revision",
+        "source_revision",
+        "round"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

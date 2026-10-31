@@ -1,0 +1,497 @@
+{
+  "type": "object",
+  "properties": {
+    "contract": {
+      "const": "CatalogPatch"
+    },
+    "version": {
+      "const": "v1"
+    },
+    "scope": {
+      "$ref": "#/$defs/Scope"
+    },
+    "base_catalog_ref": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "rationale": {
+      "type": "string",
+      "minLength": 1
+    },
+    "addressed_finding_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "requirements_upsert": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Requirement"
+      }
+    },
+    "requirements_remove": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "conditions_upsert": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Condition"
+      }
+    },
+    "conditions_remove": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "questions_add": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "question_resolutions_upsert": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "question": {
+            "type": "string",
+            "minLength": 1
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "implementation_decision",
+              "experiment",
+              "user_clarification"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "resolved"
+            ]
+          },
+          "owner": {
+            "type": "string",
+            "enum": [
+              "planner",
+              "coder",
+              "user"
+            ]
+          },
+          "condition_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "answer": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1
+          },
+          "source_refs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/SourceRef"
+            }
+          }
+        },
+        "required": [
+          "question",
+          "kind",
+          "status",
+          "owner",
+          "condition_ids",
+          "answer",
+          "reason",
+          "source_refs"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "unclassified_add": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/SourceRef"
+      }
+    },
+    "unclassified_remove": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/SourceRef"
+      }
+    }
+  },
+  "required": [
+    "contract",
+    "version",
+    "scope",
+    "base_catalog_ref",
+    "rationale",
+    "addressed_finding_ids",
+    "requirements_upsert",
+    "requirements_remove",
+    "conditions_upsert",
+    "conditions_remove",
+    "questions_add",
+    "question_resolutions_upsert",
+    "unclassified_add",
+    "unclassified_remove"
+  ],
+  "additionalProperties": false,
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CatalogPatch — runtime v1",
+  "$defs": {
+    "ArtifactRef": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Для ArtifactRef: путь относительно корня проекта; для Issue: путь поля в JSON.",
+          "pattern": "^(?!/)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//)(?!.*[\\\\:\\x00])[^/]+(?:/[^/]+)*$"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Hash",
+          "description": "Хеш точного содержимого файла; проверяется при чтении."
+        },
+        "media_type": {
+          "type": "string",
+          "minLength": 1,
+          "description": "MIME-тип файла."
+        }
+      },
+      "required": [
+        "path",
+        "sha256",
+        "media_type"
+      ],
+      "additionalProperties": false
+    },
+    "CatalogPatch": {
+      "type": "object",
+      "properties": {
+        "contract": {
+          "const": "CatalogPatch"
+        },
+        "version": {
+          "const": "v1"
+        },
+        "scope": {
+          "$ref": "#/$defs/Scope"
+        },
+        "base_catalog_ref": {
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        "rationale": {
+          "type": "string",
+          "minLength": 1
+        },
+        "addressed_finding_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "requirements_upsert": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Requirement"
+          }
+        },
+        "requirements_remove": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "conditions_upsert": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Condition"
+          }
+        },
+        "conditions_remove": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "questions_add": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "question_resolutions_upsert": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "question": {
+                "type": "string",
+                "minLength": 1
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "implementation_decision",
+                  "experiment",
+                  "user_clarification"
+                ]
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "open",
+                  "resolved"
+                ]
+              },
+              "owner": {
+                "type": "string",
+                "enum": [
+                  "planner",
+                  "coder",
+                  "user"
+                ]
+              },
+              "condition_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "answer": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1
+              },
+              "source_refs": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/SourceRef"
+                }
+              }
+            },
+            "required": [
+              "question",
+              "kind",
+              "status",
+              "owner",
+              "condition_ids",
+              "answer",
+              "reason",
+              "source_refs"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "unclassified_add": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SourceRef"
+          }
+        },
+        "unclassified_remove": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SourceRef"
+          }
+        }
+      },
+      "required": [
+        "contract",
+        "version",
+        "scope",
+        "base_catalog_ref",
+        "rationale",
+        "addressed_finding_ids",
+        "requirements_upsert",
+        "requirements_remove",
+        "conditions_upsert",
+        "conditions_remove",
+        "questions_add",
+        "question_resolutions_upsert",
+        "unclassified_add",
+        "unclassified_remove"
+      ],
+      "additionalProperties": false
+    },
+    "Condition": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Уникальный ID внутри соответствующего каталога."
+        },
+        "requirement_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "ID родительского требования."
+        },
+        "expected": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Ожидаемый результат; в Checkpoint это сравниваемое значение."
+        },
+        "verification": {
+          "type": "string",
+          "enum": [
+            "automated",
+            "manual",
+            "mixed"
+          ],
+          "description": "Способ проверки: автоматический, ручной или смешанный."
+        }
+      },
+      "required": [
+        "id",
+        "requirement_id",
+        "expected",
+        "verification"
+      ],
+      "additionalProperties": false
+    },
+    "Hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "Requirement": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Уникальный ID внутри соответствующего каталога."
+        },
+        "statement": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Утверждение или проверяемая гипотеза."
+        },
+        "source_refs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SourceRef"
+          },
+          "description": "Фрагменты исходного ТЗ, из которых выведено требование."
+        },
+        "condition_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Утверждение или проверяемая гипотеза."
+          },
+          "description": "Проверяемые условия; ID должны существовать."
+        }
+      },
+      "required": [
+        "id",
+        "statement",
+        "source_refs",
+        "condition_ids"
+      ],
+      "additionalProperties": false
+    },
+    "Scope": {
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Устойчивый ID проекта."
+        },
+        "spec_revision": {
+          "$ref": "#/$defs/Hash",
+          "description": "SHA-256 канонического манифеста ТЗ и явных уточнений."
+        },
+        "source_revision": {
+          "$ref": "#/$defs/Hash",
+          "description": "SHA-256 канонического манифеста исходников снимка."
+        },
+        "round": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Номер попытки; не процент готовности."
+        }
+      },
+      "required": [
+        "project_id",
+        "spec_revision",
+        "source_revision",
+        "round"
+      ],
+      "additionalProperties": false
+    },
+    "SourceRef": {
+      "type": "object",
+      "properties": {
+        "artifact": {
+          "$ref": "#/$defs/ArtifactRef",
+          "description": "Файл, из которого взята цитата."
+        },
+        "start_line": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Первая строка фрагмента, с 1."
+        },
+        "end_line": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Последняя строка фрагмента включительно."
+        },
+        "excerpt": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Точная цитата из указанной версии файла."
+        }
+      },
+      "required": [
+        "artifact",
+        "start_line",
+        "end_line",
+        "excerpt"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

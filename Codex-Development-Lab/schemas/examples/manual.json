@@ -1,0 +1,23 @@
+{
+  "summary": "Request a visual judgment that requires the actual user display.",
+  "action": {
+    "kind": "await_user_review",
+    "target": "REQ-00001-0123456789ab",
+    "reason": "Request a visual judgment that requires the actual user display."
+  },
+  "manual_reviews": [
+    {
+      "id": "REQ-00001-0123456789ab",
+      "manual_review": {
+        "category": "visual_judgment",
+        "reason": "The user must judge whether the overlay is comfortable on their actual display.",
+        "automation_blocker": "Personal visual comfort depends on the user and their physical viewing conditions.",
+        "steps": [
+          "Open the overlay on your usual display.",
+          "Observe the text and contrast at your normal viewing distance."
+        ],
+        "expected_result": "The user can read the overlay comfortably without visual strain."
+      }
+    }
+  ]
+}

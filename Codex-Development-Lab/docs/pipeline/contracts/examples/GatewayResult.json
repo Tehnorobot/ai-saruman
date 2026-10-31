@@ -1,0 +1,32 @@
+{
+  "contract": "GatewayResult",
+  "version": "proposal-v1",
+  "request_id": "Q-3",
+  "outcome": "completed",
+  "actual_role_config": {
+    "role": "planner",
+    "provider": "selected-provider",
+    "model": "selected-model",
+    "reasoning": "default"
+  },
+  "model_changed": false,
+  "model_change_reason": null,
+  "output_ref": {
+    "path": "rounds/3/plan.json",
+    "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "media_type": "application/json"
+  },
+  "public_transcript_ref": {
+    "path": "rounds/3/planner-public.jsonl",
+    "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "media_type": "application/x-ndjson"
+  },
+  "usage": {
+    "input_tokens": 12000,
+    "output_tokens": 800,
+    "cache_read_tokens": 9000,
+    "cache_write_tokens": 0,
+    "measurement": "provider"
+  },
+  "error": null
+}

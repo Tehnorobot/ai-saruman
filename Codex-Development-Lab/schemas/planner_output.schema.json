@@ -1,0 +1,458 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:codex-development-lab:planner-output:1",
+  "title": "Planner output",
+  "description": "A scheduling proposal, never a verifier verdict. Controller semantic validation remains mandatory.",
+  "type": "object",
+  "properties": {
+    "summary": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1600,
+      "pattern": "\\S"
+    },
+    "action": {
+      "$ref": "#/$defs/action"
+    },
+    "hypotheses": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 600,
+        "pattern": "\\S"
+      },
+      "minItems": 0,
+      "maxItems": 6
+    },
+    "next_steps": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 600,
+        "pattern": "\\S"
+      },
+      "minItems": 0,
+      "maxItems": 8
+    },
+    "manual_reviews": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/$defs/identifier"
+          },
+          "manual_review": {
+            "$ref": "#/$defs/manual_review"
+          }
+        },
+        "required": [
+          "id",
+          "manual_review"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 0,
+      "maxItems": 12
+    },
+    "coverage_reviews": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/coverage_review"
+      },
+      "minItems": 0,
+      "maxItems": 12
+    },
+    "additional_actions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/additional_action"
+      },
+      "minItems": 0,
+      "maxItems": 3
+    },
+    "bundle_reason": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1200,
+      "pattern": "\\S"
+    },
+    "verification_limit": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 4
+    }
+  },
+  "required": [
+    "summary",
+    "action"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]*$"
+    },
+    "scenario_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+    },
+    "condition_id": {
+      "type": "string",
+      "pattern": "^condition-[0-9a-f]{16}$"
+    },
+    "evidence_ref": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "pattern": "^(?!/)(?!.*//)(?!.*(?:^|/)\\.{1,2}(?:/|$))[^\\\\:\\r\\n/]+(?:/[^\\\\:\\r\\n/]+)*$"
+        },
+        "start_line": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "end_line": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "excerpt": {
+          "type": "string",
+          "minLength": 12,
+          "maxLength": 2000,
+          "pattern": "\\S"
+        }
+      },
+      "required": [
+        "path",
+        "start_line",
+        "end_line",
+        "excerpt"
+      ],
+      "additionalProperties": false
+    },
+    "expected_progress": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32,
+          "pattern": "\\S"
+        },
+        "observable_result": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1200,
+          "pattern": "\\S"
+        }
+      },
+      "required": [
+        "kind",
+        "observable_result"
+      ],
+      "additionalProperties": false
+    },
+    "manual_review": {
+      "type": "object",
+      "properties": {
+        "category": {
+          "enum": [
+            "visual_judgment",
+            "physical_device",
+            "external_access",
+            "user_environment"
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 32,
+          "maxLength": 1000,
+          "pattern": "\\S"
+        },
+        "automation_blocker": {
+          "type": "string",
+          "minLength": 32,
+          "maxLength": 1000,
+          "pattern": "\\S"
+        },
+        "steps": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500,
+            "pattern": "\\S"
+          },
+          "minItems": 1,
+          "maxItems": 12
+        },
+        "expected_result": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 1000,
+          "pattern": "\\S"
+        }
+      },
+      "required": [
+        "category",
+        "reason",
+        "automation_blocker",
+        "steps",
+        "expected_result"
+      ],
+      "additionalProperties": false
+    },
+    "action": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "repair_scenario",
+            "implement_and_map_requirement",
+            "implement_or_verify_scenario",
+            "review_coverage",
+            "repair_verification_failure",
+            "repair_acceptance_plan",
+            "diagnose_failure",
+            "await_user_review"
+          ]
+        },
+        "target": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "\\S"
+        },
+        "requirement_ids": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/identifier"
+          },
+          "minItems": 0,
+          "maxItems": 12
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1200,
+          "pattern": "\\S"
+        },
+        "diagnostic": {
+          "type": "string",
+          "maxLength": 1600
+        },
+        "evidence_refs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/evidence_ref"
+          },
+          "minItems": 0,
+          "maxItems": 6
+        },
+        "condition_ids": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/condition_id"
+          },
+          "minItems": 0,
+          "maxItems": 24,
+          "uniqueItems": true
+        },
+        "verification_scenario_ids": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/scenario_id"
+          },
+          "minItems": 0,
+          "maxItems": 4,
+          "uniqueItems": true
+        },
+        "verification_kind": {
+          "enum": [
+            "gameplay",
+            "unit"
+          ]
+        },
+        "verification_objective": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1200,
+          "pattern": "\\S"
+        },
+        "expected_progress": {
+          "$ref": "#/$defs/expected_progress"
+        }
+      },
+      "required": [
+        "kind",
+        "target",
+        "reason"
+      ],
+      "additionalProperties": false
+    },
+    "additional_action": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "enum": [
+            "repair_scenario",
+            "implement_and_map_requirement",
+            "implement_or_verify_scenario"
+          ]
+        },
+        "target": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "\\S"
+        },
+        "requirement_ids": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/identifier"
+          },
+          "minItems": 0,
+          "maxItems": 12
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1200,
+          "pattern": "\\S"
+        },
+        "diagnostic": {
+          "type": "string",
+          "maxLength": 1600
+        },
+        "evidence_refs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/evidence_ref"
+          },
+          "minItems": 0,
+          "maxItems": 6
+        },
+        "condition_ids": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/condition_id"
+          },
+          "minItems": 0,
+          "maxItems": 24,
+          "uniqueItems": true
+        },
+        "verification_scenario_ids": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/scenario_id"
+          },
+          "minItems": 0,
+          "maxItems": 4,
+          "uniqueItems": true
+        },
+        "verification_kind": {
+          "enum": [
+            "gameplay",
+            "unit"
+          ]
+        },
+        "verification_objective": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1200,
+          "pattern": "\\S"
+        },
+        "expected_progress": {
+          "$ref": "#/$defs/expected_progress"
+        },
+        "depends_on": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/identifier"
+          },
+          "minItems": 0,
+          "maxItems": 3,
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "kind",
+        "target",
+        "reason"
+      ],
+      "additionalProperties": false
+    },
+    "coverage_obligation": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/condition_id"
+        },
+        "verdict": {
+          "enum": [
+            "covered",
+            "missing"
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 20,
+          "maxLength": 1600,
+          "pattern": "\\S"
+        },
+        "scenario_ids": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/scenario_id"
+          },
+          "minItems": 0,
+          "uniqueItems": true
+        },
+        "evidence_refs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/evidence_ref"
+          },
+          "minItems": 0,
+          "maxItems": 8
+        }
+      },
+      "required": [
+        "id",
+        "verdict",
+        "reason"
+      ],
+      "additionalProperties": false
+    },
+    "coverage_review": {
+      "type": "object",
+      "properties": {
+        "requirement_id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "obligations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/coverage_obligation"
+          },
+          "minItems": 0
+        }
+      },
+      "required": [
+        "requirement_id",
+        "obligations"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

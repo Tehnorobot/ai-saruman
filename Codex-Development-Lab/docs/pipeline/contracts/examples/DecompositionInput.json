@@ -1,0 +1,20 @@
+{
+  "contract": "DecompositionInput",
+  "version": "proposal-v1",
+  "scope": {
+    "project_id": "demo-trees",
+    "spec_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "source_revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "round": 3
+  },
+  "spec_file": {
+    "path": "input/spec.md",
+    "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "media_type": "text/markdown"
+  },
+  "clarifications": [],
+  "previous_catalog_refs": [],
+  "instructions": [
+    "Выдели функции без новых требований. Сохрани ссылки на исходник."
+  ]
+}

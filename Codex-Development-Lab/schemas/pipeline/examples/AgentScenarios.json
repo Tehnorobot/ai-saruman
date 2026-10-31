@@ -1,0 +1,92 @@
+{
+  "contract": "AgentScenarios",
+  "version": "v1",
+  "scenarios": [
+    {
+      "id": "s1",
+      "task_ids": [
+        "T1",
+        "T2"
+      ],
+      "condition_ids": [
+        "C1",
+        "C2"
+      ],
+      "setup": [
+        "Плоская площадка; саженец и костная мука доступны"
+      ],
+      "steps": [
+        "Запустить посадку",
+        "Запустить выращивание"
+      ],
+      "checkpoints": [
+        {
+          "id": "CP1",
+          "condition_ids": [],
+          "assertion": "Площадка найдена",
+          "observable": "site_found",
+          "comparator": "eq",
+          "expected": true
+        },
+        {
+          "id": "CP2",
+          "condition_ids": [
+            "C1"
+          ],
+          "assertion": "Саженец установлен",
+          "observable": "sapling_placed",
+          "comparator": "eq",
+          "expected": true
+        },
+        {
+          "id": "CP3",
+          "condition_ids": [
+            "C2"
+          ],
+          "assertion": "Дерево выросло",
+          "observable": "tree_present",
+          "comparator": "eq",
+          "expected": true
+        }
+      ],
+      "test_file": "src/gametest/PlantTest.java",
+      "runner_profile": "minecraft-client-gametest",
+      "execution": {
+        "kind": "gameplay",
+        "gradle_task": "runClientGameTest",
+        "expected_tests": [
+          {
+            "classname": "dev.example.PlantTests",
+            "name": "siteFound"
+          },
+          {
+            "classname": "dev.example.PlantTests",
+            "name": "saplingPlaced"
+          },
+          {
+            "classname": "dev.example.PlantTests",
+            "name": "treeGrown"
+          }
+        ],
+        "checkpoint_tests": [
+          {
+            "checkpoint_id": "CP1",
+            "classname": "dev.example.PlantTests",
+            "name": "siteFound"
+          },
+          {
+            "checkpoint_id": "CP2",
+            "classname": "dev.example.PlantTests",
+            "name": "saplingPlaced"
+          },
+          {
+            "checkpoint_id": "CP3",
+            "classname": "dev.example.PlantTests",
+            "name": "treeGrown"
+          }
+        ]
+      }
+    }
+  ],
+  "notes_md": ""
+}

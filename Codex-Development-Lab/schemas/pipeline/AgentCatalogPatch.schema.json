@@ -1,0 +1,259 @@
+{
+  "type": "object",
+  "properties": {
+    "contract": {
+      "type": "string",
+      "const": "AgentCatalogPatch"
+    },
+    "version": {
+      "type": "string",
+      "const": "v1"
+    },
+    "addressed_finding_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "requirements_upsert": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Requirement"
+      }
+    },
+    "requirements_remove": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "conditions_upsert": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Condition"
+      }
+    },
+    "conditions_remove": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "questions_add": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "question_resolutions_upsert": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "question": {
+            "type": "string",
+            "minLength": 1
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "implementation_decision",
+              "experiment",
+              "user_clarification"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "resolved"
+            ]
+          },
+          "owner": {
+            "type": "string",
+            "enum": [
+              "planner",
+              "coder",
+              "user"
+            ]
+          },
+          "condition_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "answer": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1
+          },
+          "source_refs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/SourceRef"
+            }
+          }
+        },
+        "required": [
+          "question",
+          "kind",
+          "status",
+          "owner",
+          "condition_ids",
+          "answer",
+          "reason",
+          "source_refs"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "unclassified_add": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/SourceRef"
+      }
+    },
+    "unclassified_remove": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/SourceRef"
+      }
+    },
+    "notes_md": {
+      "type": "string",
+      "minLength": 1
+    }
+  },
+  "required": [
+    "contract",
+    "version",
+    "addressed_finding_ids",
+    "requirements_upsert",
+    "requirements_remove",
+    "conditions_upsert",
+    "conditions_remove",
+    "questions_add",
+    "question_resolutions_upsert",
+    "unclassified_add",
+    "unclassified_remove",
+    "notes_md"
+  ],
+  "additionalProperties": false,
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AgentCatalogPatch - compact agent message",
+  "$defs": {
+    "Condition": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Уникальный ID внутри соответствующего каталога."
+        },
+        "requirement_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "ID родительского требования."
+        },
+        "expected": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Ожидаемый результат; в Checkpoint это сравниваемое значение."
+        },
+        "verification": {
+          "type": "string",
+          "enum": [
+            "automated",
+            "manual",
+            "mixed"
+          ],
+          "description": "Способ проверки: автоматический, ручной или смешанный."
+        }
+      },
+      "required": [
+        "id",
+        "requirement_id",
+        "expected",
+        "verification"
+      ],
+      "additionalProperties": false
+    },
+    "Requirement": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Уникальный ID внутри соответствующего каталога."
+        },
+        "statement": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Утверждение или проверяемая гипотеза."
+        },
+        "source_refs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SourceRef"
+          },
+          "description": "Фрагменты исходного ТЗ, из которых выведено требование."
+        },
+        "condition_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Утверждение или проверяемая гипотеза."
+          },
+          "description": "Проверяемые условия; ID должны существовать."
+        }
+      },
+      "required": [
+        "id",
+        "statement",
+        "source_refs",
+        "condition_ids"
+      ],
+      "additionalProperties": false
+    },
+    "SourceRef": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "start_line": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "end_line": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "required": [
+        "path",
+        "start_line",
+        "end_line"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

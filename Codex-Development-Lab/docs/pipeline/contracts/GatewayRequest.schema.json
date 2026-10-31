@@ -1,0 +1,242 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "GatewayRequest — proposal-v1",
+  "$ref": "#/$defs/GatewayRequest",
+  "$defs": {
+    "ArtifactRef": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "MIME-тип файла."
+        },
+        "sha256": {
+          "$ref": "#/$defs/Hash",
+          "description": "Хеш точного содержимого файла; проверяется при чтении."
+        },
+        "media_type": {
+          "type": "string",
+          "minLength": 1,
+          "description": "MIME-тип файла."
+        }
+      },
+      "required": [
+        "path",
+        "sha256",
+        "media_type"
+      ],
+      "additionalProperties": false
+    },
+    "Budget": {
+      "type": "object",
+      "properties": {
+        "remaining_tokens": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Остаток разрешённого времени."
+        },
+        "remaining_seconds": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Остаток разрешённого времени."
+        }
+      },
+      "required": [
+        "remaining_tokens",
+        "remaining_seconds"
+      ],
+      "additionalProperties": false
+    },
+    "GatewayRequest": {
+      "type": "object",
+      "properties": {
+        "contract": {
+          "const": "GatewayRequest",
+          "description": "Имя типа сообщения; выбирает схему."
+        },
+        "version": {
+          "const": "proposal-v1",
+          "description": "Версия формата; здесь только proposal-v1."
+        },
+        "request_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Имя ожидаемого типа результата LLM."
+        },
+        "scope": {
+          "$ref": "#/$defs/Scope",
+          "description": "Проект, версия ТЗ, версия кода и раунд."
+        },
+        "role_config": {
+          "$ref": "#/$defs/RoleConfig",
+          "description": "Запрошенные роль, провайдер, модель и reasoning."
+        },
+        "messages": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Message"
+          },
+          "description": "Публичная текстовая часть диалога."
+        },
+        "attachment_refs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ArtifactRef"
+          },
+          "description": "Дополнительные файлы, которые адаптер читает или даёт прочитать инструментом."
+        },
+        "tools": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ToolDefinition"
+          },
+          "description": "Разрешённые инструменты; права задаёт контроллер."
+        },
+        "output_contract": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Имя ожидаемого типа результата LLM."
+        },
+        "budget": {
+          "$ref": "#/$defs/Budget",
+          "description": "Оставшийся пользовательский бюджет на момент запроса."
+        }
+      },
+      "required": [
+        "contract",
+        "version",
+        "request_id",
+        "scope",
+        "role_config",
+        "messages",
+        "attachment_refs",
+        "tools",
+        "output_contract",
+        "budget"
+      ],
+      "additionalProperties": false,
+      "description": "Любая LLM-роль → шлюз. Нормализованный запрос, без ключей API."
+    },
+    "Hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "Message": {
+      "type": "object",
+      "properties": {
+        "role": {
+          "type": "string",
+          "enum": [
+            "system",
+            "user",
+            "assistant",
+            "tool"
+          ],
+          "description": "Роль автора сообщения модели."
+        },
+        "content": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Текст сообщения; специальные поля провайдера хранит адаптер."
+        }
+      },
+      "required": [
+        "role",
+        "content"
+      ],
+      "additionalProperties": false
+    },
+    "RoleConfig": {
+      "type": "object",
+      "properties": {
+        "role": {
+          "type": "string",
+          "enum": [
+            "planner",
+            "coder",
+            "reviewer"
+          ],
+          "description": "Роль автора сообщения модели."
+        },
+        "provider": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Значение из возможностей выбранной модели; default означает штатное."
+        },
+        "model": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Значение из возможностей выбранной модели; default означает штатное."
+        },
+        "reasoning": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Значение из возможностей выбранной модели; default означает штатное."
+        }
+      },
+      "required": [
+        "role",
+        "provider",
+        "model",
+        "reasoning"
+      ],
+      "additionalProperties": false
+    },
+    "Scope": {
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Устойчивый ID проекта."
+        },
+        "spec_revision": {
+          "$ref": "#/$defs/Hash",
+          "description": "SHA-256 канонического манифеста ТЗ и явных уточнений."
+        },
+        "source_revision": {
+          "$ref": "#/$defs/Hash",
+          "description": "SHA-256 канонического манифеста исходников снимка."
+        },
+        "round": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Номер попытки; не процент готовности."
+        }
+      },
+      "required": [
+        "project_id",
+        "spec_revision",
+        "source_revision",
+        "round"
+      ],
+      "additionalProperties": false
+    },
+    "ToolDefinition": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Назначение инструмента."
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Назначение инструмента."
+        },
+        "input_schema": {
+          "$ref": "#/$defs/ArtifactRef",
+          "description": "Файл схемы аргументов инструмента."
+        }
+      },
+      "required": [
+        "name",
+        "description",
+        "input_schema"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

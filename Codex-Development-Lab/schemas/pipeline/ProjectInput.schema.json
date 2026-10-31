@@ -1,0 +1,192 @@
+{
+  "type": "object",
+  "properties": {
+    "contract": {
+      "const": "ProjectInput",
+      "description": "Имя типа сообщения; выбирает схему."
+    },
+    "version": {
+      "const": "v1",
+      "description": "Версия формата; здесь только v1."
+    },
+    "project_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Устойчивый ID проекта."
+    },
+    "spec_file": {
+      "$ref": "#/$defs/ArtifactRef",
+      "description": "Сохранённый исходный Markdown."
+    },
+    "clarifications": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/ArtifactRef"
+      },
+      "description": "Явные уточнения пользователя; отдельные файлы."
+    },
+    "roles": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/RoleConfig"
+      },
+      "description": "Настройки моделей по ролям."
+    },
+    "budget": {
+      "$ref": "#/$defs/Budget",
+      "description": "Оставшийся пользовательский бюджет на момент запроса."
+    }
+  },
+  "required": [
+    "contract",
+    "version",
+    "project_id",
+    "spec_file",
+    "clarifications",
+    "roles",
+    "budget"
+  ],
+  "additionalProperties": false,
+  "description": "Панель → приём ТЗ. Файл Markdown и явные уточнения.",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ProjectInput — runtime v1",
+  "$defs": {
+    "ArtifactRef": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Для ArtifactRef: путь относительно корня проекта; для Issue: путь поля в JSON.",
+          "pattern": "^(?!/)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//)(?!.*[\\\\:\\x00])[^/]+(?:/[^/]+)*$"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Hash",
+          "description": "Хеш точного содержимого файла; проверяется при чтении."
+        },
+        "media_type": {
+          "type": "string",
+          "minLength": 1,
+          "description": "MIME-тип файла."
+        }
+      },
+      "required": [
+        "path",
+        "sha256",
+        "media_type"
+      ],
+      "additionalProperties": false
+    },
+    "Budget": {
+      "type": "object",
+      "properties": {
+        "remaining_tokens": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Остаток доступных токенов; пример не задаёт лимит проекта."
+        },
+        "remaining_seconds": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Остаток разрешённого времени."
+        }
+      },
+      "required": [
+        "remaining_tokens",
+        "remaining_seconds"
+      ],
+      "additionalProperties": false
+    },
+    "Hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "ProjectInput": {
+      "type": "object",
+      "properties": {
+        "contract": {
+          "const": "ProjectInput",
+          "description": "Имя типа сообщения; выбирает схему."
+        },
+        "version": {
+          "const": "v1",
+          "description": "Версия формата; здесь только v1."
+        },
+        "project_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Устойчивый ID проекта."
+        },
+        "spec_file": {
+          "$ref": "#/$defs/ArtifactRef",
+          "description": "Сохранённый исходный Markdown."
+        },
+        "clarifications": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ArtifactRef"
+          },
+          "description": "Явные уточнения пользователя; отдельные файлы."
+        },
+        "roles": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/RoleConfig"
+          },
+          "description": "Настройки моделей по ролям."
+        },
+        "budget": {
+          "$ref": "#/$defs/Budget",
+          "description": "Оставшийся пользовательский бюджет на момент запроса."
+        }
+      },
+      "required": [
+        "contract",
+        "version",
+        "project_id",
+        "spec_file",
+        "clarifications",
+        "roles",
+        "budget"
+      ],
+      "additionalProperties": false,
+      "description": "Панель → приём ТЗ. Файл Markdown и явные уточнения."
+    },
+    "RoleConfig": {
+      "type": "object",
+      "properties": {
+        "role": {
+          "type": "string",
+          "enum": [
+            "planner",
+            "coder",
+            "reviewer"
+          ],
+          "description": "Роль автора сообщения модели."
+        },
+        "provider": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Выбранный API-провайдер."
+        },
+        "model": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Точное имя модели у провайдера."
+        },
+        "reasoning": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Значение из возможностей выбранной модели; default означает штатное."
+        }
+      },
+      "required": [
+        "role",
+        "provider",
+        "model",
+        "reasoning"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

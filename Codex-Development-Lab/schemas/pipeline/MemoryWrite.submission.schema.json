@@ -1,0 +1,296 @@
+{
+  "type": "object",
+  "description": "Контроллер → архив. Публичные оригиналы и связи; агенты не назначают успех.",
+  "required": [
+    "contract",
+    "version",
+    "scope",
+    "kind",
+    "producer",
+    "payload_ref",
+    "task_ids",
+    "requirement_ids",
+    "tags",
+    "links"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "contract": {
+      "description": "Имя типа сообщения; выбирает схему.",
+      "enum": [
+        "MemoryWrite"
+      ],
+      "type": "string"
+    },
+    "version": {
+      "description": "Версия формата; здесь только v1.",
+      "enum": [
+        "v1"
+      ],
+      "type": "string"
+    },
+    "scope": {
+      "description": "Проект, версия ТЗ, версия кода и раунд.",
+      "$ref": "#/$defs/Scope"
+    },
+    "kind": {
+      "type": "string",
+      "description": "В Action: вид работы; в Finding: класс замечания; в памяти: тип записи.",
+      "enum": [
+        "spec",
+        "catalog",
+        "graph",
+        "plan",
+        "coder",
+        "review",
+        "verification",
+        "reflection",
+        "validation",
+        "usage",
+        "manual"
+      ]
+    },
+    "producer": {
+      "type": "string",
+      "description": "Источник записи; подтверждается каналом, не принимается на веру.",
+      "enum": [
+        "user",
+        "controller",
+        "planner",
+        "coder",
+        "reviewer",
+        "runner",
+        "gateway"
+      ]
+    },
+    "payload_ref": {
+      "description": "Оригинальное сообщение в файле; сохраняется без смысловой правки.",
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "task_ids": {
+      "type": "array",
+      "description": "Задачи, затронутые сообщением.",
+      "items": {
+        "type": "string"
+      }
+    },
+    "requirement_ids": {
+      "type": "array",
+      "description": "Связанные требования; ID должны существовать.",
+      "items": {
+        "type": "string"
+      }
+    },
+    "tags": {
+      "type": "array",
+      "description": "Теги, назначаемые контроллером по доказательствам.",
+      "items": {
+        "type": "string",
+        "enum": [
+          "proposed",
+          "verified_pass",
+          "verified_fail",
+          "untested",
+          "blocked",
+          "superseded"
+        ]
+      }
+    },
+    "links": {
+      "type": "array",
+      "description": "Связи с предыдущими записями.",
+      "items": {
+        "$ref": "#/$defs/MemoryLink"
+      }
+    }
+  },
+  "$defs": {
+    "ArtifactRef": {
+      "type": "object",
+      "required": [
+        "path",
+        "sha256",
+        "media_type"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Для ArtifactRef: путь относительно корня проекта; для Issue: путь поля в JSON."
+        },
+        "sha256": {
+          "description": "Хеш точного содержимого файла; проверяется при чтении.",
+          "$ref": "#/$defs/Hash"
+        },
+        "media_type": {
+          "type": "string",
+          "description": "MIME-тип файла."
+        }
+      }
+    },
+    "Hash": {
+      "type": "string"
+    },
+    "MemoryLink": {
+      "type": "object",
+      "required": [
+        "relation",
+        "record_id"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "relation": {
+          "type": "string",
+          "description": "Тип связи в истории.",
+          "enum": [
+            "responds_to",
+            "tests_hypothesis",
+            "changes",
+            "verifies",
+            "supersedes",
+            "returns_after"
+          ]
+        },
+        "record_id": {
+          "type": "string",
+          "description": "Устойчивый ID записи памяти."
+        }
+      }
+    },
+    "MemoryWrite": {
+      "type": "object",
+      "description": "Контроллер → архив. Публичные оригиналы и связи; агенты не назначают успех.",
+      "required": [
+        "contract",
+        "version",
+        "scope",
+        "kind",
+        "producer",
+        "payload_ref",
+        "task_ids",
+        "requirement_ids",
+        "tags",
+        "links"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "contract": {
+          "description": "Имя типа сообщения; выбирает схему.",
+          "enum": [
+            "MemoryWrite"
+          ],
+          "type": "string"
+        },
+        "version": {
+          "description": "Версия формата; здесь только v1.",
+          "enum": [
+            "v1"
+          ],
+          "type": "string"
+        },
+        "scope": {
+          "description": "Проект, версия ТЗ, версия кода и раунд.",
+          "$ref": "#/$defs/Scope"
+        },
+        "kind": {
+          "type": "string",
+          "description": "В Action: вид работы; в Finding: класс замечания; в памяти: тип записи.",
+          "enum": [
+            "spec",
+            "catalog",
+            "graph",
+            "plan",
+            "coder",
+            "review",
+            "verification",
+            "reflection",
+            "validation",
+            "usage",
+            "manual"
+          ]
+        },
+        "producer": {
+          "type": "string",
+          "description": "Источник записи; подтверждается каналом, не принимается на веру.",
+          "enum": [
+            "user",
+            "controller",
+            "planner",
+            "coder",
+            "reviewer",
+            "runner",
+            "gateway"
+          ]
+        },
+        "payload_ref": {
+          "description": "Оригинальное сообщение в файле; сохраняется без смысловой правки.",
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        "task_ids": {
+          "type": "array",
+          "description": "Задачи, затронутые сообщением.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "requirement_ids": {
+          "type": "array",
+          "description": "Связанные требования; ID должны существовать.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "tags": {
+          "type": "array",
+          "description": "Теги, назначаемые контроллером по доказательствам.",
+          "items": {
+            "type": "string",
+            "enum": [
+              "proposed",
+              "verified_pass",
+              "verified_fail",
+              "untested",
+              "blocked",
+              "superseded"
+            ]
+          }
+        },
+        "links": {
+          "type": "array",
+          "description": "Связи с предыдущими записями.",
+          "items": {
+            "$ref": "#/$defs/MemoryLink"
+          }
+        }
+      }
+    },
+    "Scope": {
+      "type": "object",
+      "required": [
+        "project_id",
+        "spec_revision",
+        "source_revision",
+        "round"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "description": "Устойчивый ID проекта."
+        },
+        "spec_revision": {
+          "description": "SHA-256 канонического манифеста ТЗ и явных уточнений.",
+          "$ref": "#/$defs/Hash"
+        },
+        "source_revision": {
+          "description": "SHA-256 канонического манифеста исходников снимка.",
+          "$ref": "#/$defs/Hash"
+        },
+        "round": {
+          "type": "integer",
+          "description": "Номер попытки; не процент готовности."
+        }
+      }
+    }
+  }
+}

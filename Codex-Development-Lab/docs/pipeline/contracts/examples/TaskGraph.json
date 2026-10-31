@@ -1,0 +1,45 @@
+{
+  "contract": "TaskGraph",
+  "version": "proposal-v1",
+  "scope": {
+    "project_id": "demo-trees",
+    "spec_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "source_revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "round": 3
+  },
+  "catalog_ref": {
+    "path": "planning/requirements.json",
+    "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "media_type": "application/json"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Посадка саженца",
+      "requirement_ids": [
+        "R1"
+      ],
+      "condition_ids": [
+        "C1"
+      ],
+      "depends_on": [],
+      "outcome": "Саженец установлен в мире",
+      "verification_approach": "Измерить блок после посадки"
+    },
+    {
+      "id": "T2",
+      "title": "Выращивание дерева",
+      "requirement_ids": [
+        "R2"
+      ],
+      "condition_ids": [
+        "C2"
+      ],
+      "depends_on": [
+        "T1"
+      ],
+      "outcome": "Саженец заменён деревом",
+      "verification_approach": "Проверить ствол после применения костной муки"
+    }
+  ]
+}

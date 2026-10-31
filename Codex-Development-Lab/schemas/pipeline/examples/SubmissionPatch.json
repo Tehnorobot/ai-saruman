@@ -1,0 +1,14 @@
+{
+  "contract": "SubmissionPatch",
+  "version": "v1",
+  "submission_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "changes": [
+    {
+      "path": "$.scope.round",
+      "operation": "set",
+      "expected_exists": true,
+      "expected_old_json": "\"12\"",
+      "new_json": "12"
+    }
+  ]
+}

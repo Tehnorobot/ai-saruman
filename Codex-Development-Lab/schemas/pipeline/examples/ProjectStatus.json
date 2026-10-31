@@ -1,0 +1,43 @@
+{
+  "contract": "ProjectStatus",
+  "version": "v1",
+  "scope": {
+    "project_id": "demo-trees",
+    "spec_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "source_revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "round": 3
+  },
+  "stage": "planning",
+  "active_task_ids": [
+    "T1"
+  ],
+  "coverage": [
+    {
+      "condition_id": "C1",
+      "status": "failed",
+      "result_refs": [
+        {
+          "path": "rounds/2/verification.json",
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "media_type": "application/json"
+        }
+      ]
+    },
+    {
+      "condition_id": "C2",
+      "status": "untested",
+      "result_refs": []
+    }
+  ],
+  "manual_pending": [],
+  "ready": false,
+  "readiness_reasons": [
+    "C1 не пройден",
+    "C2 не проверен"
+  ],
+  "latest_memory_ref": {
+    "path": "memory/records/M-result-3.json",
+    "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "media_type": "application/json"
+  }
+}

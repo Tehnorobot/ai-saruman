@@ -1,0 +1,206 @@
+{
+  "type": "object",
+  "description": "Кодер → ревьюер. Ответ на каждое замечание с подтверждением.",
+  "required": [
+    "contract",
+    "version",
+    "scope",
+    "review_ref",
+    "responses"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "contract": {
+      "description": "Имя типа сообщения; выбирает схему.",
+      "enum": [
+        "ReviewResponse"
+      ],
+      "type": "string"
+    },
+    "version": {
+      "description": "Версия формата; здесь только v1.",
+      "enum": [
+        "v1"
+      ],
+      "type": "string"
+    },
+    "scope": {
+      "description": "Проект, версия ТЗ, версия кода и раунд.",
+      "$ref": "#/$defs/Scope"
+    },
+    "review_ref": {
+      "description": "Ревью, на которое отвечает кодер.",
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "responses": {
+      "type": "array",
+      "description": "Ответ на каждое замечание.",
+      "items": {
+        "$ref": "#/$defs/FindingResponse"
+      }
+    }
+  },
+  "$defs": {
+    "ArtifactRef": {
+      "type": "object",
+      "required": [
+        "path",
+        "sha256",
+        "media_type"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Для ArtifactRef: путь относительно корня проекта; для Issue: путь поля в JSON."
+        },
+        "sha256": {
+          "description": "Хеш точного содержимого файла; проверяется при чтении.",
+          "$ref": "#/$defs/Hash"
+        },
+        "media_type": {
+          "type": "string",
+          "description": "MIME-тип файла."
+        }
+      }
+    },
+    "FindingResponse": {
+      "type": "object",
+      "required": [
+        "finding_id",
+        "disposition",
+        "explanation",
+        "evidence_refs"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "finding_id": {
+          "type": "string",
+          "description": "ID замечания ревьюера."
+        },
+        "disposition": {
+          "type": "string",
+          "description": "Вердикт ревью или ответ кодера; не статус теста.",
+          "enum": [
+            "fixed",
+            "rejected_with_reason",
+            "unverified"
+          ]
+        },
+        "explanation": {
+          "type": "string",
+          "description": "Обоснование исправления, отклонения или неизвестности."
+        },
+        "evidence_refs": {
+          "type": "array",
+          "description": "Цитаты из файлов; доверие к выводу проверяется отдельно.",
+          "items": {
+            "$ref": "#/$defs/SourceRef"
+          }
+        }
+      }
+    },
+    "Hash": {
+      "type": "string"
+    },
+    "ReviewResponse": {
+      "type": "object",
+      "description": "Кодер → ревьюер. Ответ на каждое замечание с подтверждением.",
+      "required": [
+        "contract",
+        "version",
+        "scope",
+        "review_ref",
+        "responses"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "contract": {
+          "description": "Имя типа сообщения; выбирает схему.",
+          "enum": [
+            "ReviewResponse"
+          ],
+          "type": "string"
+        },
+        "version": {
+          "description": "Версия формата; здесь только v1.",
+          "enum": [
+            "v1"
+          ],
+          "type": "string"
+        },
+        "scope": {
+          "description": "Проект, версия ТЗ, версия кода и раунд.",
+          "$ref": "#/$defs/Scope"
+        },
+        "review_ref": {
+          "description": "Ревью, на которое отвечает кодер.",
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        "responses": {
+          "type": "array",
+          "description": "Ответ на каждое замечание.",
+          "items": {
+            "$ref": "#/$defs/FindingResponse"
+          }
+        }
+      }
+    },
+    "Scope": {
+      "type": "object",
+      "required": [
+        "project_id",
+        "spec_revision",
+        "source_revision",
+        "round"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "description": "Устойчивый ID проекта."
+        },
+        "spec_revision": {
+          "description": "SHA-256 канонического манифеста ТЗ и явных уточнений.",
+          "$ref": "#/$defs/Hash"
+        },
+        "source_revision": {
+          "description": "SHA-256 канонического манифеста исходников снимка.",
+          "$ref": "#/$defs/Hash"
+        },
+        "round": {
+          "type": "integer",
+          "description": "Номер попытки; не процент готовности."
+        }
+      }
+    },
+    "SourceRef": {
+      "type": "object",
+      "required": [
+        "artifact",
+        "start_line",
+        "end_line",
+        "excerpt"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "artifact": {
+          "description": "Файл, из которого взята цитата.",
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        "start_line": {
+          "type": "integer",
+          "description": "Первая строка фрагмента, с 1."
+        },
+        "end_line": {
+          "type": "integer",
+          "description": "Последняя строка фрагмента включительно."
+        },
+        "excerpt": {
+          "type": "string",
+          "description": "Точная цитата из указанной версии файла."
+        }
+      }
+    }
+  }
+}

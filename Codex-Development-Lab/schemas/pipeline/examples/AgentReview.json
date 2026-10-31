@@ -1,0 +1,19 @@
+{
+  "contract": "AgentReview",
+  "version": "v1",
+  "disposition": "changes_requested",
+  "reviewed_condition_ids": [
+    "C1"
+  ],
+  "notes_md": "Поведение игры ещё не проверено",
+  "findings": [
+    {
+      "kind": "requirement_violation",
+      "severity": "high",
+      "requirement_ids": [
+        "R1"
+      ],
+      "notes_md": "После движения нет действия посадки\n\nC1 может не выполняться\n\nПроверить появление саженца в мире"
+    }
+  ]
+}

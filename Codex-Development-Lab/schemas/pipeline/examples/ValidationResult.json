@@ -1,0 +1,40 @@
+{
+  "contract": "ValidationResult",
+  "version": "v1",
+  "scope": {
+    "project_id": "demo-trees",
+    "spec_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "source_revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "round": 3
+  },
+  "submission_ref": {
+    "path": "rounds/3/plan.json",
+    "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "media_type": "application/json"
+  },
+  "valid": false,
+  "checks_passed": [
+    "json_syntax",
+    "known_task_ids"
+  ],
+  "issues": [
+    {
+      "path": "$.actions[0].task_ids",
+      "code": "type",
+      "expected": "array<string>",
+      "received_type": "string",
+      "example_json": "[\"T1\"]",
+      "instruction": "Передай массив строк. Не перечитывай проект ради этой правки."
+    }
+  ],
+  "schema_ref": {
+    "path": "contracts/PlannerDecision.schema.json",
+    "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "media_type": "application/json"
+  },
+  "example_ref": {
+    "path": "contracts/examples/PlannerDecision.json",
+    "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "media_type": "application/json"
+  }
+}

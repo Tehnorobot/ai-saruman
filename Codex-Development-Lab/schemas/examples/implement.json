@@ -1,0 +1,23 @@
+{
+  "summary": "Implement movement and map an executable check to the source condition.",
+  "action": {
+    "kind": "implement_and_map_requirement",
+    "target": "REQ-00001-0123456789ab",
+    "reason": "Implement movement and map an executable check to the source condition.",
+    "requirement_ids": [
+      "REQ-00001-0123456789ab"
+    ],
+    "condition_ids": [
+      "condition-0123456789abcdef"
+    ],
+    "verification_kind": "gameplay",
+    "verification_objective": "Assert that a controlled player moves one block after the movement input.",
+    "verification_scenario_ids": [
+      "movement"
+    ],
+    "expected_progress": {
+      "kind": "new_behavior",
+      "observable_result": "A movement assertion observes one block of player displacement."
+    }
+  }
+}

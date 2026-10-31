@@ -1,0 +1,1 @@
+"""Credential-isolated model gateway."""

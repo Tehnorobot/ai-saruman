@@ -1,0 +1,10 @@
+FROM python:3.12.10-slim-bookworm
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PYTHONPATH=/opt/lab
+RUN pip install --no-cache-dir fastapi==0.115.12 uvicorn==0.34.2 httpx==0.28.1 openai==2.8.1 \
+    && useradd --uid 1000 --create-home lab && mkdir -p /usage /run/lab-provider \
+    && chown 1000:1000 /usage /run/lab-provider
+COPY provider_gateway /opt/lab/provider_gateway
+COPY common /opt/lab/common
+USER 1000:1000
+WORKDIR /opt/lab
+CMD ["python", "-m", "provider_gateway.serve"]

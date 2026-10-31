@@ -1,0 +1,228 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "RequirementsCatalog — proposal-v1",
+  "$ref": "#/$defs/RequirementsCatalog",
+  "$defs": {
+    "ArtifactRef": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "MIME-тип файла."
+        },
+        "sha256": {
+          "$ref": "#/$defs/Hash",
+          "description": "Хеш точного содержимого файла; проверяется при чтении."
+        },
+        "media_type": {
+          "type": "string",
+          "minLength": 1,
+          "description": "MIME-тип файла."
+        }
+      },
+      "required": [
+        "path",
+        "sha256",
+        "media_type"
+      ],
+      "additionalProperties": false
+    },
+    "Condition": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Ожидаемый результат; в Checkpoint это сравниваемое значение."
+        },
+        "requirement_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Ожидаемый результат; в Checkpoint это сравниваемое значение."
+        },
+        "expected": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Ожидаемый результат; в Checkpoint это сравниваемое значение."
+        },
+        "verification": {
+          "type": "string",
+          "enum": [
+            "automated",
+            "manual",
+            "mixed"
+          ],
+          "description": "Способ проверки: автоматический, ручной или смешанный."
+        }
+      },
+      "required": [
+        "id",
+        "requirement_id",
+        "expected",
+        "verification"
+      ],
+      "additionalProperties": false
+    },
+    "Hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "Requirement": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Утверждение или проверяемая гипотеза."
+        },
+        "statement": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Утверждение или проверяемая гипотеза."
+        },
+        "source_refs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SourceRef"
+          },
+          "description": "Фрагменты исходного ТЗ, из которых выведено требование."
+        },
+        "condition_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Утверждение или проверяемая гипотеза."
+          },
+          "description": "Проверяемые условия; ID должны существовать."
+        }
+      },
+      "required": [
+        "id",
+        "statement",
+        "source_refs",
+        "condition_ids"
+      ],
+      "additionalProperties": false
+    },
+    "RequirementsCatalog": {
+      "type": "object",
+      "properties": {
+        "contract": {
+          "const": "RequirementsCatalog",
+          "description": "Имя типа сообщения; выбирает схему."
+        },
+        "version": {
+          "const": "proposal-v1",
+          "description": "Версия формата; здесь только proposal-v1."
+        },
+        "scope": {
+          "$ref": "#/$defs/Scope",
+          "description": "Проект, версия ТЗ, версия кода и раунд."
+        },
+        "requirements": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Requirement"
+          },
+          "description": "Смысловые требования из ТЗ."
+        },
+        "conditions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Condition"
+          },
+          "description": "Наблюдаемые условия выполнения требований."
+        },
+        "open_questions": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Неясности, требующие уточнения; нельзя выдумывать ответ."
+        },
+        "unclassified_source_refs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SourceRef"
+          },
+          "description": "Фрагменты ТЗ, смысл которых ещё не классифицирован."
+        }
+      },
+      "required": [
+        "contract",
+        "version",
+        "scope",
+        "requirements",
+        "conditions",
+        "open_questions",
+        "unclassified_source_refs"
+      ],
+      "additionalProperties": false,
+      "description": "LLM → контроллер и ревьюер. Смысловые требования и измеримые условия."
+    },
+    "Scope": {
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Устойчивый ID проекта."
+        },
+        "spec_revision": {
+          "$ref": "#/$defs/Hash",
+          "description": "SHA-256 канонического манифеста ТЗ и явных уточнений."
+        },
+        "source_revision": {
+          "$ref": "#/$defs/Hash",
+          "description": "SHA-256 канонического манифеста исходников снимка."
+        },
+        "round": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Номер попытки; не процент готовности."
+        }
+      },
+      "required": [
+        "project_id",
+        "spec_revision",
+        "source_revision",
+        "round"
+      ],
+      "additionalProperties": false
+    },
+    "SourceRef": {
+      "type": "object",
+      "properties": {
+        "artifact": {
+          "$ref": "#/$defs/ArtifactRef",
+          "description": "Файл, из которого взята цитата."
+        },
+        "start_line": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Первая строка фрагмента, с 1."
+        },
+        "end_line": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Последняя строка фрагмента включительно."
+        },
+        "excerpt": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Точная цитата из указанной версии файла."
+        }
+      },
+      "required": [
+        "artifact",
+        "start_line",
+        "end_line",
+        "excerpt"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

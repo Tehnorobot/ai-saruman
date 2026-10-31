@@ -1,0 +1,11 @@
+{
+  "contract": "MemoryQuery",
+  "version": "v1",
+  "project_id": "demo-trees",
+  "task_ids": [
+    "T1"
+  ],
+  "record_ids": [],
+  "query": "ошибка посадки",
+  "cursor": null
+}

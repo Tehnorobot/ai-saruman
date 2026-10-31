@@ -1,0 +1,153 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Python environments, caches and generated reports
+.venv*/
+venv/
+ENV/
+.tox/
+.nox/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
+.ipynb_checkpoints/
+.cache/
+.uv-cache/
+__pypackages__/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+*.egg
+
+# Downloaded dependencies and Java/JavaScript build caches
+node_modules/
+.npm/
+.pnpm-store/
+.yarn/cache/
+.gradle/
+.kotlin/
+target/
+.next/
+.nuxt/
+.parcel-cache/
+.turbo/
+.svelte-kit/
+*.tsbuildinfo
+
+# Local credentials and environment overrides; keep public templates
+.env
+.env.*
+!.env.example
+!.env.*.example
+!.env.sample
+!.env.*.sample
+!.env.template
+!.env.*.template
+.envrc.local
+.secrets/
+.aws/
+.ssh/
+**/.codex/auth.json
+**/.codex/sessions/
+**/.codex/log/
+**/.codex/history.jsonl
+**/.claude/.credentials.json
+**/.claude/settings.local.json
+**/.gemini/oauth_creds.json
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+*.key.pem
+*-key.pem
+*_key.pem
+id_rsa
+id_ed25519
+
+# Local databases, journals and logs
+*.sqlite
+*.sqlite3
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite3-journal
+*.sqlite3-wal
+*.sqlite3-shm
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.log
+*.log.[0-9]*
+
+# Test/browser reports and local model caches
+test-results/
+playwright-report/
+.playwright/
+.hf_cache/
+hf_cache/
+.huggingface/
+wandb/
+
+# Personal IDE files; keep reusable launch/tasks/extension definitions
+.idea/
+**/.vscode/*
+!**/.vscode/launch.json
+!**/.vscode/tasks.json
+!**/.vscode/extensions.json
+
+# Operating-system and editor temporary files
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.swp
+*.swo
+*~
+*.tmp
+*.temp
+*.orig
+*.rej
+
+# Workspace-only environments, migration copies and diagnostic output
+/.audit-lab-python-deps/
+/.audit-lab-uv-cache/
+/.saruman-rename-work/
+/.local-git-history/
+/litellm-test-results.json
+/skills.rar
+
+# Codex Development Lab: generated state, queues and historical skill copies
+# Existing component rules also exclude projects, artifacts, databases and backups.
+/Codex-Development-Lab/backup-requests/*
+!/Codex-Development-Lab/backup-requests/.gitkeep
+/Codex-Development-Lab/runner-output/
+/Codex-Development-Lab/minimax-probe-results/
+/Codex-Development-Lab/skills_outdated/
+
+# Audit scripts and Markdown documentation remain versioned.
+# Subdirectories hold isolated runs, copied workspaces, screenshots and reports.
+/Codex-Development-Lab/audit/*/
+/Codex-Development-Lab/audit/*.json
+/Codex-Development-Lab/audit/*.jsonl
+/Codex-Development-Lab/audit/*.txt
+/Codex-Development-Lab/audit/*.log
+/Codex-Development-Lab/audit/*.csv
+/Codex-Development-Lab/audit/*.png
+/Codex-Development-Lab/audit/*.jpg
+/Codex-Development-Lab/audit/*.mp4
+/Codex-Development-Lab/audit/*.webm
+/Codex-Development-Lab/audit/*.zip
+/Codex-Development-Lab/audit/*.tar
+/Codex-Development-Lab/audit/*.tar.gz
+agentic_memory_dev/

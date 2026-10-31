@@ -1,0 +1,314 @@
+{
+  "type": "object",
+  "description": "Исполнитель → контроллер, планировщик и память. Наблюдения конкретного снимка.",
+  "required": [
+    "contract",
+    "version",
+    "scope",
+    "request_ref",
+    "runner_run_id",
+    "build_status",
+    "scenario_results",
+    "infrastructure_errors",
+    "raw_report_refs"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "contract": {
+      "description": "Имя типа сообщения; выбирает схему.",
+      "enum": [
+        "VerificationResult"
+      ],
+      "type": "string"
+    },
+    "version": {
+      "description": "Версия формата; здесь только v1.",
+      "enum": [
+        "v1"
+      ],
+      "type": "string"
+    },
+    "scope": {
+      "description": "Проект, версия ТЗ, версия кода и раунд.",
+      "$ref": "#/$defs/Scope"
+    },
+    "request_ref": {
+      "description": "Исходный запрос этого результата.",
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "runner_run_id": {
+      "type": "string",
+      "description": "ID независимого запуска, назначенный исполнителем."
+    },
+    "build_status": {
+      "type": "string",
+      "description": "Сборка: PASS, FAIL, не выполнялась либо ошибка среды.",
+      "enum": [
+        "PASS",
+        "FAIL",
+        "NOT_EXECUTED",
+        "ERROR"
+      ]
+    },
+    "scenario_results": {
+      "type": "array",
+      "description": "Независимые результаты сценариев.",
+      "items": {
+        "$ref": "#/$defs/ScenarioResult"
+      }
+    },
+    "infrastructure_errors": {
+      "type": "array",
+      "description": "Ошибки среды, отдельно от неверного поведения мода.",
+      "items": {
+        "type": "string",
+        "description": "ID независимого запуска, назначенный исполнителем."
+      }
+    },
+    "raw_report_refs": {
+      "type": "array",
+      "description": "Оригинальные отчёты и журналы.",
+      "items": {
+        "$ref": "#/$defs/ArtifactRef"
+      }
+    }
+  },
+  "$defs": {
+    "ArtifactRef": {
+      "type": "object",
+      "required": [
+        "path",
+        "sha256",
+        "media_type"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Для ArtifactRef: путь относительно корня проекта; для Issue: путь поля в JSON."
+        },
+        "sha256": {
+          "description": "Хеш точного содержимого файла; проверяется при чтении.",
+          "$ref": "#/$defs/Hash"
+        },
+        "media_type": {
+          "type": "string",
+          "description": "MIME-тип файла."
+        }
+      }
+    },
+    "Hash": {
+      "type": "string"
+    },
+    "Observation": {
+      "type": "object",
+      "required": [
+        "checkpoint_id",
+        "status",
+        "actual",
+        "evidence_refs"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "checkpoint_id": {
+          "type": "string",
+          "description": "ID измеряемой точки."
+        },
+        "status": {
+          "type": "string",
+          "description": "Наблюдаемый статус; допустимые значения заданы enum.",
+          "enum": [
+            "PASS",
+            "FAIL",
+            "NOT_EXECUTED",
+            "SKIPPED",
+            "ERROR"
+          ]
+        },
+        "actual": {
+          "type": "string",
+          "description": "Фактическое наблюдение либо причина отсутствия выполнения."
+        },
+        "evidence_refs": {
+          "type": "array",
+          "description": "Цитаты из файлов; доверие к выводу проверяется отдельно.",
+          "items": {
+            "$ref": "#/$defs/SourceRef"
+          }
+        }
+      }
+    },
+    "ScenarioResult": {
+      "type": "object",
+      "required": [
+        "scenario_id",
+        "status",
+        "checkpoints",
+        "media_refs"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "scenario_id": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "description": "Наблюдаемый статус; допустимые значения заданы enum.",
+          "enum": [
+            "PASS",
+            "FAIL",
+            "NOT_EXECUTED",
+            "SKIPPED",
+            "ERROR"
+          ]
+        },
+        "checkpoints": {
+          "type": "array",
+          "description": "Контрольные точки и проверяемые утверждения.",
+          "items": {
+            "$ref": "#/$defs/Observation"
+          }
+        },
+        "media_refs": {
+          "type": "array",
+          "description": "Файлы видео и изображений; не замена измерениям.",
+          "items": {
+            "$ref": "#/$defs/ArtifactRef"
+          }
+        }
+      }
+    },
+    "Scope": {
+      "type": "object",
+      "required": [
+        "project_id",
+        "spec_revision",
+        "source_revision",
+        "round"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "description": "Устойчивый ID проекта."
+        },
+        "spec_revision": {
+          "description": "SHA-256 канонического манифеста ТЗ и явных уточнений.",
+          "$ref": "#/$defs/Hash"
+        },
+        "source_revision": {
+          "description": "SHA-256 канонического манифеста исходников снимка.",
+          "$ref": "#/$defs/Hash"
+        },
+        "round": {
+          "type": "integer",
+          "description": "Номер попытки; не процент готовности."
+        }
+      }
+    },
+    "SourceRef": {
+      "type": "object",
+      "required": [
+        "artifact",
+        "start_line",
+        "end_line",
+        "excerpt"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "artifact": {
+          "description": "Файл, из которого взята цитата.",
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        "start_line": {
+          "type": "integer",
+          "description": "Первая строка фрагмента, с 1."
+        },
+        "end_line": {
+          "type": "integer",
+          "description": "Последняя строка фрагмента включительно."
+        },
+        "excerpt": {
+          "type": "string",
+          "description": "Точная цитата из указанной версии файла."
+        }
+      }
+    },
+    "VerificationResult": {
+      "type": "object",
+      "description": "Исполнитель → контроллер, планировщик и память. Наблюдения конкретного снимка.",
+      "required": [
+        "contract",
+        "version",
+        "scope",
+        "request_ref",
+        "runner_run_id",
+        "build_status",
+        "scenario_results",
+        "infrastructure_errors",
+        "raw_report_refs"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "contract": {
+          "description": "Имя типа сообщения; выбирает схему.",
+          "enum": [
+            "VerificationResult"
+          ],
+          "type": "string"
+        },
+        "version": {
+          "description": "Версия формата; здесь только v1.",
+          "enum": [
+            "v1"
+          ],
+          "type": "string"
+        },
+        "scope": {
+          "description": "Проект, версия ТЗ, версия кода и раунд.",
+          "$ref": "#/$defs/Scope"
+        },
+        "request_ref": {
+          "description": "Исходный запрос этого результата.",
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        "runner_run_id": {
+          "type": "string",
+          "description": "ID независимого запуска, назначенный исполнителем."
+        },
+        "build_status": {
+          "type": "string",
+          "description": "Сборка: PASS, FAIL, не выполнялась либо ошибка среды.",
+          "enum": [
+            "PASS",
+            "FAIL",
+            "NOT_EXECUTED",
+            "ERROR"
+          ]
+        },
+        "scenario_results": {
+          "type": "array",
+          "description": "Независимые результаты сценариев.",
+          "items": {
+            "$ref": "#/$defs/ScenarioResult"
+          }
+        },
+        "infrastructure_errors": {
+          "type": "array",
+          "description": "Ошибки среды, отдельно от неверного поведения мода.",
+          "items": {
+            "type": "string",
+            "description": "ID независимого запуска, назначенный исполнителем."
+          }
+        },
+        "raw_report_refs": {
+          "type": "array",
+          "description": "Оригинальные отчёты и журналы.",
+          "items": {
+            "$ref": "#/$defs/ArtifactRef"
+          }
+        }
+      }
+    }
+  }
+}

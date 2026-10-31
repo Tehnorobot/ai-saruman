@@ -1,0 +1,302 @@
+{
+  "type": "object",
+  "description": "Любая LLM-роль → шлюз. Нормализованный запрос, без ключей API.",
+  "required": [
+    "contract",
+    "version",
+    "request_id",
+    "scope",
+    "role_config",
+    "messages",
+    "attachment_refs",
+    "tools",
+    "output_contract",
+    "budget"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "contract": {
+      "description": "Имя типа сообщения; выбирает схему.",
+      "enum": [
+        "GatewayRequest"
+      ],
+      "type": "string"
+    },
+    "version": {
+      "description": "Версия формата; здесь только v1.",
+      "enum": [
+        "v1"
+      ],
+      "type": "string"
+    },
+    "request_id": {
+      "type": "string",
+      "description": "ID запроса модели."
+    },
+    "scope": {
+      "description": "Проект, версия ТЗ, версия кода и раунд.",
+      "$ref": "#/$defs/Scope"
+    },
+    "role_config": {
+      "description": "Запрошенные роль, провайдер, модель и reasoning.",
+      "$ref": "#/$defs/RoleConfig"
+    },
+    "messages": {
+      "type": "array",
+      "description": "Публичная текстовая часть диалога.",
+      "items": {
+        "$ref": "#/$defs/Message"
+      }
+    },
+    "attachment_refs": {
+      "type": "array",
+      "description": "Дополнительные файлы, которые адаптер читает или даёт прочитать инструментом.",
+      "items": {
+        "$ref": "#/$defs/ArtifactRef"
+      }
+    },
+    "tools": {
+      "type": "array",
+      "description": "Разрешённые инструменты; права задаёт контроллер.",
+      "items": {
+        "$ref": "#/$defs/ToolDefinition"
+      }
+    },
+    "output_contract": {
+      "type": "string",
+      "description": "Имя ожидаемого типа результата LLM."
+    },
+    "budget": {
+      "description": "Оставшийся пользовательский бюджет на момент запроса.",
+      "$ref": "#/$defs/Budget"
+    }
+  },
+  "$defs": {
+    "ArtifactRef": {
+      "type": "object",
+      "required": [
+        "path",
+        "sha256",
+        "media_type"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Для ArtifactRef: путь относительно корня проекта; для Issue: путь поля в JSON."
+        },
+        "sha256": {
+          "description": "Хеш точного содержимого файла; проверяется при чтении.",
+          "$ref": "#/$defs/Hash"
+        },
+        "media_type": {
+          "type": "string",
+          "description": "MIME-тип файла."
+        }
+      }
+    },
+    "Budget": {
+      "type": "object",
+      "required": [
+        "remaining_tokens",
+        "remaining_seconds"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "remaining_tokens": {
+          "type": "integer",
+          "description": "Остаток доступных токенов; пример не задаёт лимит проекта."
+        },
+        "remaining_seconds": {
+          "type": "integer",
+          "description": "Остаток разрешённого времени."
+        }
+      }
+    },
+    "GatewayRequest": {
+      "type": "object",
+      "description": "Любая LLM-роль → шлюз. Нормализованный запрос, без ключей API.",
+      "required": [
+        "contract",
+        "version",
+        "request_id",
+        "scope",
+        "role_config",
+        "messages",
+        "attachment_refs",
+        "tools",
+        "output_contract",
+        "budget"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "contract": {
+          "description": "Имя типа сообщения; выбирает схему.",
+          "enum": [
+            "GatewayRequest"
+          ],
+          "type": "string"
+        },
+        "version": {
+          "description": "Версия формата; здесь только v1.",
+          "enum": [
+            "v1"
+          ],
+          "type": "string"
+        },
+        "request_id": {
+          "type": "string",
+          "description": "ID запроса модели."
+        },
+        "scope": {
+          "description": "Проект, версия ТЗ, версия кода и раунд.",
+          "$ref": "#/$defs/Scope"
+        },
+        "role_config": {
+          "description": "Запрошенные роль, провайдер, модель и reasoning.",
+          "$ref": "#/$defs/RoleConfig"
+        },
+        "messages": {
+          "type": "array",
+          "description": "Публичная текстовая часть диалога.",
+          "items": {
+            "$ref": "#/$defs/Message"
+          }
+        },
+        "attachment_refs": {
+          "type": "array",
+          "description": "Дополнительные файлы, которые адаптер читает или даёт прочитать инструментом.",
+          "items": {
+            "$ref": "#/$defs/ArtifactRef"
+          }
+        },
+        "tools": {
+          "type": "array",
+          "description": "Разрешённые инструменты; права задаёт контроллер.",
+          "items": {
+            "$ref": "#/$defs/ToolDefinition"
+          }
+        },
+        "output_contract": {
+          "type": "string",
+          "description": "Имя ожидаемого типа результата LLM."
+        },
+        "budget": {
+          "description": "Оставшийся пользовательский бюджет на момент запроса.",
+          "$ref": "#/$defs/Budget"
+        }
+      }
+    },
+    "Hash": {
+      "type": "string"
+    },
+    "Message": {
+      "type": "object",
+      "required": [
+        "role",
+        "content"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "role": {
+          "type": "string",
+          "description": "Роль автора сообщения модели.",
+          "enum": [
+            "system",
+            "user",
+            "assistant",
+            "tool"
+          ]
+        },
+        "content": {
+          "type": "string",
+          "description": "Текст сообщения; специальные поля провайдера хранит адаптер."
+        }
+      }
+    },
+    "RoleConfig": {
+      "type": "object",
+      "required": [
+        "role",
+        "provider",
+        "model",
+        "reasoning"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "role": {
+          "type": "string",
+          "description": "Роль автора сообщения модели.",
+          "enum": [
+            "planner",
+            "coder",
+            "reviewer"
+          ]
+        },
+        "provider": {
+          "type": "string",
+          "description": "Выбранный API-провайдер."
+        },
+        "model": {
+          "type": "string",
+          "description": "Точное имя модели у провайдера."
+        },
+        "reasoning": {
+          "type": "string",
+          "description": "Значение из возможностей выбранной модели; default означает штатное."
+        }
+      }
+    },
+    "Scope": {
+      "type": "object",
+      "required": [
+        "project_id",
+        "spec_revision",
+        "source_revision",
+        "round"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "description": "Устойчивый ID проекта."
+        },
+        "spec_revision": {
+          "description": "SHA-256 канонического манифеста ТЗ и явных уточнений.",
+          "$ref": "#/$defs/Hash"
+        },
+        "source_revision": {
+          "description": "SHA-256 канонического манифеста исходников снимка.",
+          "$ref": "#/$defs/Hash"
+        },
+        "round": {
+          "type": "integer",
+          "description": "Номер попытки; не процент готовности."
+        }
+      }
+    },
+    "ToolDefinition": {
+      "type": "object",
+      "required": [
+        "name",
+        "description",
+        "input_schema"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Имя инструмента."
+        },
+        "description": {
+          "type": "string",
+          "description": "Назначение инструмента."
+        },
+        "input_schema": {
+          "description": "Файл схемы аргументов инструмента.",
+          "$ref": "#/$defs/ArtifactRef"
+        }
+      }
+    }
+  }
+}

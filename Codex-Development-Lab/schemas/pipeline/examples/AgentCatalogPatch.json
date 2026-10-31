@@ -1,0 +1,23 @@
+{
+  "contract": "AgentCatalogPatch",
+  "version": "v1",
+  "addressed_finding_ids": [
+    "F1"
+  ],
+  "requirements_upsert": [],
+  "requirements_remove": [],
+  "conditions_upsert": [
+    {
+      "id": "C1",
+      "requirement_id": "R1",
+      "expected": "The planted sapling is present at the chosen position.",
+      "verification": "automated"
+    }
+  ],
+  "conditions_remove": [],
+  "questions_add": [],
+  "question_resolutions_upsert": [],
+  "unclassified_add": [],
+  "unclassified_remove": [],
+  "notes_md": "Clarify only C1; preserve all other records."
+}

@@ -1,0 +1,5 @@
+services:
+  filter:
+    extends:
+      file: compose.saruman.yml
+      service: filter

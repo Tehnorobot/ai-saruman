@@ -1,0 +1,13 @@
+.env
+minimax-probe-results
+projects
+artifacts
+data
+runner-output
+audit
+agent-tasks
+planner-tasks
+backup-requests
+backups
+**/__pycache__
+*.zip

@@ -1,0 +1,71 @@
+{
+  "type": "object",
+  "properties": {
+    "contract": {
+      "type": "string",
+      "const": "AgentReport"
+    },
+    "version": {
+      "type": "string",
+      "const": "v1"
+    },
+    "scenario_manifest_path": {
+      "type": "string"
+    },
+    "notes_md": {
+      "type": "string"
+    },
+    "responses": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "finding_id": {
+            "type": "string"
+          },
+          "disposition": {
+            "type": "string",
+            "enum": [
+              "fixed",
+              "rejected_with_reason",
+              "unverified"
+            ]
+          },
+          "notes_md": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "finding_id",
+          "disposition",
+          "notes_md"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "unverified_claims": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "open_issues": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "contract",
+    "version",
+    "scenario_manifest_path",
+    "notes_md",
+    "responses",
+    "unverified_claims",
+    "open_issues"
+  ],
+  "additionalProperties": false,
+  "$defs": {},
+  "title": "AgentReport - compact agent message"
+}

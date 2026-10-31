@@ -1,0 +1,16 @@
+{
+  "summary": "Repair the independently observed movement assertion failure.",
+  "action": {
+    "kind": "repair_scenario",
+    "target": "movement",
+    "reason": "Repair the independently observed movement assertion failure.",
+    "evidence_refs": [
+      {
+        "path": ".lab-feedback/trace.txt",
+        "start_line": 1,
+        "end_line": 1,
+        "excerpt": "Expected movement of one block but observed zero blocks."
+      }
+    ]
+  }
+}

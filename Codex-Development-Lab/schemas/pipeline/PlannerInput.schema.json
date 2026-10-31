@@ -1,0 +1,249 @@
+{
+  "type": "object",
+  "properties": {
+    "contract": {
+      "const": "PlannerInput",
+      "description": "Имя типа сообщения; выбирает схему."
+    },
+    "version": {
+      "const": "v1",
+      "description": "Версия формата; здесь только v1."
+    },
+    "scope": {
+      "$ref": "#/$defs/Scope",
+      "description": "Проект, версия ТЗ, версия кода и раунд."
+    },
+    "catalog_ref": {
+      "$ref": "#/$defs/ArtifactRef",
+      "description": "Принятый каталог требований; null допустим при начальной проверке."
+    },
+    "graph_ref": {
+      "$ref": "#/$defs/ArtifactRef",
+      "description": "Принятый граф задач; null допустим при начальной проверке."
+    },
+    "task_states": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/TaskState"
+      },
+      "description": "Состояния задач, полученные контроллером из результатов."
+    },
+    "latest_result_refs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/ArtifactRef"
+      },
+      "description": "Свежие отчёты для выбора следующей работы."
+    },
+    "memory_index_ref": {
+      "$ref": "#/$defs/ArtifactRef",
+      "description": "Индекс полного архива; записи читаются по необходимости."
+    },
+    "reflection_requested": {
+      "type": "boolean",
+      "description": "Сигнал о необходимости пересмотреть подход; не команда остановиться."
+    },
+    "budget": {
+      "$ref": "#/$defs/Budget",
+      "description": "Оставшийся пользовательский бюджет на момент запроса."
+    }
+  },
+  "required": [
+    "contract",
+    "version",
+    "scope",
+    "catalog_ref",
+    "graph_ref",
+    "task_states",
+    "latest_result_refs",
+    "memory_index_ref",
+    "reflection_requested",
+    "budget"
+  ],
+  "additionalProperties": false,
+  "description": "Контроллер → планировщик. Текущий снимок, состояния и доступная память.",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PlannerInput — runtime v1",
+  "$defs": {
+    "ArtifactRef": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Для ArtifactRef: путь относительно корня проекта; для Issue: путь поля в JSON.",
+          "pattern": "^(?!/)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//)(?!.*[\\\\:\\x00])[^/]+(?:/[^/]+)*$"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Hash",
+          "description": "Хеш точного содержимого файла; проверяется при чтении."
+        },
+        "media_type": {
+          "type": "string",
+          "minLength": 1,
+          "description": "MIME-тип файла."
+        }
+      },
+      "required": [
+        "path",
+        "sha256",
+        "media_type"
+      ],
+      "additionalProperties": false
+    },
+    "Budget": {
+      "type": "object",
+      "properties": {
+        "remaining_tokens": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Остаток доступных токенов; пример не задаёт лимит проекта."
+        },
+        "remaining_seconds": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Остаток разрешённого времени."
+        }
+      },
+      "required": [
+        "remaining_tokens",
+        "remaining_seconds"
+      ],
+      "additionalProperties": false
+    },
+    "Hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "PlannerInput": {
+      "type": "object",
+      "properties": {
+        "contract": {
+          "const": "PlannerInput",
+          "description": "Имя типа сообщения; выбирает схему."
+        },
+        "version": {
+          "const": "v1",
+          "description": "Версия формата; здесь только v1."
+        },
+        "scope": {
+          "$ref": "#/$defs/Scope",
+          "description": "Проект, версия ТЗ, версия кода и раунд."
+        },
+        "catalog_ref": {
+          "$ref": "#/$defs/ArtifactRef",
+          "description": "Принятый каталог требований; null допустим при начальной проверке."
+        },
+        "graph_ref": {
+          "$ref": "#/$defs/ArtifactRef",
+          "description": "Принятый граф задач; null допустим при начальной проверке."
+        },
+        "task_states": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TaskState"
+          },
+          "description": "Состояния задач, полученные контроллером из результатов."
+        },
+        "latest_result_refs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ArtifactRef"
+          },
+          "description": "Свежие отчёты для выбора следующей работы."
+        },
+        "memory_index_ref": {
+          "$ref": "#/$defs/ArtifactRef",
+          "description": "Индекс полного архива; записи читаются по необходимости."
+        },
+        "reflection_requested": {
+          "type": "boolean",
+          "description": "Сигнал о необходимости пересмотреть подход; не команда остановиться."
+        },
+        "budget": {
+          "$ref": "#/$defs/Budget",
+          "description": "Оставшийся пользовательский бюджет на момент запроса."
+        }
+      },
+      "required": [
+        "contract",
+        "version",
+        "scope",
+        "catalog_ref",
+        "graph_ref",
+        "task_states",
+        "latest_result_refs",
+        "memory_index_ref",
+        "reflection_requested",
+        "budget"
+      ],
+      "additionalProperties": false,
+      "description": "Контроллер → планировщик. Текущий снимок, состояния и доступная память."
+    },
+    "Scope": {
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Устойчивый ID проекта."
+        },
+        "spec_revision": {
+          "$ref": "#/$defs/Hash",
+          "description": "SHA-256 канонического манифеста ТЗ и явных уточнений."
+        },
+        "source_revision": {
+          "$ref": "#/$defs/Hash",
+          "description": "SHA-256 канонического манифеста исходников снимка."
+        },
+        "round": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Номер попытки; не процент готовности."
+        }
+      },
+      "required": [
+        "project_id",
+        "spec_revision",
+        "source_revision",
+        "round"
+      ],
+      "additionalProperties": false
+    },
+    "TaskState": {
+      "type": "object",
+      "properties": {
+        "task_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "ID задачи."
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "pending",
+            "in_progress",
+            "verified",
+            "needs_retest",
+            "manual_pending",
+            "blocked"
+          ],
+          "description": "Наблюдаемый статус; допустимые значения заданы enum."
+        },
+        "result_refs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ArtifactRef"
+          },
+          "description": "Доказательства статуса, а не текстовая самооценка агента."
+        }
+      },
+      "required": [
+        "task_id",
+        "status",
+        "result_refs"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

@@ -1,0 +1,172 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ProjectSnapshot — proposal-v1",
+  "$ref": "#/$defs/ProjectSnapshot",
+  "$defs": {
+    "ArtifactRef": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "MIME-тип файла."
+        },
+        "sha256": {
+          "$ref": "#/$defs/Hash",
+          "description": "Хеш точного содержимого файла; проверяется при чтении."
+        },
+        "media_type": {
+          "type": "string",
+          "minLength": 1,
+          "description": "MIME-тип файла."
+        }
+      },
+      "required": [
+        "path",
+        "sha256",
+        "media_type"
+      ],
+      "additionalProperties": false
+    },
+    "Budget": {
+      "type": "object",
+      "properties": {
+        "remaining_tokens": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Остаток разрешённого времени."
+        },
+        "remaining_seconds": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Остаток разрешённого времени."
+        }
+      },
+      "required": [
+        "remaining_tokens",
+        "remaining_seconds"
+      ],
+      "additionalProperties": false
+    },
+    "Hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "ProjectSnapshot": {
+      "type": "object",
+      "properties": {
+        "contract": {
+          "const": "ProjectSnapshot",
+          "description": "Имя типа сообщения; выбирает схему."
+        },
+        "version": {
+          "const": "proposal-v1",
+          "description": "Версия формата; здесь только proposal-v1."
+        },
+        "scope": {
+          "$ref": "#/$defs/Scope",
+          "description": "Проект, версия ТЗ, версия кода и раунд."
+        },
+        "spec_file": {
+          "$ref": "#/$defs/ArtifactRef",
+          "description": "Сохранённый исходный Markdown."
+        },
+        "clarifications": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ArtifactRef"
+          },
+          "description": "Явные уточнения пользователя; отдельные файлы."
+        },
+        "roles": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/RoleConfig"
+          },
+          "description": "Настройки моделей по ролям."
+        },
+        "budget": {
+          "$ref": "#/$defs/Budget",
+          "description": "Оставшийся пользовательский бюджет на момент запроса."
+        }
+      },
+      "required": [
+        "contract",
+        "version",
+        "scope",
+        "spec_file",
+        "clarifications",
+        "roles",
+        "budget"
+      ],
+      "additionalProperties": false,
+      "description": "Сохранённый вход. Контроллер вычисляет ревизии, затем фиксирует снимок."
+    },
+    "RoleConfig": {
+      "type": "object",
+      "properties": {
+        "role": {
+          "type": "string",
+          "enum": [
+            "planner",
+            "coder",
+            "reviewer"
+          ],
+          "description": "Роль автора сообщения модели."
+        },
+        "provider": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Значение из возможностей выбранной модели; default означает штатное."
+        },
+        "model": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Значение из возможностей выбранной модели; default означает штатное."
+        },
+        "reasoning": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Значение из возможностей выбранной модели; default означает штатное."
+        }
+      },
+      "required": [
+        "role",
+        "provider",
+        "model",
+        "reasoning"
+      ],
+      "additionalProperties": false
+    },
+    "Scope": {
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Устойчивый ID проекта."
+        },
+        "spec_revision": {
+          "$ref": "#/$defs/Hash",
+          "description": "SHA-256 канонического манифеста ТЗ и явных уточнений."
+        },
+        "source_revision": {
+          "$ref": "#/$defs/Hash",
+          "description": "SHA-256 канонического манифеста исходников снимка."
+        },
+        "round": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Номер попытки; не процент готовности."
+        }
+      },
+      "required": [
+        "project_id",
+        "spec_revision",
+        "source_revision",
+        "round"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

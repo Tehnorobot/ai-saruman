@@ -1,0 +1,31 @@
+{
+  "summary": "Review the exact source condition against independently observed assertions.",
+  "action": {
+    "kind": "review_coverage",
+    "target": "REQ-00001-0123456789ab",
+    "reason": "Review the exact source condition against independently observed assertions."
+  },
+  "coverage_reviews": [
+    {
+      "requirement_id": "REQ-00001-0123456789ab",
+      "obligations": [
+        {
+          "id": "condition-0123456789abcdef",
+          "verdict": "covered",
+          "reason": "The observed executable assertion checks the exact player displacement required by this condition.",
+          "scenario_ids": [
+            "movement"
+          ],
+          "evidence_refs": [
+            {
+              "path": "src/gametest/java/MovementTest.java",
+              "start_line": 12,
+              "end_line": 12,
+              "excerpt": "assertEquals(start.offset(1, 0, 0), player.blockPosition());"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

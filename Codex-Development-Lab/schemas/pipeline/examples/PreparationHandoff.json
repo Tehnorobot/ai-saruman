@@ -1,0 +1,41 @@
+{
+  "contract": "PreparationHandoff",
+  "version": "v1",
+  "scope": {
+    "project_id": "demo-trees",
+    "spec_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "source_revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "round": 3
+  },
+  "catalog_ref": {
+    "path": "planning/requirements.json",
+    "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "media_type": "application/json"
+  },
+  "graph_ref": {
+    "path": "planning/tasks.json",
+    "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "media_type": "application/json"
+  },
+  "rationale": "Proceed with independent planting; test the uncertain growth behavior.",
+  "working_decisions": [
+    "Use the existing navigation API; confirm behavior through tests."
+  ],
+  "tasks": [
+    {
+      "task_id": "T1",
+      "status": "ready",
+      "reason": "Planting behavior is clear.",
+      "experiment": null,
+      "return_when": "Available now"
+    },
+    {
+      "task_id": "T2",
+      "status": "experiment",
+      "reason": "Growth geometry is not yet measured.",
+      "experiment": "Compare actual world blocks before and after applying bone meal.",
+      "return_when": "Use the observed result to choose geometry."
+    }
+  ],
+  "unresolved_review_refs": []
+}

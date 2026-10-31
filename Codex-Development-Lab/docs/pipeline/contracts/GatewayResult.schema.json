@@ -1,0 +1,223 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "GatewayResult — proposal-v1",
+  "$ref": "#/$defs/GatewayResult",
+  "$defs": {
+    "ArtifactRef": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "MIME-тип файла."
+        },
+        "sha256": {
+          "$ref": "#/$defs/Hash",
+          "description": "Хеш точного содержимого файла; проверяется при чтении."
+        },
+        "media_type": {
+          "type": "string",
+          "minLength": 1,
+          "description": "MIME-тип файла."
+        }
+      },
+      "required": [
+        "path",
+        "sha256",
+        "media_type"
+      ],
+      "additionalProperties": false
+    },
+    "GatewayResult": {
+      "type": "object",
+      "properties": {
+        "contract": {
+          "const": "GatewayResult",
+          "description": "Имя типа сообщения; выбирает схему."
+        },
+        "version": {
+          "const": "proposal-v1",
+          "description": "Версия формата; здесь только proposal-v1."
+        },
+        "request_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "ID запроса модели."
+        },
+        "outcome": {
+          "type": "string",
+          "enum": [
+            "completed",
+            "incomplete",
+            "error"
+          ],
+          "description": "Для Task: результат функции; для шлюза: завершение или ошибка."
+        },
+        "actual_role_config": {
+          "$ref": "#/$defs/RoleConfig",
+          "description": "Фактические роль, провайдер и модель."
+        },
+        "model_changed": {
+          "type": "boolean",
+          "description": "Была ли замена выбранной модели."
+        },
+        "model_change_reason": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Причина явной замены; null, если её не было."
+        },
+        "output_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ArtifactRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Публичный ответ; null, если результата нет."
+        },
+        "public_transcript_ref": {
+          "$ref": "#/$defs/ArtifactRef",
+          "description": "Публичный журнал запросов и инструментов, без секретов."
+        },
+        "usage": {
+          "$ref": "#/$defs/Usage",
+          "description": "Нормализованный расход; кэш входит в input_tokens."
+        },
+        "error": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Сообщение ошибки."
+                },
+                "message": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Сообщение ошибки."
+                },
+                "retryable": {
+                  "type": "boolean",
+                  "description": "Имеет ли смысл повтор при изменении условий или после ожидания."
+                }
+              },
+              "required": [
+                "code",
+                "message",
+                "retryable"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Структурированная ошибка, либо null."
+        }
+      },
+      "required": [
+        "contract",
+        "version",
+        "request_id",
+        "outcome",
+        "actual_role_config",
+        "model_changed",
+        "model_change_reason",
+        "output_ref",
+        "public_transcript_ref",
+        "usage",
+        "error"
+      ],
+      "additionalProperties": false,
+      "description": "Шлюз → контроллер. Публичный ответ, расход и фактическая модель."
+    },
+    "Hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "RoleConfig": {
+      "type": "object",
+      "properties": {
+        "role": {
+          "type": "string",
+          "enum": [
+            "planner",
+            "coder",
+            "reviewer"
+          ],
+          "description": "Роль автора сообщения модели."
+        },
+        "provider": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Значение из возможностей выбранной модели; default означает штатное."
+        },
+        "model": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Значение из возможностей выбранной модели; default означает штатное."
+        },
+        "reasoning": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Значение из возможностей выбранной модели; default означает штатное."
+        }
+      },
+      "required": [
+        "role",
+        "provider",
+        "model",
+        "reasoning"
+      ],
+      "additionalProperties": false
+    },
+    "Usage": {
+      "type": "object",
+      "properties": {
+        "input_tokens": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Часть входа, записанная в кэш."
+        },
+        "output_tokens": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Часть входа, записанная в кэш."
+        },
+        "cache_read_tokens": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Часть входа, записанная в кэш."
+        },
+        "cache_write_tokens": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Часть входа, записанная в кэш."
+        },
+        "measurement": {
+          "type": "string",
+          "enum": [
+            "provider",
+            "estimated",
+            "unavailable"
+          ],
+          "description": "provider: измерено; estimated: оценено; unavailable: измерения нет."
+        }
+      },
+      "required": [
+        "input_tokens",
+        "output_tokens",
+        "cache_read_tokens",
+        "cache_write_tokens",
+        "measurement"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

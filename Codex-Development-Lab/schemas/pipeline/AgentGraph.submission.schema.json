@@ -1,0 +1,92 @@
+{
+  "type": "object",
+  "required": [
+    "contract",
+    "version",
+    "tasks",
+    "notes_md"
+  ],
+  "additionalProperties": false,
+  "description": "LLM → контроллер. Зависимости задач; смысл проверяет LLM, циклы — алгоритм.",
+  "properties": {
+    "contract": {
+      "type": "string",
+      "enum": [
+        "AgentGraph"
+      ]
+    },
+    "version": {
+      "type": "string",
+      "enum": [
+        "v1"
+      ]
+    },
+    "tasks": {
+      "type": "array",
+      "description": "Компактные функциональные задачи; число не фиксировано.",
+      "items": {
+        "$ref": "#/$defs/Task"
+      }
+    },
+    "notes_md": {
+      "type": "string"
+    }
+  },
+  "$defs": {
+    "Task": {
+      "type": "object",
+      "required": [
+        "id",
+        "title",
+        "requirement_ids",
+        "condition_ids",
+        "depends_on",
+        "outcome",
+        "verification_approach"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Уникальный ID внутри соответствующего каталога."
+        },
+        "title": {
+          "type": "string",
+          "description": "Краткое имя функции для пользователя."
+        },
+        "requirement_ids": {
+          "type": "array",
+          "description": "Связанные требования; ID должны существовать.",
+          "items": {
+            "type": "string",
+            "description": "Как наблюдать результат; затем превращается в исполняемый тест."
+          }
+        },
+        "condition_ids": {
+          "type": "array",
+          "description": "Проверяемые условия; ID должны существовать.",
+          "items": {
+            "type": "string",
+            "description": "Как наблюдать результат; затем превращается в исполняемый тест."
+          }
+        },
+        "depends_on": {
+          "type": "array",
+          "description": "Задачи-предпосылки; связи должны образовать DAG.",
+          "items": {
+            "type": "string",
+            "description": "Как наблюдать результат; затем превращается в исполняемый тест."
+          }
+        },
+        "outcome": {
+          "type": "string",
+          "description": "Для Task: результат функции; для шлюза: завершение или ошибка."
+        },
+        "verification_approach": {
+          "type": "string",
+          "description": "Как наблюдать результат; затем превращается в исполняемый тест."
+        }
+      }
+    }
+  }
+}

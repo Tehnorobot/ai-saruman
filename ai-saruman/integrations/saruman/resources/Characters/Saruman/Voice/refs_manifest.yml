@@ -1,0 +1,19 @@
+# Operator-provided clips; reference_text stays in the recording's language.
+# neutral.wav: 0.16-5.80 s + 11.20-19.10 s of neutral.mp3 (0.12 s gap).
+# Excludes the intervening "He is odd, I grant you" line; evil.wav: full evil.mp3.
+neutral: &neutral
+  wav: neutral
+  text: Do not speak to me of Radagast the Brown. He is a foolish fellow. It's his excessive consumption of mushrooms. They've addled his brain and yellowed his teeth.
+angry: &angry
+  wav: evil
+  text: They drove your people into the hills to scratch a living off rocks! Take back the lands they stole from you!
+happy: *neutral
+sad: *neutral
+sarcastic: *neutral
+scared: *neutral
+whispering: *neutral
+disgusted: *neutral
+combat: *angry
+battle: *angry
+rage: *angry
+evil: *angry

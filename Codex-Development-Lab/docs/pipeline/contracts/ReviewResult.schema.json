@@ -1,0 +1,223 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ReviewResult — proposal-v1",
+  "$ref": "#/$defs/ReviewResult",
+  "$defs": {
+    "ArtifactRef": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "MIME-тип файла."
+        },
+        "sha256": {
+          "$ref": "#/$defs/Hash",
+          "description": "Хеш точного содержимого файла; проверяется при чтении."
+        },
+        "media_type": {
+          "type": "string",
+          "minLength": 1,
+          "description": "MIME-тип файла."
+        }
+      },
+      "required": [
+        "path",
+        "sha256",
+        "media_type"
+      ],
+      "additionalProperties": false
+    },
+    "Finding": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Как проверить предполагаемую проблему."
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "requirement_violation",
+            "technical_risk",
+            "suggestion"
+          ],
+          "description": "В Action: вид работы; в Finding: класс замечания; в памяти: тип записи."
+        },
+        "severity": {
+          "type": "string",
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ],
+          "description": "Риск замечания, не новое требование продукта."
+        },
+        "requirement_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Как проверить предполагаемую проблему."
+          },
+          "description": "Связанные требования; ID должны существовать."
+        },
+        "code_refs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SourceRef"
+          },
+          "description": "Точные места в исходниках."
+        },
+        "observation": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Как проверить предполагаемую проблему."
+        },
+        "consequence": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Как проверить предполагаемую проблему."
+        },
+        "suggested_check": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Как проверить предполагаемую проблему."
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "severity",
+        "requirement_ids",
+        "code_refs",
+        "observation",
+        "consequence",
+        "suggested_check"
+      ],
+      "additionalProperties": false
+    },
+    "Hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "ReviewResult": {
+      "type": "object",
+      "properties": {
+        "contract": {
+          "const": "ReviewResult",
+          "description": "Имя типа сообщения; выбирает схему."
+        },
+        "version": {
+          "const": "proposal-v1",
+          "description": "Версия формата; здесь только proposal-v1."
+        },
+        "scope": {
+          "$ref": "#/$defs/Scope",
+          "description": "Проект, версия ТЗ, версия кода и раунд."
+        },
+        "request_ref": {
+          "$ref": "#/$defs/ArtifactRef",
+          "description": "Исходный запрос этого результата."
+        },
+        "disposition": {
+          "type": "string",
+          "enum": [
+            "changes_requested",
+            "ready_for_verification",
+            "needs_experiment"
+          ],
+          "description": "Вердикт ревью или ответ кодера; не статус теста."
+        },
+        "findings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Finding"
+          },
+          "description": "Замечания с местом, причиной и способом проверки."
+        },
+        "unknowns": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Что обзор не подтвердил."
+        }
+      },
+      "required": [
+        "contract",
+        "version",
+        "scope",
+        "request_ref",
+        "disposition",
+        "findings",
+        "unknowns"
+      ],
+      "additionalProperties": false,
+      "description": "Ревьюер → контроллер и кодер. Вердикт о ревью, не о прохождении игры."
+    },
+    "Scope": {
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Устойчивый ID проекта."
+        },
+        "spec_revision": {
+          "$ref": "#/$defs/Hash",
+          "description": "SHA-256 канонического манифеста ТЗ и явных уточнений."
+        },
+        "source_revision": {
+          "$ref": "#/$defs/Hash",
+          "description": "SHA-256 канонического манифеста исходников снимка."
+        },
+        "round": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Номер попытки; не процент готовности."
+        }
+      },
+      "required": [
+        "project_id",
+        "spec_revision",
+        "source_revision",
+        "round"
+      ],
+      "additionalProperties": false
+    },
+    "SourceRef": {
+      "type": "object",
+      "properties": {
+        "artifact": {
+          "$ref": "#/$defs/ArtifactRef",
+          "description": "Файл, из которого взята цитата."
+        },
+        "start_line": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Первая строка фрагмента, с 1."
+        },
+        "end_line": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Последняя строка фрагмента включительно."
+        },
+        "excerpt": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Точная цитата из указанной версии файла."
+        }
+      },
+      "required": [
+        "artifact",
+        "start_line",
+        "end_line",
+        "excerpt"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

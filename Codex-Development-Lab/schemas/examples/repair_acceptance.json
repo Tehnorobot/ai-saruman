@@ -1,0 +1,8 @@
+{
+  "summary": "Repair the controller-reported acceptance mapping error.",
+  "action": {
+    "kind": "repair_acceptance_plan",
+    "target": "acceptance-plan",
+    "reason": "Repair the controller-reported acceptance mapping error."
+  }
+}

@@ -1,0 +1,353 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PlannerDecision — proposal-v1",
+  "$ref": "#/$defs/PlannerDecision",
+  "$defs": {
+    "Action": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Как отличить полезный результат от повторения попытки."
+        },
+        "task_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Как отличить полезный результат от повторения попытки."
+          },
+          "description": "Задачи, затронутые сообщением."
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "implement",
+            "repair",
+            "diagnose",
+            "verify",
+            "manual"
+          ],
+          "description": "В Action: вид работы; в Finding: класс замечания; в памяти: тип записи."
+        },
+        "goal": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Как отличить полезный результат от повторения попытки."
+        },
+        "expected_observation": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Как отличить полезный результат от повторения попытки."
+        },
+        "depends_on_action_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Как отличить полезный результат от повторения попытки."
+          },
+          "description": "Порядок зависимых действий внутри пакета."
+        },
+        "condition_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Как отличить полезный результат от повторения попытки."
+          },
+          "description": "Проверяемые условия; ID должны существовать."
+        }
+      },
+      "required": [
+        "id",
+        "task_ids",
+        "kind",
+        "goal",
+        "expected_observation",
+        "depends_on_action_ids",
+        "condition_ids"
+      ],
+      "additionalProperties": false
+    },
+    "ArtifactRef": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "MIME-тип файла."
+        },
+        "sha256": {
+          "$ref": "#/$defs/Hash",
+          "description": "Хеш точного содержимого файла; проверяется при чтении."
+        },
+        "media_type": {
+          "type": "string",
+          "minLength": 1,
+          "description": "MIME-тип файла."
+        }
+      },
+      "required": [
+        "path",
+        "sha256",
+        "media_type"
+      ],
+      "additionalProperties": false
+    },
+    "DeferredTask": {
+      "type": "object",
+      "properties": {
+        "task_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Условия возвращения; не безусловный повтор."
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Условия возвращения; не безусловный повтор."
+        },
+        "return_when": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Условия возвращения; не безусловный повтор."
+        }
+      },
+      "required": [
+        "task_id",
+        "reason",
+        "return_when"
+      ],
+      "additionalProperties": false
+    },
+    "Hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "Hypothesis": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Результат, ожидаемый при верной гипотезе."
+        },
+        "statement": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Результат, ожидаемый при верной гипотезе."
+        },
+        "observation_refs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SourceRef"
+          },
+          "description": "Реальные наблюдения, на которых основана гипотеза."
+        },
+        "experiment": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Результат, ожидаемый при верной гипотезе."
+        },
+        "prediction": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Результат, ожидаемый при верной гипотезе."
+        }
+      },
+      "required": [
+        "id",
+        "statement",
+        "observation_refs",
+        "experiment",
+        "prediction"
+      ],
+      "additionalProperties": false
+    },
+    "ManualCheck": {
+      "type": "object",
+      "properties": {
+        "condition_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Ожидаемый результат; в Checkpoint это сравниваемое значение."
+          },
+          "description": "Проверяемые условия; ID должны существовать."
+        },
+        "steps": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Ожидаемый результат; в Checkpoint это сравниваемое значение."
+          },
+          "description": "Последовательность действий."
+        },
+        "expected": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Ожидаемый результат; в Checkpoint это сравниваемое значение."
+        }
+      },
+      "required": [
+        "condition_ids",
+        "steps",
+        "expected"
+      ],
+      "additionalProperties": false
+    },
+    "PlannerDecision": {
+      "type": "object",
+      "properties": {
+        "contract": {
+          "const": "PlannerDecision",
+          "description": "Имя типа сообщения; выбирает схему."
+        },
+        "version": {
+          "const": "proposal-v1",
+          "description": "Версия формата; здесь только proposal-v1."
+        },
+        "scope": {
+          "$ref": "#/$defs/Scope",
+          "description": "Проект, версия ТЗ, версия кода и раунд."
+        },
+        "strategy": {
+          "type": "string",
+          "enum": [
+            "implement",
+            "repair",
+            "diagnose",
+            "reflect",
+            "verify",
+            "manual",
+            "wait"
+          ],
+          "description": "Выбранный режим следующей работы."
+        },
+        "rationale": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Краткое основание выбора пакета."
+        },
+        "actions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Action"
+          },
+          "description": "Адаптивный пакет работ, без фиксированного числа действий."
+        },
+        "hypotheses": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Hypothesis"
+          },
+          "description": "Предположения, отделённые от установленных фактов."
+        },
+        "deferred": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DeferredTask"
+          },
+          "description": "Задачи, перенесённые с объяснением."
+        },
+        "manual_checks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ManualCheck"
+          },
+          "description": "Ручные проверки с инструкцией; не дают автоматического PASS."
+        },
+        "replacement_graph_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ArtifactRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Полный новый TaskGraph; null, если граф не меняется."
+        }
+      },
+      "required": [
+        "contract",
+        "version",
+        "scope",
+        "strategy",
+        "rationale",
+        "actions",
+        "hypotheses",
+        "deferred",
+        "manual_checks",
+        "replacement_graph_ref"
+      ],
+      "additionalProperties": false,
+      "description": "Планировщик → контроллер. Адаптивный пакет, гипотезы, отложенные задачи."
+    },
+    "Scope": {
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Устойчивый ID проекта."
+        },
+        "spec_revision": {
+          "$ref": "#/$defs/Hash",
+          "description": "SHA-256 канонического манифеста ТЗ и явных уточнений."
+        },
+        "source_revision": {
+          "$ref": "#/$defs/Hash",
+          "description": "SHA-256 канонического манифеста исходников снимка."
+        },
+        "round": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Номер попытки; не процент готовности."
+        }
+      },
+      "required": [
+        "project_id",
+        "spec_revision",
+        "source_revision",
+        "round"
+      ],
+      "additionalProperties": false
+    },
+    "SourceRef": {
+      "type": "object",
+      "properties": {
+        "artifact": {
+          "$ref": "#/$defs/ArtifactRef",
+          "description": "Файл, из которого взята цитата."
+        },
+        "start_line": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Первая строка фрагмента, с 1."
+        },
+        "end_line": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Последняя строка фрагмента включительно."
+        },
+        "excerpt": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Точная цитата из указанной версии файла."
+        }
+      },
+      "required": [
+        "artifact",
+        "start_line",
+        "end_line",
+        "excerpt"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

@@ -1,0 +1,13 @@
+fastapi>=0.104.1
+uvicorn>=0.24.0
+python-Levenshtein>=0.23.0
+pymorphy2>=0.9.1
+transliterate>=1.10.2
+pydantic>=2.9.0
+requests>=2.31.0
+# The +cpu suffix prevents the CUDA build from being selected from PyPI.
+torch==2.6.0+cpu
+transformers==4.57.6
+numpy==1.26.4
+sentencepiece>=0.1.99
+protobuf>=4.24.4

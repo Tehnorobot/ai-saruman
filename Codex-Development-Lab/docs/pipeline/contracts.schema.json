@@ -1,0 +1,2663 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:codex-lab:pipeline:proposal-v1",
+  "title": "Предлагаемые контракты новой архитектуры — не runtime API",
+  "$defs": {
+    "Hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "ArtifactRef": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "MIME-тип файла."
+        },
+        "sha256": {
+          "$ref": "#/$defs/Hash",
+          "description": "Хеш точного содержимого файла; проверяется при чтении."
+        },
+        "media_type": {
+          "type": "string",
+          "minLength": 1,
+          "description": "MIME-тип файла."
+        }
+      },
+      "required": [
+        "path",
+        "sha256",
+        "media_type"
+      ],
+      "additionalProperties": false
+    },
+    "SourceRef": {
+      "type": "object",
+      "properties": {
+        "artifact": {
+          "$ref": "#/$defs/ArtifactRef",
+          "description": "Файл, из которого взята цитата."
+        },
+        "start_line": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Первая строка фрагмента, с 1."
+        },
+        "end_line": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Последняя строка фрагмента включительно."
+        },
+        "excerpt": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Точная цитата из указанной версии файла."
+        }
+      },
+      "required": [
+        "artifact",
+        "start_line",
+        "end_line",
+        "excerpt"
+      ],
+      "additionalProperties": false
+    },
+    "Scope": {
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Устойчивый ID проекта."
+        },
+        "spec_revision": {
+          "$ref": "#/$defs/Hash",
+          "description": "SHA-256 канонического манифеста ТЗ и явных уточнений."
+        },
+        "source_revision": {
+          "$ref": "#/$defs/Hash",
+          "description": "SHA-256 канонического манифеста исходников снимка."
+        },
+        "round": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Номер попытки; не процент готовности."
+        }
+      },
+      "required": [
+        "project_id",
+        "spec_revision",
+        "source_revision",
+        "round"
+      ],
+      "additionalProperties": false
+    },
+    "RoleConfig": {
+      "type": "object",
+      "properties": {
+        "role": {
+          "type": "string",
+          "enum": [
+            "planner",
+            "coder",
+            "reviewer"
+          ],
+          "description": "Роль автора сообщения модели."
+        },
+        "provider": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Значение из возможностей выбранной модели; default означает штатное."
+        },
+        "model": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Значение из возможностей выбранной модели; default означает штатное."
+        },
+        "reasoning": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Значение из возможностей выбранной модели; default означает штатное."
+        }
+      },
+      "required": [
+        "role",
+        "provider",
+        "model",
+        "reasoning"
+      ],
+      "additionalProperties": false
+    },
+    "Budget": {
+      "type": "object",
+      "properties": {
+        "remaining_tokens": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Остаток разрешённого времени."
+        },
+        "remaining_seconds": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Остаток разрешённого времени."
+        }
+      },
+      "required": [
+        "remaining_tokens",
+        "remaining_seconds"
+      ],
+      "additionalProperties": false
+    },
+    "Requirement": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Утверждение или проверяемая гипотеза."
+        },
+        "statement": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Утверждение или проверяемая гипотеза."
+        },
+        "source_refs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SourceRef"
+          },
+          "description": "Фрагменты исходного ТЗ, из которых выведено требование."
+        },
+        "condition_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Утверждение или проверяемая гипотеза."
+          },
+          "description": "Проверяемые условия; ID должны существовать."
+        }
+      },
+      "required": [
+        "id",
+        "statement",
+        "source_refs",
+        "condition_ids"
+      ],
+      "additionalProperties": false
+    },
+    "Condition": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Ожидаемый результат; в Checkpoint это сравниваемое значение."
+        },
+        "requirement_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Ожидаемый результат; в Checkpoint это сравниваемое значение."
+        },
+        "expected": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Ожидаемый результат; в Checkpoint это сравниваемое значение."
+        },
+        "verification": {
+          "type": "string",
+          "enum": [
+            "automated",
+            "manual",
+            "mixed"
+          ],
+          "description": "Способ проверки: автоматический, ручной или смешанный."
+        }
+      },
+      "required": [
+        "id",
+        "requirement_id",
+        "expected",
+        "verification"
+      ],
+      "additionalProperties": false
+    },
+    "Task": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Как наблюдать результат; затем превращается в исполняемый тест."
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Как наблюдать результат; затем превращается в исполняемый тест."
+        },
+        "requirement_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Как наблюдать результат; затем превращается в исполняемый тест."
+          },
+          "description": "Связанные требования; ID должны существовать."
+        },
+        "condition_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Как наблюдать результат; затем превращается в исполняемый тест."
+          },
+          "description": "Проверяемые условия; ID должны существовать."
+        },
+        "depends_on": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Как наблюдать результат; затем превращается в исполняемый тест."
+          },
+          "description": "Задачи-предпосылки; связи должны образовать DAG."
+        },
+        "outcome": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Как наблюдать результат; затем превращается в исполняемый тест."
+        },
+        "verification_approach": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Как наблюдать результат; затем превращается в исполняемый тест."
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "requirement_ids",
+        "condition_ids",
+        "depends_on",
+        "outcome",
+        "verification_approach"
+      ],
+      "additionalProperties": false
+    },
+    "TaskState": {
+      "type": "object",
+      "properties": {
+        "task_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "ID задачи."
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "pending",
+            "in_progress",
+            "verified",
+            "needs_retest",
+            "manual_pending",
+            "blocked"
+          ],
+          "description": "Наблюдаемый статус; допустимые значения заданы enum."
+        },
+        "result_refs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ArtifactRef"
+          },
+          "description": "Доказательства статуса, а не текстовая самооценка агента."
+        }
+      },
+      "required": [
+        "task_id",
+        "status",
+        "result_refs"
+      ],
+      "additionalProperties": false
+    },
+    "Action": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Как отличить полезный результат от повторения попытки."
+        },
+        "task_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Как отличить полезный результат от повторения попытки."
+          },
+          "description": "Задачи, затронутые сообщением."
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "implement",
+            "repair",
+            "diagnose",
+            "verify",
+            "manual"
+          ],
+          "description": "В Action: вид работы; в Finding: класс замечания; в памяти: тип записи."
+        },
+        "goal": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Как отличить полезный результат от повторения попытки."
+        },
+        "expected_observation": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Как отличить полезный результат от повторения попытки."
+        },
+        "depends_on_action_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Как отличить полезный результат от повторения попытки."
+          },
+          "description": "Порядок зависимых действий внутри пакета."
+        },
+        "condition_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Как отличить полезный результат от повторения попытки."
+          },
+          "description": "Проверяемые условия; ID должны существовать."
+        }
+      },
+      "required": [
+        "id",
+        "task_ids",
+        "kind",
+        "goal",
+        "expected_observation",
+        "depends_on_action_ids",
+        "condition_ids"
+      ],
+      "additionalProperties": false
+    },
+    "Hypothesis": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Результат, ожидаемый при верной гипотезе."
+        },
+        "statement": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Результат, ожидаемый при верной гипотезе."
+        },
+        "observation_refs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SourceRef"
+          },
+          "description": "Реальные наблюдения, на которых основана гипотеза."
+        },
+        "experiment": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Результат, ожидаемый при верной гипотезе."
+        },
+        "prediction": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Результат, ожидаемый при верной гипотезе."
+        }
+      },
+      "required": [
+        "id",
+        "statement",
+        "observation_refs",
+        "experiment",
+        "prediction"
+      ],
+      "additionalProperties": false
+    },
+    "DeferredTask": {
+      "type": "object",
+      "properties": {
+        "task_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Условия возвращения; не безусловный повтор."
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Условия возвращения; не безусловный повтор."
+        },
+        "return_when": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Условия возвращения; не безусловный повтор."
+        }
+      },
+      "required": [
+        "task_id",
+        "reason",
+        "return_when"
+      ],
+      "additionalProperties": false
+    },
+    "ManualCheck": {
+      "type": "object",
+      "properties": {
+        "condition_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Ожидаемый результат; в Checkpoint это сравниваемое значение."
+          },
+          "description": "Проверяемые условия; ID должны существовать."
+        },
+        "steps": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Ожидаемый результат; в Checkpoint это сравниваемое значение."
+          },
+          "description": "Последовательность действий."
+        },
+        "expected": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Ожидаемый результат; в Checkpoint это сравниваемое значение."
+        }
+      },
+      "required": [
+        "condition_ids",
+        "steps",
+        "expected"
+      ],
+      "additionalProperties": false
+    },
+    "Issue": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Как исправить конкретное нарушение."
+        },
+        "code": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Как исправить конкретное нарушение."
+        },
+        "expected": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Как исправить конкретное нарушение."
+        },
+        "received_type": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Как исправить конкретное нарушение."
+        },
+        "example_json": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Как исправить конкретное нарушение."
+        },
+        "instruction": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Как исправить конкретное нарушение."
+        }
+      },
+      "required": [
+        "path",
+        "code",
+        "expected",
+        "received_type",
+        "example_json",
+        "instruction"
+      ],
+      "additionalProperties": false
+    },
+    "Checkpoint": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Имя измеряемого состояния или события."
+        },
+        "condition_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Имя измеряемого состояния или события."
+          },
+          "description": "Проверяемые условия; ID должны существовать."
+        },
+        "assertion": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Имя измеряемого состояния или события."
+        },
+        "observable": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Имя измеряемого состояния или события."
+        },
+        "comparator": {
+          "type": "string",
+          "enum": [
+            "eq",
+            "ne",
+            "lt",
+            "le",
+            "gt",
+            "ge",
+            "contains",
+            "event"
+          ],
+          "description": "Операция сравнения: eq равно, ne не равно; lt/le/gt/ge; contains; event."
+        },
+        "expected": {
+          "type": [
+            "string",
+            "number",
+            "boolean"
+          ],
+          "description": "Ожидаемый результат; в Checkpoint это сравниваемое значение."
+        }
+      },
+      "required": [
+        "id",
+        "condition_ids",
+        "assertion",
+        "observable",
+        "comparator",
+        "expected"
+      ],
+      "additionalProperties": false
+    },
+    "Scenario": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Имя доверенного профиля; не произвольная shell-команда модели."
+        },
+        "task_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Имя доверенного профиля; не произвольная shell-команда модели."
+          },
+          "description": "Задачи, затронутые сообщением."
+        },
+        "condition_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Имя доверенного профиля; не произвольная shell-команда модели."
+          },
+          "description": "Проверяемые условия; ID должны существовать."
+        },
+        "setup": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Имя доверенного профиля; не произвольная shell-команда модели."
+          },
+          "description": "Исходные условия воспроизводимого сценария."
+        },
+        "steps": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Имя доверенного профиля; не произвольная shell-команда модели."
+          },
+          "description": "Последовательность действий."
+        },
+        "checkpoints": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Checkpoint"
+          },
+          "description": "Контрольные точки и проверяемые утверждения."
+        },
+        "test_file": {
+          "$ref": "#/$defs/ArtifactRef",
+          "description": "Исполняемый тест. Текстовый сценарий сам не запускается."
+        },
+        "runner_profile": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Имя доверенного профиля; не произвольная shell-команда модели."
+        },
+        "media": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "video",
+              "screenshot"
+            ]
+          },
+          "description": "Какие медиа нужны сценарию; пустой массив разрешён."
+        }
+      },
+      "required": [
+        "id",
+        "task_ids",
+        "condition_ids",
+        "setup",
+        "steps",
+        "checkpoints",
+        "test_file",
+        "runner_profile",
+        "media"
+      ],
+      "additionalProperties": false
+    },
+    "Finding": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Как проверить предполагаемую проблему."
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "requirement_violation",
+            "technical_risk",
+            "suggestion"
+          ],
+          "description": "В Action: вид работы; в Finding: класс замечания; в памяти: тип записи."
+        },
+        "severity": {
+          "type": "string",
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ],
+          "description": "Риск замечания, не новое требование продукта."
+        },
+        "requirement_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Как проверить предполагаемую проблему."
+          },
+          "description": "Связанные требования; ID должны существовать."
+        },
+        "code_refs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SourceRef"
+          },
+          "description": "Точные места в исходниках."
+        },
+        "observation": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Как проверить предполагаемую проблему."
+        },
+        "consequence": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Как проверить предполагаемую проблему."
+        },
+        "suggested_check": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Как проверить предполагаемую проблему."
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "severity",
+        "requirement_ids",
+        "code_refs",
+        "observation",
+        "consequence",
+        "suggested_check"
+      ],
+      "additionalProperties": false
+    },
+    "FindingResponse": {
+      "type": "object",
+      "properties": {
+        "finding_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Обоснование исправления, отклонения или неизвестности."
+        },
+        "disposition": {
+          "type": "string",
+          "enum": [
+            "fixed",
+            "rejected_with_reason",
+            "unverified"
+          ],
+          "description": "Вердикт ревью или ответ кодера; не статус теста."
+        },
+        "explanation": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Обоснование исправления, отклонения или неизвестности."
+        },
+        "evidence_refs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SourceRef"
+          },
+          "description": "Цитаты из файлов; доверие к выводу проверяется отдельно."
+        }
+      },
+      "required": [
+        "finding_id",
+        "disposition",
+        "explanation",
+        "evidence_refs"
+      ],
+      "additionalProperties": false
+    },
+    "Observation": {
+      "type": "object",
+      "properties": {
+        "checkpoint_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Фактическое наблюдение либо причина отсутствия выполнения."
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "PASS",
+            "FAIL",
+            "NOT_EXECUTED",
+            "SKIPPED",
+            "ERROR"
+          ],
+          "description": "Наблюдаемый статус; допустимые значения заданы enum."
+        },
+        "actual": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Фактическое наблюдение либо причина отсутствия выполнения."
+        },
+        "evidence_refs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SourceRef"
+          },
+          "description": "Цитаты из файлов; доверие к выводу проверяется отдельно."
+        }
+      },
+      "required": [
+        "checkpoint_id",
+        "status",
+        "actual",
+        "evidence_refs"
+      ],
+      "additionalProperties": false
+    },
+    "ScenarioResult": {
+      "type": "object",
+      "properties": {
+        "scenario_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "ID сценария."
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "PASS",
+            "FAIL",
+            "NOT_EXECUTED",
+            "SKIPPED",
+            "ERROR"
+          ],
+          "description": "Наблюдаемый статус; допустимые значения заданы enum."
+        },
+        "checkpoints": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Observation"
+          },
+          "description": "Контрольные точки и проверяемые утверждения."
+        },
+        "media_refs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ArtifactRef"
+          },
+          "description": "Файлы видео и изображений; не замена измерениям."
+        }
+      },
+      "required": [
+        "scenario_id",
+        "status",
+        "checkpoints",
+        "media_refs"
+      ],
+      "additionalProperties": false
+    },
+    "Usage": {
+      "type": "object",
+      "properties": {
+        "input_tokens": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Часть входа, записанная в кэш."
+        },
+        "output_tokens": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Часть входа, записанная в кэш."
+        },
+        "cache_read_tokens": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Часть входа, записанная в кэш."
+        },
+        "cache_write_tokens": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Часть входа, записанная в кэш."
+        },
+        "measurement": {
+          "type": "string",
+          "enum": [
+            "provider",
+            "estimated",
+            "unavailable"
+          ],
+          "description": "provider: измерено; estimated: оценено; unavailable: измерения нет."
+        }
+      },
+      "required": [
+        "input_tokens",
+        "output_tokens",
+        "cache_read_tokens",
+        "cache_write_tokens",
+        "measurement"
+      ],
+      "additionalProperties": false
+    },
+    "Message": {
+      "type": "object",
+      "properties": {
+        "role": {
+          "type": "string",
+          "enum": [
+            "system",
+            "user",
+            "assistant",
+            "tool"
+          ],
+          "description": "Роль автора сообщения модели."
+        },
+        "content": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Текст сообщения; специальные поля провайдера хранит адаптер."
+        }
+      },
+      "required": [
+        "role",
+        "content"
+      ],
+      "additionalProperties": false
+    },
+    "ToolDefinition": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Назначение инструмента."
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Назначение инструмента."
+        },
+        "input_schema": {
+          "$ref": "#/$defs/ArtifactRef",
+          "description": "Файл схемы аргументов инструмента."
+        }
+      },
+      "required": [
+        "name",
+        "description",
+        "input_schema"
+      ],
+      "additionalProperties": false
+    },
+    "Coverage": {
+      "type": "object",
+      "properties": {
+        "condition_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "ID проверяемого условия."
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "verified",
+            "failed",
+            "untested",
+            "manual_pending",
+            "needs_retest"
+          ],
+          "description": "Наблюдаемый статус; допустимые значения заданы enum."
+        },
+        "result_refs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ArtifactRef"
+          },
+          "description": "Доказательства статуса, а не текстовая самооценка агента."
+        }
+      },
+      "required": [
+        "condition_id",
+        "status",
+        "result_refs"
+      ],
+      "additionalProperties": false
+    },
+    "MemoryLink": {
+      "type": "object",
+      "properties": {
+        "relation": {
+          "type": "string",
+          "enum": [
+            "responds_to",
+            "tests_hypothesis",
+            "changes",
+            "verifies",
+            "supersedes",
+            "returns_after"
+          ],
+          "description": "Тип связи в истории."
+        },
+        "record_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Устойчивый ID записи памяти."
+        }
+      },
+      "required": [
+        "relation",
+        "record_id"
+      ],
+      "additionalProperties": false
+    },
+    "ProjectInput": {
+      "type": "object",
+      "properties": {
+        "contract": {
+          "const": "ProjectInput",
+          "description": "Имя типа сообщения; выбирает схему."
+        },
+        "version": {
+          "const": "proposal-v1",
+          "description": "Версия формата; здесь только proposal-v1."
+        },
+        "project_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Устойчивый ID проекта."
+        },
+        "spec_file": {
+          "$ref": "#/$defs/ArtifactRef",
+          "description": "Сохранённый исходный Markdown."
+        },
+        "clarifications": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ArtifactRef"
+          },
+          "description": "Явные уточнения пользователя; отдельные файлы."
+        },
+        "roles": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/RoleConfig"
+          },
+          "description": "Настройки моделей по ролям."
+        },
+        "budget": {
+          "$ref": "#/$defs/Budget",
+          "description": "Оставшийся пользовательский бюджет на момент запроса."
+        }
+      },
+      "required": [
+        "contract",
+        "version",
+        "project_id",
+        "spec_file",
+        "clarifications",
+        "roles",
+        "budget"
+      ],
+      "additionalProperties": false,
+      "description": "Панель → приём ТЗ. Файл Markdown и явные уточнения."
+    },
+    "ProjectSnapshot": {
+      "type": "object",
+      "properties": {
+        "contract": {
+          "const": "ProjectSnapshot",
+          "description": "Имя типа сообщения; выбирает схему."
+        },
+        "version": {
+          "const": "proposal-v1",
+          "description": "Версия формата; здесь только proposal-v1."
+        },
+        "scope": {
+          "$ref": "#/$defs/Scope",
+          "description": "Проект, версия ТЗ, версия кода и раунд."
+        },
+        "spec_file": {
+          "$ref": "#/$defs/ArtifactRef",
+          "description": "Сохранённый исходный Markdown."
+        },
+        "clarifications": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ArtifactRef"
+          },
+          "description": "Явные уточнения пользователя; отдельные файлы."
+        },
+        "roles": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/RoleConfig"
+          },
+          "description": "Настройки моделей по ролям."
+        },
+        "budget": {
+          "$ref": "#/$defs/Budget",
+          "description": "Оставшийся пользовательский бюджет на момент запроса."
+        }
+      },
+      "required": [
+        "contract",
+        "version",
+        "scope",
+        "spec_file",
+        "clarifications",
+        "roles",
+        "budget"
+      ],
+      "additionalProperties": false,
+      "description": "Сохранённый вход. Контроллер вычисляет ревизии, затем фиксирует снимок."
+    },
+    "DecompositionInput": {
+      "type": "object",
+      "properties": {
+        "contract": {
+          "const": "DecompositionInput",
+          "description": "Имя типа сообщения; выбирает схему."
+        },
+        "version": {
+          "const": "proposal-v1",
+          "description": "Версия формата; здесь только proposal-v1."
+        },
+        "scope": {
+          "$ref": "#/$defs/Scope",
+          "description": "Проект, версия ТЗ, версия кода и раунд."
+        },
+        "spec_file": {
+          "$ref": "#/$defs/ArtifactRef",
+          "description": "Сохранённый исходный Markdown."
+        },
+        "clarifications": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ArtifactRef"
+          },
+          "description": "Явные уточнения пользователя; отдельные файлы."
+        },
+        "previous_catalog_refs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ArtifactRef"
+          },
+          "description": "Предыдущие каталоги при изменении ТЗ."
+        },
+        "instructions": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Явные инструкции этапа."
+        }
+      },
+      "required": [
+        "contract",
+        "version",
+        "scope",
+        "spec_file",
+        "clarifications",
+        "previous_catalog_refs",
+        "instructions"
+      ],
+      "additionalProperties": false,
+      "description": "Контроллер → LLM-планировщик. Исходное ТЗ доступно целиком по ссылке."
+    },
+    "RequirementsCatalog": {
+      "type": "object",
+      "properties": {
+        "contract": {
+          "const": "RequirementsCatalog",
+          "description": "Имя типа сообщения; выбирает схему."
+        },
+        "version": {
+          "const": "proposal-v1",
+          "description": "Версия формата; здесь только proposal-v1."
+        },
+        "scope": {
+          "$ref": "#/$defs/Scope",
+          "description": "Проект, версия ТЗ, версия кода и раунд."
+        },
+        "requirements": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Requirement"
+          },
+          "description": "Смысловые требования из ТЗ."
+        },
+        "conditions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Condition"
+          },
+          "description": "Наблюдаемые условия выполнения требований."
+        },
+        "open_questions": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Неясности, требующие уточнения; нельзя выдумывать ответ."
+        },
+        "unclassified_source_refs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SourceRef"
+          },
+          "description": "Фрагменты ТЗ, смысл которых ещё не классифицирован."
+        }
+      },
+      "required": [
+        "contract",
+        "version",
+        "scope",
+        "requirements",
+        "conditions",
+        "open_questions",
+        "unclassified_source_refs"
+      ],
+      "additionalProperties": false,
+      "description": "LLM → контроллер и ревьюер. Смысловые требования и измеримые условия."
+    },
+    "TaskGraph": {
+      "type": "object",
+      "properties": {
+        "contract": {
+          "const": "TaskGraph",
+          "description": "Имя типа сообщения; выбирает схему."
+        },
+        "version": {
+          "const": "proposal-v1",
+          "description": "Версия формата; здесь только proposal-v1."
+        },
+        "scope": {
+          "$ref": "#/$defs/Scope",
+          "description": "Проект, версия ТЗ, версия кода и раунд."
+        },
+        "catalog_ref": {
+          "$ref": "#/$defs/ArtifactRef",
+          "description": "Принятый каталог требований; null допустим при начальной проверке."
+        },
+        "tasks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Task"
+          },
+          "description": "Компактные функциональные задачи; число не фиксировано."
+        }
+      },
+      "required": [
+        "contract",
+        "version",
+        "scope",
+        "catalog_ref",
+        "tasks"
+      ],
+      "additionalProperties": false,
+      "description": "LLM → контроллер. Зависимости задач; смысл проверяет LLM, циклы — алгоритм."
+    },
+    "PlannerInput": {
+      "type": "object",
+      "properties": {
+        "contract": {
+          "const": "PlannerInput",
+          "description": "Имя типа сообщения; выбирает схему."
+        },
+        "version": {
+          "const": "proposal-v1",
+          "description": "Версия формата; здесь только proposal-v1."
+        },
+        "scope": {
+          "$ref": "#/$defs/Scope",
+          "description": "Проект, версия ТЗ, версия кода и раунд."
+        },
+        "catalog_ref": {
+          "$ref": "#/$defs/ArtifactRef",
+          "description": "Принятый каталог требований; null допустим при начальной проверке."
+        },
+        "graph_ref": {
+          "$ref": "#/$defs/ArtifactRef",
+          "description": "Принятый граф задач; null допустим при начальной проверке."
+        },
+        "task_states": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TaskState"
+          },
+          "description": "Состояния задач, полученные контроллером из результатов."
+        },
+        "latest_result_refs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ArtifactRef"
+          },
+          "description": "Свежие отчёты для выбора следующей работы."
+        },
+        "memory_index_ref": {
+          "$ref": "#/$defs/ArtifactRef",
+          "description": "Индекс полного архива; записи читаются по необходимости."
+        },
+        "reflection_requested": {
+          "type": "boolean",
+          "description": "Сигнал о необходимости пересмотреть подход; не команда остановиться."
+        },
+        "budget": {
+          "$ref": "#/$defs/Budget",
+          "description": "Оставшийся пользовательский бюджет на момент запроса."
+        }
+      },
+      "required": [
+        "contract",
+        "version",
+        "scope",
+        "catalog_ref",
+        "graph_ref",
+        "task_states",
+        "latest_result_refs",
+        "memory_index_ref",
+        "reflection_requested",
+        "budget"
+      ],
+      "additionalProperties": false,
+      "description": "Контроллер → планировщик. Текущий снимок, состояния и доступная память."
+    },
+    "PlannerDecision": {
+      "type": "object",
+      "properties": {
+        "contract": {
+          "const": "PlannerDecision",
+          "description": "Имя типа сообщения; выбирает схему."
+        },
+        "version": {
+          "const": "proposal-v1",
+          "description": "Версия формата; здесь только proposal-v1."
+        },
+        "scope": {
+          "$ref": "#/$defs/Scope",
+          "description": "Проект, версия ТЗ, версия кода и раунд."
+        },
+        "strategy": {
+          "type": "string",
+          "enum": [
+            "implement",
+            "repair",
+            "diagnose",
+            "reflect",
+            "verify",
+            "manual",
+            "wait"
+          ],
+          "description": "Выбранный режим следующей работы."
+        },
+        "rationale": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Краткое основание выбора пакета."
+        },
+        "actions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Action"
+          },
+          "description": "Адаптивный пакет работ, без фиксированного числа действий."
+        },
+        "hypotheses": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Hypothesis"
+          },
+          "description": "Предположения, отделённые от установленных фактов."
+        },
+        "deferred": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DeferredTask"
+          },
+          "description": "Задачи, перенесённые с объяснением."
+        },
+        "manual_checks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ManualCheck"
+          },
+          "description": "Ручные проверки с инструкцией; не дают автоматического PASS."
+        },
+        "replacement_graph_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ArtifactRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Полный новый TaskGraph; null, если граф не меняется."
+        }
+      },
+      "required": [
+        "contract",
+        "version",
+        "scope",
+        "strategy",
+        "rationale",
+        "actions",
+        "hypotheses",
+        "deferred",
+        "manual_checks",
+        "replacement_graph_ref"
+      ],
+      "additionalProperties": false,
+      "description": "Планировщик → контроллер. Адаптивный пакет, гипотезы, отложенные задачи."
+    },
+    "ValidationRequest": {
+      "type": "object",
+      "properties": {
+        "contract": {
+          "const": "ValidationRequest",
+          "description": "Имя типа сообщения; выбирает схему."
+        },
+        "version": {
+          "const": "proposal-v1",
+          "description": "Версия формата; здесь только proposal-v1."
+        },
+        "scope": {
+          "$ref": "#/$defs/Scope",
+          "description": "Проект, версия ТЗ, версия кода и раунд."
+        },
+        "payload_ref": {
+          "$ref": "#/$defs/ArtifactRef",
+          "description": "Оригинальное сообщение в файле; сохраняется без смысловой правки."
+        },
+        "schema_name": {
+          "type": "string",
+          "enum": [
+            "RequirementsCatalog",
+            "TaskGraph",
+            "PlannerDecision",
+            "CoderReport",
+            "ScenarioManifest",
+            "ReviewResult",
+            "ReviewResponse"
+          ],
+          "description": "Схема из доверенного реестра."
+        },
+        "catalog_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ArtifactRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Принятый каталог требований; null допустим при начальной проверке."
+        },
+        "graph_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ArtifactRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Принятый граф задач; null допустим при начальной проверке."
+        }
+      },
+      "required": [
+        "contract",
+        "version",
+        "scope",
+        "payload_ref",
+        "schema_name",
+        "catalog_ref",
+        "graph_ref"
+      ],
+      "additionalProperties": false,
+      "description": "Внутренний вызов контроллера. Проверяемый JSON и доверенная схема."
+    },
+    "ValidationResult": {
+      "type": "object",
+      "properties": {
+        "contract": {
+          "const": "ValidationResult",
+          "description": "Имя типа сообщения; выбирает схему."
+        },
+        "version": {
+          "const": "proposal-v1",
+          "description": "Версия формата; здесь только proposal-v1."
+        },
+        "scope": {
+          "$ref": "#/$defs/Scope",
+          "description": "Проект, версия ТЗ, версия кода и раунд."
+        },
+        "submission_ref": {
+          "$ref": "#/$defs/ArtifactRef",
+          "description": "Точная версия проверенного сообщения."
+        },
+        "valid": {
+          "type": "boolean",
+          "description": "Результат формальных проверок; не означает смысловую правильность."
+        },
+        "checks_passed": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Имена успешно выполненных формальных проверок."
+        },
+        "issues": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Issue"
+          },
+          "description": "Точные ошибки формата и связей."
+        },
+        "schema_ref": {
+          "$ref": "#/$defs/ArtifactRef",
+          "description": "Доверенная схема для исправления."
+        },
+        "example_ref": {
+          "$ref": "#/$defs/ArtifactRef",
+          "description": "Соответствующий схеме пример."
+        }
+      },
+      "required": [
+        "contract",
+        "version",
+        "scope",
+        "submission_ref",
+        "valid",
+        "checks_passed",
+        "issues",
+        "schema_ref",
+        "example_ref"
+      ],
+      "additionalProperties": false,
+      "description": "Контроллер → автор сообщения. Точная ошибка и материал для коррекции."
+    },
+    "CoderAssignment": {
+      "type": "object",
+      "properties": {
+        "contract": {
+          "const": "CoderAssignment",
+          "description": "Имя типа сообщения; выбирает схему."
+        },
+        "version": {
+          "const": "proposal-v1",
+          "description": "Версия формата; здесь только proposal-v1."
+        },
+        "scope": {
+          "$ref": "#/$defs/Scope",
+          "description": "Проект, версия ТЗ, версия кода и раунд."
+        },
+        "plan_ref": {
+          "$ref": "#/$defs/ArtifactRef",
+          "description": "Принятый план раунда."
+        },
+        "catalog_ref": {
+          "$ref": "#/$defs/ArtifactRef",
+          "description": "Принятый каталог требований; null допустим при начальной проверке."
+        },
+        "graph_ref": {
+          "$ref": "#/$defs/ArtifactRef",
+          "description": "Принятый граф задач; null допустим при начальной проверке."
+        },
+        "memory_index_ref": {
+          "$ref": "#/$defs/ArtifactRef",
+          "description": "Индекс полного архива; записи читаются по необходимости."
+        },
+        "writable_roots": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Разрешённые области записи; физически задаются исполнителем."
+        },
+        "instructions": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Явные инструкции этапа."
+        }
+      },
+      "required": [
+        "contract",
+        "version",
+        "scope",
+        "plan_ref",
+        "catalog_ref",
+        "graph_ref",
+        "memory_index_ref",
+        "writable_roots",
+        "instructions"
+      ],
+      "additionalProperties": false,
+      "description": "Контроллер → кодер. Принятый план и границы рабочей области."
+    },
+    "CoderReport": {
+      "type": "object",
+      "properties": {
+        "contract": {
+          "const": "CoderReport",
+          "description": "Имя типа сообщения; выбирает схему."
+        },
+        "version": {
+          "const": "proposal-v1",
+          "description": "Версия формата; здесь только proposal-v1."
+        },
+        "scope": {
+          "$ref": "#/$defs/Scope",
+          "description": "Проект, версия ТЗ, версия кода и раунд."
+        },
+        "base_source_revision": {
+          "$ref": "#/$defs/Hash",
+          "description": "Версия исходников до правок кодера."
+        },
+        "plan_ref": {
+          "$ref": "#/$defs/ArtifactRef",
+          "description": "Принятый план раунда."
+        },
+        "action_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Краткое описание записи или изменения."
+          },
+          "description": "Действия принятого плана, по которым кодер отчитывается."
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Краткое описание записи или изменения."
+        },
+        "changed_files": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ArtifactRef"
+          },
+          "description": "Версии изменённых файлов; контроллер сверяет с реальным diff."
+        },
+        "scenario_manifest_ref": {
+          "$ref": "#/$defs/ArtifactRef",
+          "description": "Версия описания сценариев для данного снимка."
+        },
+        "review_response_refs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ArtifactRef"
+          },
+          "description": "Полные ответы кодера на ревью."
+        },
+        "unverified_claims": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Краткое описание записи или изменения."
+          },
+          "description": "Заявления кодера, которые ещё надо подтвердить."
+        },
+        "open_issues": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Краткое описание записи или изменения."
+          },
+          "description": "Известные нерешённые вопросы."
+        }
+      },
+      "required": [
+        "contract",
+        "version",
+        "scope",
+        "base_source_revision",
+        "plan_ref",
+        "action_ids",
+        "summary",
+        "changed_files",
+        "scenario_manifest_ref",
+        "review_response_refs",
+        "unverified_claims",
+        "open_issues"
+      ],
+      "additionalProperties": false,
+      "description": "Кодер → контроллер. Отчёт о правках; это утверждение агента, ещё не PASS."
+    },
+    "ScenarioManifest": {
+      "type": "object",
+      "properties": {
+        "contract": {
+          "const": "ScenarioManifest",
+          "description": "Имя типа сообщения; выбирает схему."
+        },
+        "version": {
+          "const": "proposal-v1",
+          "description": "Версия формата; здесь только proposal-v1."
+        },
+        "scope": {
+          "$ref": "#/$defs/Scope",
+          "description": "Проект, версия ТЗ, версия кода и раунд."
+        },
+        "scenarios": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Scenario"
+          },
+          "description": "Сценарии и их измеримые контрольные точки."
+        }
+      },
+      "required": [
+        "contract",
+        "version",
+        "scope",
+        "scenarios"
+      ],
+      "additionalProperties": false,
+      "description": "Кодер → ревьюер → исполнитель. Исполняемые тесты плюс явные утверждения."
+    },
+    "ReviewRequest": {
+      "type": "object",
+      "properties": {
+        "contract": {
+          "const": "ReviewRequest",
+          "description": "Имя типа сообщения; выбирает схему."
+        },
+        "version": {
+          "const": "proposal-v1",
+          "description": "Версия формата; здесь только proposal-v1."
+        },
+        "scope": {
+          "$ref": "#/$defs/Scope",
+          "description": "Проект, версия ТЗ, версия кода и раунд."
+        },
+        "subject": {
+          "type": "string",
+          "enum": [
+            "decomposition",
+            "plan",
+            "code",
+            "scenarios"
+          ],
+          "description": "Что рассматривает ревьюер: разбиение, план, код или тесты."
+        },
+        "context_ref": {
+          "$ref": "#/$defs/ArtifactRef",
+          "description": "Вход рассматриваемого этапа: DecompositionInput, PlannerInput или CoderAssignment."
+        },
+        "catalog_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ArtifactRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Принятый каталог требований; null допустим при начальной проверке."
+        },
+        "subject_refs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ArtifactRef"
+          },
+          "description": "Документы и файлы, которые нужно проверить."
+        },
+        "diff_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ArtifactRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Изменения относительно базы; null для этапа без diff."
+        },
+        "memory_index_ref": {
+          "$ref": "#/$defs/ArtifactRef",
+          "description": "Индекс полного архива; записи читаются по необходимости."
+        },
+        "focus": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Риски и вопросы, на которых сосредоточить обзор."
+        }
+      },
+      "required": [
+        "contract",
+        "version",
+        "scope",
+        "subject",
+        "context_ref",
+        "catalog_ref",
+        "subject_refs",
+        "diff_ref",
+        "memory_index_ref",
+        "focus"
+      ],
+      "additionalProperties": false,
+      "description": "Контроллер → ревьюер. Независимое чтение кода, условий и тестов."
+    },
+    "ReviewResult": {
+      "type": "object",
+      "properties": {
+        "contract": {
+          "const": "ReviewResult",
+          "description": "Имя типа сообщения; выбирает схему."
+        },
+        "version": {
+          "const": "proposal-v1",
+          "description": "Версия формата; здесь только proposal-v1."
+        },
+        "scope": {
+          "$ref": "#/$defs/Scope",
+          "description": "Проект, версия ТЗ, версия кода и раунд."
+        },
+        "request_ref": {
+          "$ref": "#/$defs/ArtifactRef",
+          "description": "Исходный запрос этого результата."
+        },
+        "disposition": {
+          "type": "string",
+          "enum": [
+            "changes_requested",
+            "ready_for_verification",
+            "needs_experiment"
+          ],
+          "description": "Вердикт ревью или ответ кодера; не статус теста."
+        },
+        "findings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Finding"
+          },
+          "description": "Замечания с местом, причиной и способом проверки."
+        },
+        "unknowns": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Что обзор не подтвердил."
+        }
+      },
+      "required": [
+        "contract",
+        "version",
+        "scope",
+        "request_ref",
+        "disposition",
+        "findings",
+        "unknowns"
+      ],
+      "additionalProperties": false,
+      "description": "Ревьюер → контроллер и кодер. Вердикт о ревью, не о прохождении игры."
+    },
+    "ReviewResponse": {
+      "type": "object",
+      "properties": {
+        "contract": {
+          "const": "ReviewResponse",
+          "description": "Имя типа сообщения; выбирает схему."
+        },
+        "version": {
+          "const": "proposal-v1",
+          "description": "Версия формата; здесь только proposal-v1."
+        },
+        "scope": {
+          "$ref": "#/$defs/Scope",
+          "description": "Проект, версия ТЗ, версия кода и раунд."
+        },
+        "review_ref": {
+          "$ref": "#/$defs/ArtifactRef",
+          "description": "Ревью, на которое отвечает кодер."
+        },
+        "responses": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/FindingResponse"
+          },
+          "description": "Ответ на каждое замечание."
+        }
+      },
+      "required": [
+        "contract",
+        "version",
+        "scope",
+        "review_ref",
+        "responses"
+      ],
+      "additionalProperties": false,
+      "description": "Кодер → ревьюер. Ответ на каждое замечание с подтверждением."
+    },
+    "VerificationRequest": {
+      "type": "object",
+      "properties": {
+        "contract": {
+          "const": "VerificationRequest",
+          "description": "Имя типа сообщения; выбирает схему."
+        },
+        "version": {
+          "const": "proposal-v1",
+          "description": "Версия формата; здесь только proposal-v1."
+        },
+        "scope": {
+          "$ref": "#/$defs/Scope",
+          "description": "Проект, версия ТЗ, версия кода и раунд."
+        },
+        "source_snapshot_ref": {
+          "$ref": "#/$defs/ArtifactRef",
+          "description": "Архив снимка исходников; состав сверяется с source_revision."
+        },
+        "scenario_manifest_ref": {
+          "$ref": "#/$defs/ArtifactRef",
+          "description": "Версия описания сценариев для данного снимка."
+        },
+        "scenario_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Имя доверенного профиля; не произвольная shell-команда модели."
+          },
+          "description": "Целевые сценарии."
+        },
+        "regression_scenario_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Имя доверенного профиля; не произвольная shell-команда модели."
+          },
+          "description": "Проверки ранее работавших затронутых функций."
+        },
+        "run_kind": {
+          "type": "string",
+          "enum": [
+            "targeted",
+            "regression",
+            "full"
+          ],
+          "description": "Целевой, регрессионный или полный запуск."
+        },
+        "runner_profile": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Имя доверенного профиля; не произвольная shell-команда модели."
+        }
+      },
+      "required": [
+        "contract",
+        "version",
+        "scope",
+        "source_snapshot_ref",
+        "scenario_manifest_ref",
+        "scenario_ids",
+        "regression_scenario_ids",
+        "run_kind",
+        "runner_profile"
+      ],
+      "additionalProperties": false,
+      "description": "Контроллер → независимый исполнитель. Снимок кода и выбранные проверки."
+    },
+    "VerificationResult": {
+      "type": "object",
+      "properties": {
+        "contract": {
+          "const": "VerificationResult",
+          "description": "Имя типа сообщения; выбирает схему."
+        },
+        "version": {
+          "const": "proposal-v1",
+          "description": "Версия формата; здесь только proposal-v1."
+        },
+        "scope": {
+          "$ref": "#/$defs/Scope",
+          "description": "Проект, версия ТЗ, версия кода и раунд."
+        },
+        "request_ref": {
+          "$ref": "#/$defs/ArtifactRef",
+          "description": "Исходный запрос этого результата."
+        },
+        "runner_run_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "ID независимого запуска, назначенный исполнителем."
+        },
+        "build_status": {
+          "type": "string",
+          "enum": [
+            "PASS",
+            "FAIL",
+            "NOT_EXECUTED",
+            "ERROR"
+          ],
+          "description": "Сборка: PASS, FAIL, не выполнялась либо ошибка среды."
+        },
+        "scenario_results": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ScenarioResult"
+          },
+          "description": "Независимые результаты сценариев."
+        },
+        "infrastructure_errors": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "ID независимого запуска, назначенный исполнителем."
+          },
+          "description": "Ошибки среды, отдельно от неверного поведения мода."
+        },
+        "raw_report_refs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ArtifactRef"
+          },
+          "description": "Оригинальные отчёты и журналы."
+        }
+      },
+      "required": [
+        "contract",
+        "version",
+        "scope",
+        "request_ref",
+        "runner_run_id",
+        "build_status",
+        "scenario_results",
+        "infrastructure_errors",
+        "raw_report_refs"
+      ],
+      "additionalProperties": false,
+      "description": "Исполнитель → контроллер, планировщик и память. Наблюдения конкретного снимка."
+    },
+    "MemoryWrite": {
+      "type": "object",
+      "properties": {
+        "contract": {
+          "const": "MemoryWrite",
+          "description": "Имя типа сообщения; выбирает схему."
+        },
+        "version": {
+          "const": "proposal-v1",
+          "description": "Версия формата; здесь только proposal-v1."
+        },
+        "scope": {
+          "$ref": "#/$defs/Scope",
+          "description": "Проект, версия ТЗ, версия кода и раунд."
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "spec",
+            "catalog",
+            "graph",
+            "plan",
+            "coder",
+            "review",
+            "verification",
+            "reflection",
+            "validation",
+            "usage",
+            "manual"
+          ],
+          "description": "В Action: вид работы; в Finding: класс замечания; в памяти: тип записи."
+        },
+        "producer": {
+          "type": "string",
+          "enum": [
+            "user",
+            "controller",
+            "planner",
+            "coder",
+            "reviewer",
+            "runner",
+            "gateway"
+          ],
+          "description": "Источник записи; подтверждается каналом, не принимается на веру."
+        },
+        "payload_ref": {
+          "$ref": "#/$defs/ArtifactRef",
+          "description": "Оригинальное сообщение в файле; сохраняется без смысловой правки."
+        },
+        "task_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Задачи, затронутые сообщением."
+        },
+        "requirement_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Связанные требования; ID должны существовать."
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "proposed",
+              "verified_pass",
+              "verified_fail",
+              "untested",
+              "blocked",
+              "superseded"
+            ]
+          },
+          "description": "Теги, назначаемые контроллером по доказательствам."
+        },
+        "links": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/MemoryLink"
+          },
+          "description": "Связи с предыдущими записями."
+        }
+      },
+      "required": [
+        "contract",
+        "version",
+        "scope",
+        "kind",
+        "producer",
+        "payload_ref",
+        "task_ids",
+        "requirement_ids",
+        "tags",
+        "links"
+      ],
+      "additionalProperties": false,
+      "description": "Контроллер → архив. Публичные оригиналы и связи; агенты не назначают успех."
+    },
+    "MemoryRecord": {
+      "type": "object",
+      "properties": {
+        "contract": {
+          "const": "MemoryRecord",
+          "description": "Имя типа сообщения; выбирает схему."
+        },
+        "version": {
+          "const": "proposal-v1",
+          "description": "Версия формата; здесь только proposal-v1."
+        },
+        "record_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Устойчивый ID записи памяти."
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Время сохранения в UTC, ISO 8601."
+        },
+        "entry": {
+          "$ref": "#/$defs/MemoryWrite",
+          "description": "Полная запись MemoryWrite."
+        },
+        "index_ref": {
+          "$ref": "#/$defs/ArtifactRef",
+          "description": "Версия индекса архива."
+        }
+      },
+      "required": [
+        "contract",
+        "version",
+        "record_id",
+        "created_at",
+        "entry",
+        "index_ref"
+      ],
+      "additionalProperties": false,
+      "description": "Архив → читатели. Неизменяемая запись, время, исходник и связи."
+    },
+    "MemoryQuery": {
+      "type": "object",
+      "properties": {
+        "contract": {
+          "const": "MemoryQuery",
+          "description": "Имя типа сообщения; выбирает схему."
+        },
+        "version": {
+          "const": "proposal-v1",
+          "description": "Версия формата; здесь только proposal-v1."
+        },
+        "project_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Устойчивый ID проекта."
+        },
+        "task_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Устойчивый ID проекта."
+          },
+          "description": "Задачи, затронутые сообщением."
+        },
+        "record_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Устойчивый ID проекта."
+          },
+          "description": "Явно запрошенные записи."
+        },
+        "query": {
+          "type": "string",
+          "description": "Поисковая строка; может быть пустой."
+        },
+        "cursor": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Позиция продолжения; null для первой страницы."
+        }
+      },
+      "required": [
+        "contract",
+        "version",
+        "project_id",
+        "task_ids",
+        "record_ids",
+        "query",
+        "cursor"
+      ],
+      "additionalProperties": false,
+      "description": "Агент → инструмент чтения. Поиск записей или чтение полного фрагмента."
+    },
+    "MemoryResult": {
+      "type": "object",
+      "properties": {
+        "contract": {
+          "const": "MemoryResult",
+          "description": "Имя типа сообщения; выбирает схему."
+        },
+        "version": {
+          "const": "proposal-v1",
+          "description": "Версия формата; здесь только proposal-v1."
+        },
+        "records": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "record_id": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Краткое описание записи или изменения."
+              },
+              "summary": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Краткое описание записи или изменения."
+              },
+              "full_record_ref": {
+                "$ref": "#/$defs/ArtifactRef",
+                "description": "Ссылка на полный MemoryRecord без сокращения."
+              }
+            },
+            "required": [
+              "record_id",
+              "summary",
+              "full_record_ref"
+            ],
+            "additionalProperties": false
+          },
+          "description": "Найденные записи с кратким описанием."
+        },
+        "next_cursor": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Продолжение выдачи; null означает последнюю страницу."
+        },
+        "omitted_records": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Записи вне этой страницы; остаются в архиве."
+        }
+      },
+      "required": [
+        "contract",
+        "version",
+        "records",
+        "next_cursor",
+        "omitted_records"
+      ],
+      "additionalProperties": false,
+      "description": "Индекс → агент. Краткие результаты и ссылки на полные записи. Есть продолжение."
+    },
+    "GatewayRequest": {
+      "type": "object",
+      "properties": {
+        "contract": {
+          "const": "GatewayRequest",
+          "description": "Имя типа сообщения; выбирает схему."
+        },
+        "version": {
+          "const": "proposal-v1",
+          "description": "Версия формата; здесь только proposal-v1."
+        },
+        "request_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Имя ожидаемого типа результата LLM."
+        },
+        "scope": {
+          "$ref": "#/$defs/Scope",
+          "description": "Проект, версия ТЗ, версия кода и раунд."
+        },
+        "role_config": {
+          "$ref": "#/$defs/RoleConfig",
+          "description": "Запрошенные роль, провайдер, модель и reasoning."
+        },
+        "messages": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Message"
+          },
+          "description": "Публичная текстовая часть диалога."
+        },
+        "attachment_refs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ArtifactRef"
+          },
+          "description": "Дополнительные файлы, которые адаптер читает или даёт прочитать инструментом."
+        },
+        "tools": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ToolDefinition"
+          },
+          "description": "Разрешённые инструменты; права задаёт контроллер."
+        },
+        "output_contract": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Имя ожидаемого типа результата LLM."
+        },
+        "budget": {
+          "$ref": "#/$defs/Budget",
+          "description": "Оставшийся пользовательский бюджет на момент запроса."
+        }
+      },
+      "required": [
+        "contract",
+        "version",
+        "request_id",
+        "scope",
+        "role_config",
+        "messages",
+        "attachment_refs",
+        "tools",
+        "output_contract",
+        "budget"
+      ],
+      "additionalProperties": false,
+      "description": "Любая LLM-роль → шлюз. Нормализованный запрос, без ключей API."
+    },
+    "GatewayResult": {
+      "type": "object",
+      "properties": {
+        "contract": {
+          "const": "GatewayResult",
+          "description": "Имя типа сообщения; выбирает схему."
+        },
+        "version": {
+          "const": "proposal-v1",
+          "description": "Версия формата; здесь только proposal-v1."
+        },
+        "request_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "ID запроса модели."
+        },
+        "outcome": {
+          "type": "string",
+          "enum": [
+            "completed",
+            "incomplete",
+            "error"
+          ],
+          "description": "Для Task: результат функции; для шлюза: завершение или ошибка."
+        },
+        "actual_role_config": {
+          "$ref": "#/$defs/RoleConfig",
+          "description": "Фактические роль, провайдер и модель."
+        },
+        "model_changed": {
+          "type": "boolean",
+          "description": "Была ли замена выбранной модели."
+        },
+        "model_change_reason": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Причина явной замены; null, если её не было."
+        },
+        "output_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ArtifactRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Публичный ответ; null, если результата нет."
+        },
+        "public_transcript_ref": {
+          "$ref": "#/$defs/ArtifactRef",
+          "description": "Публичный журнал запросов и инструментов, без секретов."
+        },
+        "usage": {
+          "$ref": "#/$defs/Usage",
+          "description": "Нормализованный расход; кэш входит в input_tokens."
+        },
+        "error": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Сообщение ошибки."
+                },
+                "message": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Сообщение ошибки."
+                },
+                "retryable": {
+                  "type": "boolean",
+                  "description": "Имеет ли смысл повтор при изменении условий или после ожидания."
+                }
+              },
+              "required": [
+                "code",
+                "message",
+                "retryable"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Структурированная ошибка, либо null."
+        }
+      },
+      "required": [
+        "contract",
+        "version",
+        "request_id",
+        "outcome",
+        "actual_role_config",
+        "model_changed",
+        "model_change_reason",
+        "output_ref",
+        "public_transcript_ref",
+        "usage",
+        "error"
+      ],
+      "additionalProperties": false,
+      "description": "Шлюз → контроллер. Публичный ответ, расход и фактическая модель."
+    },
+    "ProjectStatus": {
+      "type": "object",
+      "properties": {
+        "contract": {
+          "const": "ProjectStatus",
+          "description": "Имя типа сообщения; выбирает схему."
+        },
+        "version": {
+          "const": "proposal-v1",
+          "description": "Версия формата; здесь только proposal-v1."
+        },
+        "scope": {
+          "$ref": "#/$defs/Scope",
+          "description": "Проект, версия ТЗ, версия кода и раунд."
+        },
+        "stage": {
+          "type": "string",
+          "enum": [
+            "ingest",
+            "decompose",
+            "planning",
+            "coding",
+            "review",
+            "verification",
+            "reflection",
+            "waiting",
+            "paused",
+            "done"
+          ],
+          "description": "Текущий этап контроллера."
+        },
+        "active_task_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Задачи активного пакета."
+        },
+        "coverage": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Coverage"
+          },
+          "description": "Статусы условий для текущей версии кода."
+        },
+        "manual_pending": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ManualCheck"
+          },
+          "description": "Ручные пункты с инструкциями; всё ещё не подтверждены."
+        },
+        "ready": {
+          "type": "boolean",
+          "description": "Есть ли доказательства готовности; вычисляет контроллер."
+        },
+        "readiness_reasons": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Почему проект ещё не признан готовым."
+        },
+        "latest_memory_ref": {
+          "$ref": "#/$defs/ArtifactRef",
+          "description": "Последняя полная запись истории."
+        }
+      },
+      "required": [
+        "contract",
+        "version",
+        "scope",
+        "stage",
+        "active_task_ids",
+        "coverage",
+        "manual_pending",
+        "ready",
+        "readiness_reasons",
+        "latest_memory_ref"
+      ],
+      "additionalProperties": false,
+      "description": "Контроллер → панель. Фактический этап и состояние условий, не самооценка модели."
+    }
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/ProjectInput"
+    },
+    {
+      "$ref": "#/$defs/ProjectSnapshot"
+    },
+    {
+      "$ref": "#/$defs/DecompositionInput"
+    },
+    {
+      "$ref": "#/$defs/RequirementsCatalog"
+    },
+    {
+      "$ref": "#/$defs/TaskGraph"
+    },
+    {
+      "$ref": "#/$defs/PlannerInput"
+    },
+    {
+      "$ref": "#/$defs/PlannerDecision"
+    },
+    {
+      "$ref": "#/$defs/ValidationRequest"
+    },
+    {
+      "$ref": "#/$defs/ValidationResult"
+    },
+    {
+      "$ref": "#/$defs/CoderAssignment"
+    },
+    {
+      "$ref": "#/$defs/CoderReport"
+    },
+    {
+      "$ref": "#/$defs/ScenarioManifest"
+    },
+    {
+      "$ref": "#/$defs/ReviewRequest"
+    },
+    {
+      "$ref": "#/$defs/ReviewResult"
+    },
+    {
+      "$ref": "#/$defs/ReviewResponse"
+    },
+    {
+      "$ref": "#/$defs/VerificationRequest"
+    },
+    {
+      "$ref": "#/$defs/VerificationResult"
+    },
+    {
+      "$ref": "#/$defs/MemoryWrite"
+    },
+    {
+      "$ref": "#/$defs/MemoryRecord"
+    },
+    {
+      "$ref": "#/$defs/MemoryQuery"
+    },
+    {
+      "$ref": "#/$defs/MemoryResult"
+    },
+    {
+      "$ref": "#/$defs/GatewayRequest"
+    },
+    {
+      "$ref": "#/$defs/GatewayResult"
+    },
+    {
+      "$ref": "#/$defs/ProjectStatus"
+    }
+  ]
+}

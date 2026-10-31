@@ -1,0 +1,246 @@
+{
+  "type": "object",
+  "properties": {
+    "contract": {
+      "const": "CoderReport",
+      "description": "Имя типа сообщения; выбирает схему."
+    },
+    "version": {
+      "const": "v1",
+      "description": "Версия формата; здесь только v1."
+    },
+    "scope": {
+      "$ref": "#/$defs/Scope",
+      "description": "Проект, версия ТЗ, версия кода и раунд."
+    },
+    "base_source_revision": {
+      "$ref": "#/$defs/Hash",
+      "description": "Версия исходников до правок кодера."
+    },
+    "plan_ref": {
+      "$ref": "#/$defs/ArtifactRef",
+      "description": "Принятый план раунда."
+    },
+    "action_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "description": "Краткое описание записи или изменения."
+      },
+      "description": "Действия принятого плана, по которым кодер отчитывается."
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Краткое описание записи или изменения."
+    },
+    "changed_files": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/ArtifactRef"
+      },
+      "description": "Версии изменённых файлов; контроллер сверяет с реальным diff."
+    },
+    "scenario_manifest_ref": {
+      "$ref": "#/$defs/ArtifactRef",
+      "description": "Версия описания сценариев для данного снимка."
+    },
+    "review_response_refs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/ArtifactRef"
+      },
+      "description": "Полные ответы кодера на ревью."
+    },
+    "unverified_claims": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "description": "Краткое описание записи или изменения."
+      },
+      "description": "Заявления кодера, которые ещё надо подтвердить."
+    },
+    "open_issues": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "description": "Краткое описание записи или изменения."
+      },
+      "description": "Известные нерешённые вопросы."
+    }
+  },
+  "required": [
+    "contract",
+    "version",
+    "scope",
+    "base_source_revision",
+    "plan_ref",
+    "action_ids",
+    "summary",
+    "changed_files",
+    "scenario_manifest_ref",
+    "review_response_refs",
+    "unverified_claims",
+    "open_issues"
+  ],
+  "additionalProperties": false,
+  "description": "Кодер → контроллер. Отчёт о правках; это утверждение агента, ещё не PASS.",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CoderReport — runtime v1",
+  "$defs": {
+    "ArtifactRef": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Для ArtifactRef: путь относительно корня проекта; для Issue: путь поля в JSON.",
+          "pattern": "^(?!/)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//)(?!.*[\\\\:\\x00])[^/]+(?:/[^/]+)*$"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Hash",
+          "description": "Хеш точного содержимого файла; проверяется при чтении."
+        },
+        "media_type": {
+          "type": "string",
+          "minLength": 1,
+          "description": "MIME-тип файла."
+        }
+      },
+      "required": [
+        "path",
+        "sha256",
+        "media_type"
+      ],
+      "additionalProperties": false
+    },
+    "CoderReport": {
+      "type": "object",
+      "properties": {
+        "contract": {
+          "const": "CoderReport",
+          "description": "Имя типа сообщения; выбирает схему."
+        },
+        "version": {
+          "const": "v1",
+          "description": "Версия формата; здесь только v1."
+        },
+        "scope": {
+          "$ref": "#/$defs/Scope",
+          "description": "Проект, версия ТЗ, версия кода и раунд."
+        },
+        "base_source_revision": {
+          "$ref": "#/$defs/Hash",
+          "description": "Версия исходников до правок кодера."
+        },
+        "plan_ref": {
+          "$ref": "#/$defs/ArtifactRef",
+          "description": "Принятый план раунда."
+        },
+        "action_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Краткое описание записи или изменения."
+          },
+          "description": "Действия принятого плана, по которым кодер отчитывается."
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Краткое описание записи или изменения."
+        },
+        "changed_files": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ArtifactRef"
+          },
+          "description": "Версии изменённых файлов; контроллер сверяет с реальным diff."
+        },
+        "scenario_manifest_ref": {
+          "$ref": "#/$defs/ArtifactRef",
+          "description": "Версия описания сценариев для данного снимка."
+        },
+        "review_response_refs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ArtifactRef"
+          },
+          "description": "Полные ответы кодера на ревью."
+        },
+        "unverified_claims": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Краткое описание записи или изменения."
+          },
+          "description": "Заявления кодера, которые ещё надо подтвердить."
+        },
+        "open_issues": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Краткое описание записи или изменения."
+          },
+          "description": "Известные нерешённые вопросы."
+        }
+      },
+      "required": [
+        "contract",
+        "version",
+        "scope",
+        "base_source_revision",
+        "plan_ref",
+        "action_ids",
+        "summary",
+        "changed_files",
+        "scenario_manifest_ref",
+        "review_response_refs",
+        "unverified_claims",
+        "open_issues"
+      ],
+      "additionalProperties": false,
+      "description": "Кодер → контроллер. Отчёт о правках; это утверждение агента, ещё не PASS."
+    },
+    "Hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "Scope": {
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Устойчивый ID проекта."
+        },
+        "spec_revision": {
+          "$ref": "#/$defs/Hash",
+          "description": "SHA-256 канонического манифеста ТЗ и явных уточнений."
+        },
+        "source_revision": {
+          "$ref": "#/$defs/Hash",
+          "description": "SHA-256 канонического манифеста исходников снимка."
+        },
+        "round": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Номер попытки; не процент готовности."
+        }
+      },
+      "required": [
+        "project_id",
+        "spec_revision",
+        "source_revision",
+        "round"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

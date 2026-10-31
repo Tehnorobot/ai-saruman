@@ -1,0 +1,62 @@
+{
+  "type": "object",
+  "required": [
+    "contract",
+    "version",
+    "submission_sha256",
+    "changes"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "contract": {
+      "type": "string",
+      "enum": [
+        "SubmissionPatch"
+      ]
+    },
+    "version": {
+      "type": "string",
+      "enum": [
+        "v1"
+      ]
+    },
+    "submission_sha256": {
+      "type": "string"
+    },
+    "changes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "path",
+          "operation",
+          "expected_exists",
+          "expected_old_json",
+          "new_json"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "operation": {
+            "type": "string",
+            "enum": [
+              "set",
+              "remove"
+            ]
+          },
+          "expected_exists": {
+            "type": "boolean"
+          },
+          "expected_old_json": {
+            "type": "string"
+          },
+          "new_json": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

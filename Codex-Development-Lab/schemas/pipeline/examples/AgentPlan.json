@@ -1,0 +1,30 @@
+{
+  "contract": "AgentPlan",
+  "version": "v1",
+  "strategy": "repair",
+  "actions": [
+    {
+      "kind": "repair",
+      "task_ids": [
+        "T1"
+      ],
+      "condition_ids": [
+        "C1"
+      ],
+      "goal": "Устранить отсутствие посадки",
+      "expected_observation": "sapling_placed=true"
+    }
+  ],
+  "notes_md": "Место найдено, но посадка не подтверждена. Проверить действие установки.\n\n[{\"id\": \"H1\", \"statement\": \"Команда посадки не вызывается\", \"observation_refs\": [{\"artifact\": {\"path\": \"runs/2/game.log\", \"sha256\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\", \"media_type\": \"text/plain\"}, \"start_line\": 18, \"end_line\": 18, \"excerpt\": \"sapling_placed=false\"}], \"experiment\": \"Записать событие вызова посадки\", \"prediction\": \"Событие отсутствует при воспроизведении\"}]",
+  "deferred": [
+    {
+      "task_id": "T2",
+      "reason": "Нужен установленный саженец",
+      "return_when": "C1 подтверждён либо T1 реализован перед T2 в общем пакете"
+    }
+  ],
+  "manual_checks": [],
+  "regression_condition_ids": [],
+  "request_graph_change": false,
+  "external_updates": []
+}

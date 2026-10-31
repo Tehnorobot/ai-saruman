@@ -1,0 +1,85 @@
+{
+  "contract": "VerificationResult",
+  "version": "proposal-v1",
+  "scope": {
+    "project_id": "demo-trees",
+    "spec_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "source_revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "round": 2
+  },
+  "request_ref": {
+    "path": "rounds/2/verification-request.json",
+    "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "media_type": "application/json"
+  },
+  "runner_run_id": "RUN-2",
+  "build_status": "PASS",
+  "scenario_results": [
+    {
+      "scenario_id": "S1",
+      "status": "FAIL",
+      "checkpoints": [
+        {
+          "checkpoint_id": "CP1",
+          "status": "PASS",
+          "actual": "site_found=true",
+          "evidence_refs": [
+            {
+              "artifact": {
+                "path": "runs/2/game.log",
+                "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+                "media_type": "text/plain"
+              },
+              "start_line": 17,
+              "end_line": 17,
+              "excerpt": "site_found=true"
+            }
+          ]
+        },
+        {
+          "checkpoint_id": "CP2",
+          "status": "FAIL",
+          "actual": "sapling_placed=false",
+          "evidence_refs": [
+            {
+              "artifact": {
+                "path": "runs/2/game.log",
+                "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+                "media_type": "text/plain"
+              },
+              "start_line": 18,
+              "end_line": 18,
+              "excerpt": "sapling_placed=false"
+            }
+          ]
+        },
+        {
+          "checkpoint_id": "CP3",
+          "status": "NOT_EXECUTED",
+          "actual": "До выращивания выполнение не дошло",
+          "evidence_refs": []
+        }
+      ],
+      "media_refs": [
+        {
+          "path": "rounds/2/S1.mp4",
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "media_type": "video/mp4"
+        }
+      ]
+    }
+  ],
+  "infrastructure_errors": [],
+  "raw_report_refs": [
+    {
+      "path": "rounds/2/junit.xml",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "media_type": "application/xml"
+    },
+    {
+      "path": "runs/2/game.log",
+      "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "media_type": "text/plain"
+    }
+  ]
+}

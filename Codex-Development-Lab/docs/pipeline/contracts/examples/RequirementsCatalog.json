@@ -1,0 +1,66 @@
+{
+  "contract": "RequirementsCatalog",
+  "version": "proposal-v1",
+  "scope": {
+    "project_id": "demo-trees",
+    "spec_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "source_revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "round": 3
+  },
+  "requirements": [
+    {
+      "id": "R1",
+      "statement": "Посадить саженец",
+      "source_refs": [
+        {
+          "artifact": {
+            "path": "input/spec.md",
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "media_type": "text/markdown"
+          },
+          "start_line": 1,
+          "end_line": 2,
+          "excerpt": "Посадить саженец.\nВырастить дерево костной мукой."
+        }
+      ],
+      "condition_ids": [
+        "C1"
+      ]
+    },
+    {
+      "id": "R2",
+      "statement": "Вырастить дерево",
+      "source_refs": [
+        {
+          "artifact": {
+            "path": "input/spec.md",
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "media_type": "text/markdown"
+          },
+          "start_line": 1,
+          "end_line": 2,
+          "excerpt": "Посадить саженец.\nВырастить дерево костной мукой."
+        }
+      ],
+      "condition_ids": [
+        "C2"
+      ]
+    }
+  ],
+  "conditions": [
+    {
+      "id": "C1",
+      "requirement_id": "R1",
+      "expected": "В мире установлен саженец",
+      "verification": "automated"
+    },
+    {
+      "id": "C2",
+      "requirement_id": "R2",
+      "expected": "Дерево выросло",
+      "verification": "automated"
+    }
+  ],
+  "open_questions": [],
+  "unclassified_source_refs": []
+}

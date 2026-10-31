@@ -1,0 +1,226 @@
+{
+  "type": "object",
+  "description": "Контроллер → автор сообщения. Точная ошибка и материал для коррекции.",
+  "required": [
+    "contract",
+    "version",
+    "scope",
+    "submission_ref",
+    "valid",
+    "checks_passed",
+    "issues",
+    "schema_ref",
+    "example_ref"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "contract": {
+      "description": "Имя типа сообщения; выбирает схему.",
+      "enum": [
+        "ValidationResult"
+      ],
+      "type": "string"
+    },
+    "version": {
+      "description": "Версия формата; здесь только v1.",
+      "enum": [
+        "v1"
+      ],
+      "type": "string"
+    },
+    "scope": {
+      "description": "Проект, версия ТЗ, версия кода и раунд.",
+      "$ref": "#/$defs/Scope"
+    },
+    "submission_ref": {
+      "description": "Точная версия проверенного сообщения.",
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "valid": {
+      "type": "boolean",
+      "description": "Результат формальных проверок; не означает смысловую правильность."
+    },
+    "checks_passed": {
+      "type": "array",
+      "description": "Имена успешно выполненных формальных проверок.",
+      "items": {
+        "type": "string"
+      }
+    },
+    "issues": {
+      "type": "array",
+      "description": "Точные ошибки формата и связей.",
+      "items": {
+        "$ref": "#/$defs/Issue"
+      }
+    },
+    "schema_ref": {
+      "description": "Доверенная схема для исправления.",
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "example_ref": {
+      "description": "Соответствующий схеме пример.",
+      "$ref": "#/$defs/ArtifactRef"
+    }
+  },
+  "$defs": {
+    "ArtifactRef": {
+      "type": "object",
+      "required": [
+        "path",
+        "sha256",
+        "media_type"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Для ArtifactRef: путь относительно корня проекта; для Issue: путь поля в JSON."
+        },
+        "sha256": {
+          "description": "Хеш точного содержимого файла; проверяется при чтении.",
+          "$ref": "#/$defs/Hash"
+        },
+        "media_type": {
+          "type": "string",
+          "description": "MIME-тип файла."
+        }
+      }
+    },
+    "Hash": {
+      "type": "string"
+    },
+    "Issue": {
+      "type": "object",
+      "required": [
+        "path",
+        "code",
+        "expected",
+        "received_type",
+        "example_json",
+        "instruction"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Для ArtifactRef: путь относительно корня проекта; для Issue: путь поля в JSON."
+        },
+        "code": {
+          "type": "string",
+          "description": "Код ошибки для обработки программой."
+        },
+        "expected": {
+          "type": "string",
+          "description": "Ожидаемый результат; в Checkpoint это сравниваемое значение."
+        },
+        "received_type": {
+          "type": "string",
+          "description": "Фактически полученный тип поля."
+        },
+        "example_json": {
+          "type": "string",
+          "description": "Готовый пример значения, представленный строкой JSON."
+        },
+        "instruction": {
+          "type": "string",
+          "description": "Как исправить конкретное нарушение."
+        }
+      }
+    },
+    "Scope": {
+      "type": "object",
+      "required": [
+        "project_id",
+        "spec_revision",
+        "source_revision",
+        "round"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "description": "Устойчивый ID проекта."
+        },
+        "spec_revision": {
+          "description": "SHA-256 канонического манифеста ТЗ и явных уточнений.",
+          "$ref": "#/$defs/Hash"
+        },
+        "source_revision": {
+          "description": "SHA-256 канонического манифеста исходников снимка.",
+          "$ref": "#/$defs/Hash"
+        },
+        "round": {
+          "type": "integer",
+          "description": "Номер попытки; не процент готовности."
+        }
+      }
+    },
+    "ValidationResult": {
+      "type": "object",
+      "description": "Контроллер → автор сообщения. Точная ошибка и материал для коррекции.",
+      "required": [
+        "contract",
+        "version",
+        "scope",
+        "submission_ref",
+        "valid",
+        "checks_passed",
+        "issues",
+        "schema_ref",
+        "example_ref"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "contract": {
+          "description": "Имя типа сообщения; выбирает схему.",
+          "enum": [
+            "ValidationResult"
+          ],
+          "type": "string"
+        },
+        "version": {
+          "description": "Версия формата; здесь только v1.",
+          "enum": [
+            "v1"
+          ],
+          "type": "string"
+        },
+        "scope": {
+          "description": "Проект, версия ТЗ, версия кода и раунд.",
+          "$ref": "#/$defs/Scope"
+        },
+        "submission_ref": {
+          "description": "Точная версия проверенного сообщения.",
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        "valid": {
+          "type": "boolean",
+          "description": "Результат формальных проверок; не означает смысловую правильность."
+        },
+        "checks_passed": {
+          "type": "array",
+          "description": "Имена успешно выполненных формальных проверок.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "issues": {
+          "type": "array",
+          "description": "Точные ошибки формата и связей.",
+          "items": {
+            "$ref": "#/$defs/Issue"
+          }
+        },
+        "schema_ref": {
+          "description": "Доверенная схема для исправления.",
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        "example_ref": {
+          "description": "Соответствующий схеме пример.",
+          "$ref": "#/$defs/ArtifactRef"
+        }
+      }
+    }
+  }
+}

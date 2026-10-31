@@ -1,0 +1,160 @@
+{
+  "type": "object",
+  "description": "Индекс → агент. Краткие результаты и ссылки на полные записи. Есть продолжение.",
+  "required": [
+    "contract",
+    "version",
+    "records",
+    "next_cursor",
+    "omitted_records"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "contract": {
+      "description": "Имя типа сообщения; выбирает схему.",
+      "enum": [
+        "MemoryResult"
+      ],
+      "type": "string"
+    },
+    "version": {
+      "description": "Версия формата; здесь только v1.",
+      "enum": [
+        "v1"
+      ],
+      "type": "string"
+    },
+    "records": {
+      "type": "array",
+      "description": "Найденные записи с кратким описанием.",
+      "items": {
+        "type": "object",
+        "required": [
+          "record_id",
+          "summary",
+          "full_record_ref"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "record_id": {
+            "type": "string",
+            "description": "Устойчивый ID записи памяти."
+          },
+          "summary": {
+            "type": "string",
+            "description": "Краткое описание записи или изменения."
+          },
+          "full_record_ref": {
+            "description": "Ссылка на полный MemoryRecord без сокращения.",
+            "$ref": "#/$defs/ArtifactRef"
+          }
+        }
+      }
+    },
+    "next_cursor": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Продолжение выдачи; null означает последнюю страницу."
+    },
+    "omitted_records": {
+      "type": "integer",
+      "description": "Записи вне этой страницы; остаются в архиве."
+    }
+  },
+  "$defs": {
+    "ArtifactRef": {
+      "type": "object",
+      "required": [
+        "path",
+        "sha256",
+        "media_type"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Для ArtifactRef: путь относительно корня проекта; для Issue: путь поля в JSON."
+        },
+        "sha256": {
+          "description": "Хеш точного содержимого файла; проверяется при чтении.",
+          "$ref": "#/$defs/Hash"
+        },
+        "media_type": {
+          "type": "string",
+          "description": "MIME-тип файла."
+        }
+      }
+    },
+    "Hash": {
+      "type": "string"
+    },
+    "MemoryResult": {
+      "type": "object",
+      "description": "Индекс → агент. Краткие результаты и ссылки на полные записи. Есть продолжение.",
+      "required": [
+        "contract",
+        "version",
+        "records",
+        "next_cursor",
+        "omitted_records"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "contract": {
+          "description": "Имя типа сообщения; выбирает схему.",
+          "enum": [
+            "MemoryResult"
+          ],
+          "type": "string"
+        },
+        "version": {
+          "description": "Версия формата; здесь только v1.",
+          "enum": [
+            "v1"
+          ],
+          "type": "string"
+        },
+        "records": {
+          "type": "array",
+          "description": "Найденные записи с кратким описанием.",
+          "items": {
+            "type": "object",
+            "required": [
+              "record_id",
+              "summary",
+              "full_record_ref"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "record_id": {
+                "type": "string",
+                "description": "Устойчивый ID записи памяти."
+              },
+              "summary": {
+                "type": "string",
+                "description": "Краткое описание записи или изменения."
+              },
+              "full_record_ref": {
+                "description": "Ссылка на полный MemoryRecord без сокращения.",
+                "$ref": "#/$defs/ArtifactRef"
+              }
+            }
+          }
+        },
+        "next_cursor": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Продолжение выдачи; null означает последнюю страницу."
+        },
+        "omitted_records": {
+          "type": "integer",
+          "description": "Записи вне этой страницы; остаются в архиве."
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,232 @@
+{
+  "type": "object",
+  "properties": {
+    "contract": {
+      "type": "string",
+      "const": "AgentCatalog"
+    },
+    "version": {
+      "type": "string",
+      "const": "v1"
+    },
+    "requirements": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Requirement"
+      },
+      "description": "Смысловые требования из ТЗ."
+    },
+    "conditions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Condition"
+      },
+      "description": "Наблюдаемые условия выполнения требований."
+    },
+    "open_questions": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "Неясности, требующие уточнения; нельзя выдумывать ответ."
+    },
+    "unclassified_source_refs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/SourceRef"
+      },
+      "description": "Фрагменты ТЗ, смысл которых ещё не классифицирован."
+    },
+    "question_resolutions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "question": {
+            "type": "string",
+            "minLength": 1
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "implementation_decision",
+              "experiment",
+              "user_clarification"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "resolved"
+            ]
+          },
+          "owner": {
+            "type": "string",
+            "enum": [
+              "planner",
+              "coder",
+              "user"
+            ]
+          },
+          "condition_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "answer": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1
+          },
+          "source_refs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/SourceRef"
+            }
+          }
+        },
+        "required": [
+          "question",
+          "kind",
+          "status",
+          "owner",
+          "condition_ids",
+          "answer",
+          "reason",
+          "source_refs"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "notes_md": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "contract",
+    "version",
+    "requirements",
+    "conditions",
+    "open_questions",
+    "unclassified_source_refs",
+    "question_resolutions",
+    "notes_md"
+  ],
+  "additionalProperties": false,
+  "description": "LLM → контроллер и ревьюер. Смысловые требования и измеримые условия.",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AgentCatalog - compact agent message",
+  "$defs": {
+    "Condition": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Уникальный ID внутри соответствующего каталога."
+        },
+        "requirement_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "ID родительского требования."
+        },
+        "expected": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Ожидаемый результат; в Checkpoint это сравниваемое значение."
+        },
+        "verification": {
+          "type": "string",
+          "enum": [
+            "automated",
+            "manual",
+            "mixed"
+          ],
+          "description": "Способ проверки: автоматический, ручной или смешанный."
+        }
+      },
+      "required": [
+        "id",
+        "requirement_id",
+        "expected",
+        "verification"
+      ],
+      "additionalProperties": false
+    },
+    "Requirement": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Уникальный ID внутри соответствующего каталога."
+        },
+        "statement": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Утверждение или проверяемая гипотеза."
+        },
+        "source_refs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SourceRef"
+          },
+          "description": "Фрагменты исходного ТЗ, из которых выведено требование."
+        },
+        "condition_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Утверждение или проверяемая гипотеза."
+          },
+          "description": "Проверяемые условия; ID должны существовать."
+        }
+      },
+      "required": [
+        "id",
+        "statement",
+        "source_refs",
+        "condition_ids"
+      ],
+      "additionalProperties": false
+    },
+    "SourceRef": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "start_line": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "end_line": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "required": [
+        "path",
+        "start_line",
+        "end_line"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

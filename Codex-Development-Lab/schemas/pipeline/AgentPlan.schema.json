@@ -1,0 +1,209 @@
+{
+  "type": "object",
+  "properties": {
+    "contract": {
+      "type": "string",
+      "const": "AgentPlan"
+    },
+    "version": {
+      "type": "string",
+      "const": "v1"
+    },
+    "strategy": {
+      "type": "string",
+      "enum": [
+        "implement",
+        "repair",
+        "diagnose",
+        "reflect",
+        "verify",
+        "manual",
+        "wait"
+      ],
+      "description": "Выбранный режим следующей работы."
+    },
+    "actions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "implement",
+              "repair",
+              "diagnose",
+              "verify",
+              "manual"
+            ],
+            "description": "В Action: вид работы; в Finding: класс замечания; в памяти: тип записи."
+          },
+          "task_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "condition_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "goal": {
+            "type": "string"
+          },
+          "expected_observation": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "task_ids",
+          "condition_ids",
+          "goal",
+          "expected_observation"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "notes_md": {
+      "type": "string"
+    },
+    "regression_condition_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true,
+      "description": "Previously implemented conditions whose scenarios must be rerun alongside the selected work. No fixed count."
+    },
+    "deferred": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/DeferredTask"
+      },
+      "description": "Задачи, перенесённые с объяснением."
+    },
+    "manual_checks": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/ManualCheck"
+      },
+      "description": "Ручные проверки с инструкцией; не дают автоматического PASS."
+    },
+    "request_graph_change": {
+      "type": "boolean"
+    },
+    "external_updates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "task_id": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "blocked",
+              "resolved"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1
+          },
+          "return_when": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "task_id",
+          "state",
+          "reason",
+          "return_when"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "contract",
+    "version",
+    "strategy",
+    "actions",
+    "notes_md",
+    "regression_condition_ids",
+    "deferred",
+    "manual_checks",
+    "request_graph_change",
+    "external_updates"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "DeferredTask": {
+      "type": "object",
+      "properties": {
+        "task_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "ID задачи."
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Причина переноса."
+        },
+        "return_when": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Условия возвращения; не безусловный повтор."
+        }
+      },
+      "required": [
+        "task_id",
+        "reason",
+        "return_when"
+      ],
+      "additionalProperties": false
+    },
+    "ManualCheck": {
+      "type": "object",
+      "properties": {
+        "condition_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Ожидаемый результат; в Checkpoint это сравниваемое значение."
+          },
+          "description": "Проверяемые условия; ID должны существовать."
+        },
+        "steps": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Ожидаемый результат; в Checkpoint это сравниваемое значение."
+          },
+          "description": "Последовательность действий."
+        },
+        "expected": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Ожидаемый результат; в Checkpoint это сравниваемое значение."
+        }
+      },
+      "required": [
+        "condition_ids",
+        "steps",
+        "expected"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "title": "AgentPlan - compact agent message"
+}

@@ -1,0 +1,375 @@
+name: codex-development-lab
+x-common: &common
+  init: true
+  restart: unless-stopped
+  user: "1000:1000"
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+  pids_limit: 256
+services:
+  init-permissions:
+    image: alpine:3.21
+    user: "0:0"
+    restart: "no"
+    read_only: true
+    network_mode: none
+    cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 64
+    mem_limit: 128m
+    command: ["sh", "-c", "chown -R 1000:1000 /data /projects /artifacts /backups /backup-requests /agent-tasks /planner-tasks /run/lab-provider /usage"]
+    volumes:
+      - ./data:/data
+      - ./projects:/projects
+      - ./artifacts:/artifacts
+      - ./backups:/backups
+      - ./backup-requests:/backup-requests
+      - ./agent-tasks:/agent-tasks
+      - ./planner-tasks:/planner-tasks
+      - provider_socket:/run/lab-provider
+      - provider_usage:/usage
+  dashboard:
+    <<: *common
+    build:
+      context: .
+      dockerfile: Dockerfile.service
+    image: codex-lab-service:local
+    pull_policy: never
+    depends_on:
+      init-permissions:
+        condition: service_completed_successfully
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]
+    ports:
+      - "127.0.0.1:${DASHBOARD_PORT:-8080}:8080"
+    environment:
+      LAB_DB: /data/lab.sqlite3
+      LAB_PROJECTS: /projects
+      LAB_ARTIFACTS: /artifacts
+      LAB_BACKUPS: /backups
+      STORAGE_STATE: /s3-state/upload_index.json
+      AGENT_TASKS: /agent-tasks
+      PLANNER_TASKS: /planner-tasks
+      DSLAB_CONTROL_TOKEN: ${DSLAB_CONTROL_TOKEN:-}
+    volumes:
+      - ./data:/data
+      - ./projects:/projects
+      - ./artifacts:/artifacts:ro
+      - ./agent-tasks:/agent-tasks:ro
+      - ./planner-tasks:/planner-tasks:ro
+      - ./backups:/backups:ro
+      - s3_state:/s3-state:ro
+      - provider_socket:/run/lab-provider:ro
+    mem_limit: 512m
+  egress:
+    <<: *common
+    build:
+      context: .
+      dockerfile: Dockerfile.egress
+    image: codex-lab-egress:local
+    pull_policy: never
+    read_only: true
+    command: ["python3", "-I", "/opt/lab/egress.py"]
+    networks:
+      agent_internal:
+        aliases: [lab-egress]
+      test_internal:
+        aliases: [lab-egress]
+      egress_public: {}
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import socket;s=socket.create_connection(('127.0.0.1',3128),2);s.close()"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    pids_limit: 160
+    mem_limit: 192m
+    cpus: 1
+  runner:
+    <<: *common
+    # Minimal trusted launcher. No project folders, credentials or TCP listener.
+    user: "0:1000"
+    cap_add: [DAC_OVERRIDE, CHOWN, FOWNER]
+    build:
+      context: .
+      dockerfile: Dockerfile.runner
+    image: codex-lab-runner:local
+    pull_policy: never
+    read_only: true
+    network_mode: none
+    environment:
+      LAB_RUNNER_IMAGE: codex-lab-worker:local
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - runner_control:/run/lab-runner
+      - runner_state:/state
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,size=64m,mode=1777
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import socket;s=socket.socket(socket.AF_UNIX);s.settimeout(2);s.connect('/run/lab-runner/runner.sock');s.close()"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    mem_limit: 512m
+  provider-gateway:
+    <<: *common
+    build:
+      context: .
+      dockerfile: Dockerfile.gateway
+    image: codex-lab-provider:local
+    pull_policy: never
+    read_only: true
+    depends_on:
+      init-permissions:
+        condition: service_completed_successfully
+      egress:
+        condition: service_healthy
+    environment:
+      DSLAB_API_KEY: ${DSLAB_API_KEY:-}
+      DSLAB_CONTROL_TOKEN: ${DSLAB_CONTROL_TOKEN:-}
+      DSLAB_BASE_URL: ${DSLAB_BASE_URL:-https://api.dslab.tech}
+      LITELLM_BASE_URL: ${LITELLM_BASE_URL:-}
+      LITELLM_API_KEY: ${LITELLM_API_KEY:-}
+      MINIMAX_API_KEY: ${MINIMAX_API_KEY:-}
+      MINIMAX_BASE_URL: ${MINIMAX_BASE_URL:-https://api.minimax.io/anthropic}
+      DSLAB_USAGE_DB: /usage/usage.sqlite3
+      HTTP_PROXY: http://lab-egress:3128
+      HTTPS_PROXY: http://lab-egress:3128
+      NO_PROXY: localhost,127.0.0.1,::1
+    networks: [agent_internal]
+    volumes:
+      - provider_socket:/run/lab-provider
+      - provider_usage:/usage
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,size=32m,mode=1777
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket;s=socket.socket(socket.AF_UNIX);s.settimeout(2);s.connect('/run/lab-provider/gateway.sock');s.close()"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    mem_limit: 256m
+  worker:
+    <<: *common
+    # No raw Docker access. Builds run through the restricted Unix-socket service.
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    image: codex-lab-worker:local
+    pull_policy: never
+    network_mode: none
+    depends_on:
+      init-permissions:
+        condition: service_completed_successfully
+      runner:
+        condition: service_healthy
+      provider-gateway:
+        condition: service_healthy
+    environment:
+      LAB_DB: /data/lab.sqlite3
+      LAB_PROJECTS: /projects
+      LAB_ARTIFACTS: /artifacts
+      BACKUP_REQUESTS: /backup-requests
+      AGENT_TASKS: /agent-tasks
+      PLANNER_TASKS: /planner-tasks
+      LAB_RUNNER_SOCKET: /run/lab-runner/runner.sock
+      DSLAB_CONTROL_TOKEN: ${DSLAB_CONTROL_TOKEN:-}
+      MINECRAFT_EULA_ACCEPTED: ${MINECRAFT_EULA_ACCEPTED:-false}
+      QUOTA_RECHECK_SECONDS: ${QUOTA_RECHECK_SECONDS:-900}
+      MAX_AGENT_ROUNDS: ${MAX_AGENT_ROUNDS:-5}
+      AGENT_TIMEOUT_SECONDS: ${AGENT_TIMEOUT_SECONDS:-3600}
+      PREPARATION_SOFT_LIMIT_SECONDS: ${PREPARATION_SOFT_LIMIT_SECONDS:-3600}
+      PLANNER_TIMEOUT_SECONDS: ${PLANNER_TIMEOUT_SECONDS:-}
+      REVIEWER_TIMEOUT_SECONDS: ${REVIEWER_TIMEOUT_SECONDS:-}
+      TEST_TIMEOUT_SECONDS: ${TEST_TIMEOUT_SECONDS:-900}
+      # Only ChatGPT device login is used by default; do not pass a paid API key.
+      CI: "true"
+    volumes:
+      - ./data:/data
+      - ./projects:/projects
+      - ./artifacts:/artifacts
+      - ./backup-requests:/backup-requests
+      - ./agent-tasks:/agent-tasks
+      - ./planner-tasks:/planner-tasks
+      - runner_control:/run/lab-runner:ro
+      - provider_socket:/run/lab-provider:ro
+    shm_size: "1gb"
+    cpus: 4
+    mem_limit: 10g
+    pids_limit: 500
+  agent:
+    <<: *common
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    image: codex-lab-worker:local
+    pull_policy: never
+    depends_on:
+      init-permissions:
+        condition: service_completed_successfully
+      egress:
+        condition: service_healthy
+    command: ["python3", "/opt/lab/agent/daemon.py"]
+    environment:
+      LAB_PROJECTS: /projects
+      AGENT_TASKS: /agent-tasks
+      AGENT_TIMEOUT_SECONDS: ${AGENT_TIMEOUT_SECONDS:-3600}
+      JAVA_TOOL_OPTIONS: -XX:ActiveProcessorCount=4 -Dhttp.proxyHost=lab-egress -Dhttp.proxyPort=3128 -Dhttps.proxyHost=lab-egress -Dhttps.proxyPort=3128 -Dhttp.nonProxyHosts=localhost|127.*|[::1]
+      GRADLE_OPTS: -Dorg.gradle.workers.max=4 -Dorg.gradle.daemon=false
+      LP_NUM_THREADS: "2"
+      OMP_NUM_THREADS: "2"
+      HTTP_PROXY: http://lab-egress:3128
+      HTTPS_PROXY: http://lab-egress:3128
+      ALL_PROXY: http://lab-egress:3128
+      NO_PROXY: localhost,127.0.0.1,::1
+    networks: [agent_internal]
+    volumes:
+      - ./projects:/projects
+      - ./agent-tasks:/agent-tasks
+      - codex_auth:/home/lab/.codex
+      - gradle_cache:/home/lab/.gradle
+    cpus: 4
+    mem_limit: 6g
+    pids_limit: 768
+    shm_size: "1gb"
+  agent-dslab:
+    <<: *common
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    image: codex-lab-worker:local
+    pull_policy: never
+    depends_on:
+      init-permissions:
+        condition: service_completed_successfully
+      egress:
+        condition: service_healthy
+      provider-gateway:
+        condition: service_healthy
+    command: ["python3", "/opt/lab/agent/daemon.py"]
+    environment:
+      LAB_PROJECTS: /projects
+      AGENT_TASKS: /agent-tasks
+      AGENT_PROVIDER: dslab
+      AGENT_TIMEOUT_SECONDS: ${AGENT_TIMEOUT_SECONDS:-3600}
+      API_CONTEXT_BYTES: ${API_CONTEXT_BYTES:-${DSLAB_CONTEXT_BYTES:-524288}}
+      JAVA_TOOL_OPTIONS: -XX:ActiveProcessorCount=4 -Dhttp.proxyHost=lab-egress -Dhttp.proxyPort=3128 -Dhttps.proxyHost=lab-egress -Dhttps.proxyPort=3128 -Dhttp.nonProxyHosts=localhost|127.*|[::1]
+      GRADLE_OPTS: -Dorg.gradle.workers.max=4 -Dorg.gradle.daemon=false
+      LP_NUM_THREADS: "2"
+      OMP_NUM_THREADS: "2"
+      HTTP_PROXY: http://lab-egress:3128
+      HTTPS_PROXY: http://lab-egress:3128
+      ALL_PROXY: http://lab-egress:3128
+      NO_PROXY: localhost,127.0.0.1,::1
+    networks: [agent_internal]
+    volumes:
+      - ./projects:/projects
+      - ./agent-tasks:/agent-tasks
+      - provider_socket:/run/lab-provider:ro
+      - dslab_gradle_cache:/home/lab/.gradle
+    cpus: 4
+    mem_limit: 6g
+    pids_limit: 768
+    shm_size: "1gb"
+  agent-planner:
+    <<: *common
+    image: codex-lab-worker:local
+    pull_policy: never
+    read_only: true
+    depends_on:
+      init-permissions:
+        condition: service_completed_successfully
+      egress:
+        condition: service_healthy
+      provider-gateway:
+        condition: service_healthy
+    command: ["python3", "/opt/lab/agent/daemon.py"]
+    environment:
+      LAB_PROJECTS: /projects
+      AGENT_TASKS: /agent-tasks
+      EXECUTOR_ROLE: planner
+      AGENT_PROVIDER: any
+      AGENT_TIMEOUT_SECONDS: ${AGENT_TIMEOUT_SECONDS:-3600}
+      PLANNER_TIMEOUT_SECONDS: ${PLANNER_TIMEOUT_SECONDS:-}
+      REVIEWER_TIMEOUT_SECONDS: ${REVIEWER_TIMEOUT_SECONDS:-}
+      API_CONTEXT_BYTES: ${API_CONTEXT_BYTES:-${DSLAB_CONTEXT_BYTES:-524288}}
+      HTTP_PROXY: http://lab-egress:3128
+      HTTPS_PROXY: http://lab-egress:3128
+      ALL_PROXY: http://lab-egress:3128
+      NO_PROXY: localhost,127.0.0.1,::1
+    networks: [agent_internal]
+    volumes:
+      - ./projects:/projects:ro
+      - ./planner-tasks:/agent-tasks
+      - planner_auth:/home/lab/.codex
+      - codex_auth:/planner-auth:ro
+      - provider_socket:/run/lab-provider:ro
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,size=128m,mode=1777
+    cpus: 2
+    mem_limit: 2g
+    pids_limit: 256
+  backup:
+    <<: *common
+    image: codex-lab-service:local
+    pull_policy: never
+    network_mode: none
+    depends_on: [dashboard]
+    command: ["python3", "backup/daemon.py"]
+    environment:
+      LAB_DB: /data/lab.sqlite3
+      LAB_PROJECTS: /projects
+      LAB_ARTIFACTS: /artifacts
+      LAB_BACKUPS: /backups
+      BACKUP_REQUESTS: /backup-requests
+    volumes:
+      - ./data:/data
+      - ./projects:/projects:ro
+      - ./artifacts:/artifacts:ro
+      - ./backups:/backups
+      - ./backup-requests:/backup-requests
+    mem_limit: 512m
+  storage:
+    <<: *common
+    image: codex-lab-service:local
+    pull_policy: never
+    depends_on: [dashboard]
+    command: ["uvicorn", "storage.api:app", "--host", "0.0.0.0", "--port", "8090"]
+    environment:
+      STORAGE_RUNS: /artifacts
+      STORAGE_STATE: /s3-state
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      YC_S3_BUCKET: ${YC_S3_BUCKET:-}
+      YC_S3_ENDPOINT: ${YC_S3_ENDPOINT:-https://storage.yandexcloud.net}
+      YC_S3_REGION: ${YC_S3_REGION:-ru-central1}
+      YC_S3_PREFIX: ${YC_S3_PREFIX:-codex-development-lab}
+      YC_VIDEO_MAX_SECONDS: ${YC_VIDEO_MAX_SECONDS:-60}
+      YC_S3_PRESIGN_SECONDS: ${YC_S3_PRESIGN_SECONDS:-900}
+    volumes:
+      - ./artifacts:/artifacts:ro
+      - s3_state:/s3-state
+    mem_limit: 1g
+volumes:
+  planner_auth: {}
+  codex_auth: {}
+  gradle_cache: {}
+  s3_state: {}
+  runner_control: {}
+  runner_state: {}
+  provider_socket: {}
+  provider_usage: {}
+  dslab_gradle_cache: {}
+networks:
+  default: {}
+  egress_public: {}
+  agent_internal:
+    driver: bridge
+    internal: true
+    driver_opts:
+      com.docker.network.bridge.gateway_mode_ipv4: isolated
+      com.docker.network.bridge.gateway_mode_ipv6: isolated
+  test_internal:
+    driver: bridge
+    internal: true
+    driver_opts:
+      com.docker.network.bridge.gateway_mode_ipv4: isolated
+      com.docker.network.bridge.gateway_mode_ipv6: isolated

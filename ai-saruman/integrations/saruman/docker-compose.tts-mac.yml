@@ -1,0 +1,11 @@
+services:
+
+  tts-fish:
+    image: fishaudio/fish-speech:v1.5.1-dev
+    container_name: saruman_fishtts
+    platform: linux/amd64
+    ports:
+      - "22231:7860"
+    volumes:
+      - ./data/fish-tts:/app
+    command: "python -m tools.run_webui --device mps"

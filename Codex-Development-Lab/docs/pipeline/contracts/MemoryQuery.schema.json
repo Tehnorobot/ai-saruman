@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "MemoryQuery — proposal-v1",
+  "$ref": "#/$defs/MemoryQuery",
+  "$defs": {
+    "MemoryQuery": {
+      "type": "object",
+      "properties": {
+        "contract": {
+          "const": "MemoryQuery",
+          "description": "Имя типа сообщения; выбирает схему."
+        },
+        "version": {
+          "const": "proposal-v1",
+          "description": "Версия формата; здесь только proposal-v1."
+        },
+        "project_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Устойчивый ID проекта."
+        },
+        "task_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Устойчивый ID проекта."
+          },
+          "description": "Задачи, затронутые сообщением."
+        },
+        "record_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Устойчивый ID проекта."
+          },
+          "description": "Явно запрошенные записи."
+        },
+        "query": {
+          "type": "string",
+          "description": "Поисковая строка; может быть пустой."
+        },
+        "cursor": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Позиция продолжения; null для первой страницы."
+        }
+      },
+      "required": [
+        "contract",
+        "version",
+        "project_id",
+        "task_ids",
+        "record_ids",
+        "query",
+        "cursor"
+      ],
+      "additionalProperties": false,
+      "description": "Агент → инструмент чтения. Поиск записей или чтение полного фрагмента."
+    }
+  }
+}

@@ -1,0 +1,22 @@
+FROM python:3.12-slim-bookworm
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg ca-certificates && rm -rf /var/lib/apt/lists/*
+COPY requirements.txt /tmp/requirements.txt
+RUN pip install --no-cache-dir -r /tmp/requirements.txt
+RUN useradd -m -u 1000 -s /bin/sh lab && mkdir -p /data /artifacts /projects /backups /backup-requests /s3-state \
+    && chown -R lab:lab /data /artifacts /projects /backups /backup-requests /s3-state
+COPY common /opt/lab/common
+COPY schemas /opt/lab/schemas
+COPY app /opt/lab/app
+COPY backup /opt/lab/backup
+COPY storage /opt/lab/storage
+COPY tests /opt/lab/tests
+COPY agent /opt/lab/agent
+COPY worker /opt/lab/worker
+COPY runner /opt/lab/runner
+COPY network /opt/lab/network
+COPY provider_gateway /opt/lab/provider_gateway
+COPY skills /opt/lab/skills
+ENV PYTHONPATH=/opt/lab
+USER lab
+WORKDIR /opt/lab

@@ -1,0 +1,38 @@
+# Examples illustrate the argument format; they are not memories or completed tasks.
+example_tool:
+  - context: You are illustrating a documented tool with two required arguments.
+    args:
+      exampleArg1: sample
+      exampleArg2: 1
+    result: Tool accepted the supplied arguments. Check its actual result before continuing.
+
+speak:
+  - context: You see trees and an empty field and choose to inspect the area first.
+    args:
+      comment: Даже этой земле пойдёт на пользу немного порядка. Сначала осмотрюсь.
+      emotion: neutral
+    result: Speech was queued. No planting has been performed by speaking.
+  - context: A player rudely asks for your resources. You decide to refuse.
+    args:
+      comment: Мою благосклонность не получают таким обращением, смертный.
+      emotion: sarcastic
+    result: Refusal was queued for speech. No attack or transfer was requested.
+
+save_user_info:
+  - context: A player named Alex introduced themselves in an observed conversation.
+    args:
+      user: Alex
+      summary: Introduced themselves during our conversation.
+    result: Record only this observed fact; do not invent a previous relationship.
+
+minecraft_command:
+  - context: You verified that the current server supports spawn and decide to return there.
+    args:
+      command: spawn
+    result: Command was queued for Minecraft. Verify location before claiming arrival.
+
+agent_action:
+  - context: A nearby player asks you to follow. You choose to agree after checking the situation.
+    args:
+      action: "@follow <player>"
+    result: Follow command was queued. Check the task chain and position to confirm movement.

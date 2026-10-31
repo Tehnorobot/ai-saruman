@@ -1,0 +1,496 @@
+<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Codex Development Lab</title><link rel="stylesheet" href="/planner.css"><style>
+:root{font-family:Inter,system-ui,Segoe UI,Arial,sans-serif;color:#e9eef9;background:#0d121d}*{box-sizing:border-box}body{margin:0;padding:24px;max-width:1250px;margin:auto}h1{margin:0;font-size:26px}h2{font-size:17px;margin:0 0 12px}header{display:flex;align-items:center;justify-content:space-between;margin-bottom:22px;gap:14px}.muted{color:#9faac1;font-size:13px}.panel{background:#171f2e;border:1px solid #2d394d;border-radius:14px;padding:20px;margin-bottom:18px}.grid{display:grid;grid-template-columns:minmax(280px,1fr) minmax(300px,1.5fr);gap:18px}.row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:14px}input,select,button{font:inherit}input[type=file]{max-width:100%;color:#9faac1}input[type=text],select{background:#0d121d;border:1px solid #3b465a;color:#e9eef9;border-radius:7px;padding:8px;max-width:100%}input[type=text]{width:240px}label.field{display:flex;flex-direction:column;gap:6px;flex:1;min-width:180px}input[type=number]{background:#0d121d;border:1px solid #3b465a;color:#e9eef9;border-radius:7px;width:67px;padding:8px}button{border:1px solid #405174;background:#29344b;color:white;border-radius:8px;padding:9px 13px;cursor:pointer}button.primary{background:#3e71dd;border-color:#3e71dd}button:disabled{opacity:.45;cursor:default}.item{padding:11px;margin:7px 0;border:1px solid #303d52;border-radius:10px;cursor:pointer}.item:hover{border-color:#709cf1}.status{font-size:11px;border-radius:6px;background:#38465c;padding:4px 7px}.RUNNING{color:#b9dcff}.FINISHED{color:#98e8b2}.QUOTA_PAUSED,.USER_PAUSED{color:#ffdc99}.FAILED{color:#ffa5a5}pre{font-size:12px;white-space:pre-wrap;max-height:270px;overflow:auto;background:#0f1520;border-radius:8px;padding:12px}a{color:#a9c8ff;word-break:break-all}video{width:100%;background:#05070a;border-radius:9px}#files{max-height:380px;overflow:auto}.file{padding:6px 0;border-bottom:1px solid #2b3445}#status{white-space:pre-line}.foot{font-size:12px;color:#9faac1}hr{border:0;border-top:1px solid #2c3444;margin:14px 0}@media(max-width:800px){.grid{grid-template-columns:1fr}body{padding:12px}}
+.history-events{max-height:620px;overflow:auto;overflow-anchor:none}.history-card{border:1px solid #303d52;border-radius:9px;padding:12px;margin:10px 0;overflow-wrap:anywhere}.history-card pre{margin-bottom:0}.history-card summary{cursor:pointer;color:#bcd5ff}.history-card .muted{margin-bottom:7px}.history-request{margin-top:14px}.history-request summary{cursor:pointer;color:#bcd5ff}#historyPrompt{max-height:360px}#historyMeta{white-space:pre-line;margin-top:12px}
+
+.FINISHED{color:#ffdc99}#files{max-height:700px}.media-preview{display:block;width:100%;max-height:420px;object-fit:contain;margin:10px 0;cursor:zoom-in}.media-warning{color:#ffdc99;border-left:3px solid #aa8138;padding:8px 12px;margin:10px 0;font-size:13px}.media-dialog{background:#111927;color:#e9eef9;border:1px solid #405174;border-radius:12px;max-width:96vw;width:fit-content;max-height:95vh;padding:16px}.media-dialog::backdrop{background:#000b}.media-dialog header{margin-bottom:12px}.media-dialog .image-scroll{overflow:auto;max-width:90vw;max-height:78vh}.media-dialog img{display:block;max-width:88vw;max-height:75vh;object-fit:contain}.media-dialog.full-size img{max-width:none;max-height:none}.media-dialog button:focus-visible,.media-preview:focus-visible{outline:3px solid #a9c8ff;outline-offset:3px}
+.acceptance-dialog{width:1120px;max-width:96vw;background:#111927;color:#e9eef9;border:1px solid #405174;border-radius:14px;padding:20px;max-height:94vh;overflow:auto}.acceptance-dialog::backdrop{background:#000b}.acceptance-dialog header{align-items:flex-start}.acceptance-card{border:1px solid #36435a;border-radius:10px;padding:16px;margin:12px 0;overflow-wrap:anywhere}.acceptance-card h3{font-size:16px;margin:0 0 8px}.acceptance-card summary{cursor:pointer;color:#bcd5ff}.acceptance-card pre{max-height:230px}.acceptance-card video{max-height:460px;margin:12px 0}.acceptance-counts{display:flex;gap:14px;flex-wrap:wrap;background:#1b273b;padding:12px;border-radius:8px}.acceptance-dialog [hidden]{display:none}.acceptance-dialog button:focus-visible,.acceptance-dialog select:focus-visible,.acceptance-dialog input:focus-visible{outline:3px solid #a9c8ff;outline-offset:3px}.acceptance-pass{color:#98e8b2}.acceptance-fail{color:#ffa5a5}.acceptance-gap{color:#ffdc99}#acceptanceSearch{width:100%}
+ .activity-card{margin-top:16px;padding:15px;border:1px solid #405174;border-radius:10px;background:#111a2b}.activity-card h3{margin:0 0 9px;font-size:14px;color:#a9c8ff}.activity-title{font-size:19px;font-weight:650}.activity-card p{margin:8px 0}.activity-card.is-stale{border-color:#a08246}.activity-card.is-stale .activity-freshness{color:#ffdc99}.activity-meta{font-variant-numeric:tabular-nums}
+[hidden]{display:none!important}
+</style><link rel="stylesheet" href="/memory.css"><link rel="stylesheet" href="/pipeline.css"><link rel="stylesheet" href="/dashboard.css"></head><body class="lab-shell"><a class="skip-link" href="#workspace">К содержимому</a>
+<header class="lab-header"><div class="lab-brand"><span class="brand-mark" aria-hidden="true">C</span><div><h1>Development Lab</h1><span class="muted">Разработка модов Minecraft</span></div></div><div class="header-actions"><span id="connectionState" class="muted" role="status">Подключение…</span><button type="button" class="primary" id="newProjectOpen">＋ Новый проект</button></div></header>
+<div class="lab-layout"><aside class="lab-sidebar" aria-label="Проекты и навигация"><details class="project-picker" open><summary>Проекты</summary><div id="jobs" class="muted">Загрузка…</div></details><p class="sidebar-label">Рабочее пространство</p><nav class="lab-nav" aria-label="Разделы проекта"><button type="button" data-view="overview" aria-controls="view-overview" aria-current="page"><span class="nav-icon" aria-hidden="true">01</span>Обзор</button><button type="button" data-view="acceptance" aria-controls="view-acceptance"><span class="nav-icon" aria-hidden="true">02</span>Приёмка</button><button type="button" data-view="media" aria-controls="view-media"><span class="nav-icon" aria-hidden="true">03</span>Материалы</button><button type="button" data-view="agents" aria-controls="view-agents"><span class="nav-icon" aria-hidden="true">04</span>Агенты и память</button><button type="button" data-view="usage" aria-controls="view-usage"><span class="nav-icon" aria-hidden="true">05</span>Расход</button><button type="button" data-view="settings" aria-controls="view-settings"><span class="nav-icon" aria-hidden="true">06</span>Настройки</button></nav><p class="sidebar-foot muted">Данные сохраняются на сервере.<br>Обновление страницы не сбрасывает работу.</p></aside>
+<main id="workspace" tabindex="-1"><div class="workspace-header"><div><p class="eyebrow">Текущий проект</p><h2 id="title">Выбери проект</h2></div><span id="projectBadge" class="status">Нет задания</span></div>
+<section class="lab-view" id="view-overview" data-page="overview" aria-labelledby="overviewHeading"><div class="view-heading"><div><h2 id="overviewHeading">Обзор</h2><p class="muted">Текущая работа и подтверждённые результаты.</p></div><div id="workspaceControls" class="row"><button id="pause" onclick="action('pause')" disabled>Пауза</button><button id="resume" class="primary" onclick="action('resume')" disabled>Продолжить</button><button id="stop" onclick="action('stop')" disabled>Остановить</button></div></div>
+<div id="jobAlert" class="media-warning" hidden role="status"><span id="jobAlertText"></span> <button type="button" data-go="agents">Открыть журналы</button></div>
+<div class="overview-grid"><section class="panel overview-summary"><p class="eyebrow">Приёмка по ТЗ</p><h3 id="readinessTitle">Нет данных</h3><progress id="readinessProgress" max="1" value="0" aria-label="Подтверждённые условия ТЗ"></progress><p id="readinessDetail" class="muted">Выбери проект для просмотра результатов.</p><p id="acceptanceSummary" class="muted" role="status">Готовность мода ещё не подтверждена.</p></section><section class="panel metric-card"><p class="eyebrow">Цикл разработки</p><div id="roundMetric" class="metric-value">—</div><p id="roundDetail" class="muted">Раунд — попытка работы и проверки.</p><button type="button" class="quick-link" data-go="settings">Изменить лимиты →</button></section></div>
+<div id="workflow" class="workflow" aria-label="Этапы раунда"><span class="workflow-step" data-stage="plan">План</span><span aria-hidden="true">→</span><span class="workflow-step" data-stage="code">Код</span><span aria-hidden="true">→</span><span class="workflow-step" data-stage="test">Проверка</span><span aria-hidden="true">→</span><span class="workflow-step" data-stage="result">Результат</span></div>
+<div id="activityCard" class="activity-card"><h3>Сейчас выполняется</h3><div id="activityTitle" class="activity-title" role="status" aria-live="polite">Выбери проект</div><p id="activityDetail" class="muted"></p><p id="activityMeta" class="muted activity-meta"></p><div id="activityFreshness" class="muted activity-freshness">Обновляется каждые 5 секунд.</div></div><div id="overviewTaskSlot"></div><details id="projectDiagnostics" class="panel"><summary>Состояние и диагностика задания</summary><div id="status" class="muted">Выбери проект.</div></details></section>
+<section class="lab-view" id="view-acceptance" data-page="acceptance" hidden aria-label="Приёмка по ТЗ"><p id="acceptanceEmpty" class="muted">Выбери проект, чтобы открыть приёмку.</p></section>
+<section class="lab-view" id="view-media" data-page="media" hidden aria-labelledby="mediaHeading"><div class="view-heading"><div><h2 id="mediaHeading">Материалы</h2><p class="muted">Видео, скриншоты и JAR по раундам.</p></div></div><section class="panel"><div id="files" class="muted">Результатов пока нет.</div></section><details class="panel"><summary>Резервные копии и облачное хранилище</summary><div id="backups" class="muted">Резервных копий пока нет.</div><div id="s3" class="muted"></div></details></section>
+<section class="lab-view" id="view-agents" data-page="agents" hidden aria-labelledby="agentsHeading"><div class="view-heading"><div><h2 id="agentsHeading">Агенты и память</h2><p class="muted">Назначения, решения и история по раундам.</p></div></div><div class="row"><button id="pipelineOpen" type="button" aria-haspopup="dialog" disabled>Пайплайн и решения</button></div><div id="memorySlot"></div><details class="panel" id="plannerDetails"><summary>Планировщик и ручные проверки</summary><div id="plannerSlot"></div></details><section class="panel" id="agentHistory"><h2>История агентов</h2><p class="muted">Доступные сообщения и действия из журнала Codex. Полнота диалогов дочерних агентов зависит от экспорта CLI.</p><div class="row"><label class="field muted" for="historyAttempt">Запуск / раунд<select id="historyAttempt" aria-label="Запуск агента"></select></label><label class="field muted" for="historyAgent">Агент<select id="historyAgent"><option value="*">Все агенты</option></select></label></div><div id="historyMeta" class="muted">Выбери проект, чтобы посмотреть историю.</div><details id="historyRequest" class="history-request"><summary>Исходный запрос агенту</summary><pre id="historyPrompt">Запрос пока не выбран.</pre></details><p id="historyEmpty" class="muted"></p><div id="historyEvents" class="history-events" aria-label="Сообщения и действия агентов"></div><div class="row"><button id="historyMore" type="button" disabled>Загрузить ещё</button><button id="historyStart" type="button" disabled>С начала</button></div><p id="historyNotice" class="foot" role="status"></p></section><details class="panel"><summary>Журнал контроллера</summary><pre id="events">Событий пока нет.</pre></details><details class="panel"><summary>Отчёт независимой проверки · JSON</summary><pre id="verification">Пока нет результатов.</pre></details></section>
+<section class="lab-view" id="view-usage" data-page="usage" hidden aria-labelledby="usagePageHeading"><div class="view-heading"><div><h2 id="usagePageHeading">Расход API</h2><p class="muted">Учёт токенов и запросов. Данные Codex недоступны.</p></div></div><div id="usageSlot"></div><section class="panel"><h3>Токены по ролям</h3><div id="usageChart" class="usage-bars" aria-label="Распределение токенов по ролям"><p class="muted">Данных пока нет.</p></div><p class="foot">Длина полосы показывает долю учтённых токенов, а не прогресс разработки.</p></section></section>
+<section class="lab-view" id="view-settings" data-page="settings" hidden aria-labelledby="settingsHeading"><div class="view-heading"><div><h2 id="settingsHeading">Модели и лимиты</h2><p class="muted">Изменения действуют для следующих запусков. Сначала приостанови задание.</p></div></div><div id="modelsSlot"></div><details class="panel" id="baseModelSettings"><summary>Общие настройки и бюджет API</summary><p class="muted">Роли без собственного выбора наследуют эти настройки. Выбор модели по роли имеет приоритет.</p><form id="updateSettings" style="margin-top:12px"><div class="row"><label class="field muted">Модель Codex<input type="text" name="model" id="updateModel" list="codexModels" maxlength="96" placeholder="По умолчанию Codex"></label><label class="field muted">Reasoning<select name="reasoning_effort" id="updateReasoning"><option value="default">По умолчанию</option><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="xhigh">Extra High</option><option value="minimal">Minimal</option><option value="none">None</option></select></label></div><div class="row"><button id="saveSettings" type="submit">Сохранить</button></div><p class="foot" id="settingsNote">Доступно для ожидающего или приостановленного задания. Для работающего сначала нажми «Пауза».</p></form></details><section class="panel"><h3>Лимит раундов</h3><form id="roundLimitSettings"><div class="row"><label class="muted" for="roundLimitValue">Новый общий предел: <input id="roundLimitValue" type="number" min="1" step="1" value="5" required></label><label class="muted"><input id="roundLimitUnlimited" type="checkbox"> Без лимита</label><button id="saveRoundLimit" type="submit">Сохранить лимит</button></div><p id="roundLimitNote" class="foot" role="status">Для изменения работающего задания сначала нажми «Пауза».</p></form><form id="extendRounds" hidden><div class="row"><label class="muted" for="additionalRounds">Добавить раундов: <input id="additionalRounds" name="additional_rounds" type="number" min="1" step="1" value="5" required></label><button id="extendButton" class="primary" type="submit">Добавить раунды и продолжить</button></div><p id="extendNote" class="foot" role="status"></p></form></section></section>
+</main></div><dialog id="newProjectDialog" class="acceptance-dialog lab-create-dialog" aria-labelledby="newProjectTitle"><header><h2 id="newProjectTitle">Новый проект</h2><button type="button" id="newProjectClose">Закрыть</button></header><p class="muted">Загрузи ТЗ в формате Markdown. Skills подключаются автоматически.</p><form id="form"><input id="spec" name="spec" type="file" accept=".md,text/markdown" required><div class="row"><label class="field muted" for="model">Модель Codex<input type="text" id="model" name="model" list="codexModels" maxlength="96" placeholder="По умолчанию Codex" autocomplete="off"><datalist id="codexModels"><option value="gpt-6-sol"></option><option value="gpt-6-luna"></option><option value="gpt-5.3-codex"></option></datalist></label><label class="field muted" for="reasoning">Reasoning<select id="reasoning" name="reasoning_effort"><option value="default">По умолчанию модели</option><option value="low">Low — быстрее</option><option value="medium">Medium — сбалансированно</option><option value="high">High — сложные задачи</option><option value="xhigh">Extra High — максимальная глубина из основных вариантов</option><option value="minimal">Minimal — если поддерживается</option><option value="none">None — если поддерживается</option></select></label></div><p class="foot">Уровень применяется к выбранной модели на каждом раунде. Набор поддерживаемых уровней зависит от модели и доступа твоего аккаунта. Неподдерживаемая комбинация даст явную ошибку Codex без скрытой смены модели.</p><div class="row"><label class="muted">Лимит раундов: <input name="max_rounds" id="rounds" type="number" value="5" min="1" step="1"></label><label class="muted"><input id="newUnlimited" type="checkbox"> Без лимита</label><button class="primary" type="submit">Начать разработку</button></div></form><p class="foot">Модели по ролям можно изменить после создания проекта. Раунд не означает готовность мода.</p><p id="upload" role="status"></p></dialog>
+<dialog class="media-dialog" id="mediaDialog" aria-labelledby="mediaTitle"><header><span id="mediaTitle">Изображение</span><button type="button" id="mediaZoom">Масштаб 100%</button><button type="button" id="mediaClose">Закрыть</button></header><div class="image-scroll"><img id="mediaImage" alt="Полный кадр проверки"></div></dialog>
+<dialog class="acceptance-dialog" id="acceptanceDialog" aria-labelledby="acceptanceTitle" aria-describedby="acceptanceCaution"><header><div><h2 id="acceptanceTitle">Приёмка по ТЗ</h2><div id="acceptanceIdentity" class="muted"></div></div><button type="button" id="acceptanceClose" autofocus>Закрыть</button></header><p id="acceptanceCaution" class="media-warning">«Тесты пройдены» означает успешное выполнение связанных исполняемых проверок. Это не доказывает полноту ТЗ и правильность всех игровых ситуаций. Итог требует проверки покрытия и доказательств.</p><p id="acceptanceCoverage" class="muted"></p><p id="acceptancePlanNotes" class="muted"></p><div id="acceptanceCounts" class="acceptance-counts" aria-label="Покрытие требований"></div><div class="row"><label class="field muted" for="acceptanceSearch">Найти требование<input type="text" id="acceptanceSearch" placeholder="ID, название, раздел или текст ТЗ"></label><label class="field muted" for="acceptanceFilter">Показать<select id="acceptanceFilter"><option value="ALL">Все требования</option><option value="NOT_TESTED">Не проверено</option><option value="FAIL">Ошибки</option><option value="STALE">Устаревшие доказательства</option><option value="TEST_PASSED">Тесты пройдены</option><option value="NO_VIDEO">Нет обязательного видео</option></select></label></div><p class="foot">Видео загружается только по нажатию. Для API и других ненаблюдаемых требований доказательством служат проверки и журналы; искусственное видео не требуется.</p><p id="acceptanceNotice" role="status" class="muted"></p><div id="acceptanceRows"></div></dialog>
+<script src="/failure-details.js"></script><script>
+const q=x=>document.getElementById(x);let active=null, settingsFor=null;const eventPages=new Map();
+async function api(path,opts){let r=await fetch(path,opts);let t=await r.text();let data;try{data=JSON.parse(t)}catch{data={detail:t}}if(!r.ok)throw Error(data.detail||r.status);return data}
+function el(t,cls,text){let x=document.createElement(t);if(cls)x.className=cls;if(text!==undefined)x.textContent=text;return x}
+
+let renderedMediaKey='',renderedMediaJob=null,mediaOpener=null;const mediaRows=new Map();let mediaFooter=null;
+let activityJob=null,currentActivity=null,activityRevision=0,activityPending=null;
+function displayRound(job){return job.round+(job.status==='RUNNING'&&job.phase==='codex_development'?1:0)}
+function activitySwitchJob(jid){
+ if(window.memorySwitchJob)window.memorySwitchJob(jid);
+ if(activityJob===jid)return;activityJob=jid;activityRevision++;activityPending=null;currentActivity=null;
+ q('activityCard').classList.remove('is-stale');q('activityTitle').textContent=jid?'Получаю текущий этап…':'Выбери проект';
+ q('activityDetail').textContent='';q('activityMeta').textContent='';q('activityFreshness').textContent='Обновляется каждые 5 секунд.';
+}
+function updateActivityElapsed(){
+ if(!currentActivity||currentActivity.job_id!==active)return;
+ const limit=currentActivity.max_rounds===0?'∞':currentActivity.max_rounds;
+ let text='Раунд '+currentActivity.current_round+'/'+limit;
+ const start=Date.parse(currentActivity.started_at||'');
+ if(Number.isFinite(start)){
+   const elapsed=Math.max(0,Math.floor((Date.now()-start)/1000));
+   text+=' · Этап раунда начат '+new Date(start).toLocaleTimeString()+' · '+Math.floor(elapsed/60)+' мин '+String(elapsed%60).padStart(2,'0')+' с';
+ }else text+=' · Время начала этапа не передано';
+ q('activityMeta').textContent=text;
+}
+function renderCurrentActivity(data){
+ if(!data||data.job_id!==active||data.job_id!==activityJob)return;
+ currentActivity=data;q('activityTitle').textContent=data.title||'Этап уточняется';q('activityDetail').textContent=data.detail||'';
+ q('activityCard').classList.toggle('is-stale',Boolean(data.stale));
+ q('activityFreshness').textContent=data.stale?'Нет свежего подтверждения операции. Это само по себе не означает ошибку.':'По состоянию обработчика и журналу действий · обновление каждые 5 секунд';
+ updateActivityElapsed();
+}
+async function refreshCurrentActivity(job){
+ if(!job||job.id!==active)return;activitySwitchJob(job.id);
+ if(activityPending===job.id)return;
+ const jid=job.id,revision=activityRevision;activityPending=jid;
+ try{
+   const data=await api('/api/jobs/'+encodeURIComponent(jid)+'/activity');
+   if(active!==jid||activityJob!==jid||revision!==activityRevision)return;
+   if(!data||data.job_id!==jid)throw Error('Invalid activity response');
+   renderCurrentActivity(data);
+ }catch(error){
+   if(active!==jid||activityJob!==jid||revision!==activityRevision)return;
+   q('activityCard').classList.add('is-stale');
+   if(!currentActivity)q('activityTitle').textContent='Текущий этап недоступен';
+   q('activityFreshness').textContent='Не удалось обновить данные. Показан последний полученный статус; он может быть устаревшим.';
+ }finally{if(revision===activityRevision&&activityPending===jid)activityPending=null}
+}
+setInterval(updateActivityElapsed,1000);
+function roundLimitText(job){return job.max_rounds===0?'∞':job.max_rounds}
+function roundStatus(job){return job.status==='FINISHED'?'Лимит раундов достигнут':job.status}
+function modelSelectionSummary(job){
+ let roles=job.role_models||{};
+ if(typeof roles==='string'){try{roles=JSON.parse(roles)}catch{return 'Настройки моделей не удалось прочитать'}}
+ return ['planner','coder','reviewer'].map(role=>{
+  const selected=roles[role]||(role==='reviewer'?roles.coder:null)||job;
+  const inherited=role==='reviewer'&&!roles.reviewer?' · наследует кодера':'';
+  return ({planner:'Выбор планировщика: ',coder:'Выбор кодера: ',reviewer:'Выбор ревьюера: '})[role]+(selected.provider||'codex')+' / '+(selected.model||'по умолчанию')+' · reasoning: '+(selected.reasoning_effort||'default')+inherited;
+ }).join('\n');
+}
+function acceptanceText(report){
+  if(report.status==='BUILD_VERIFIED_GAMEPLAY_UNVERIFIED')return 'Сборка подтверждена. Полная игровая приёмка мода не подтверждена.';
+  if(report.status==='FAIL')return 'Проверка обнаружила ошибки. Мод нельзя считать готовым.';
+  return 'Готовность мода определяется проверками всех требований ТЗ. Статус: '+(report.status||'NOT_TESTED');
+}
+function isWorldIcon(file){return /(?:^|\/)screenshots\/.*saves.*-icon\.png$/i.test(file.path)}
+function openMedia(file,opener){mediaOpener=opener;q('mediaImage').src=file.url;q('mediaImage').alt=file.path;q('mediaTitle').textContent=file.path;q('mediaDialog').classList.remove('full-size');q('mediaZoom').textContent='Масштаб 100%';q('mediaDialog').showModal()}
+q('mediaClose').onclick=()=>q('mediaDialog').close();
+q('mediaZoom').onclick=()=>{const full=q('mediaDialog').classList.toggle('full-size');q('mediaZoom').textContent=full?'Вписать в окно':'Масштаб 100%'};
+q('mediaDialog').addEventListener('close',()=>{if(mediaOpener?.isConnected)mediaOpener.focus()});
+function renderMediaFiles(files,jid=active){
+  if(jid!==active)return;
+  const key=jid+'|'+JSON.stringify(files);if(key===renderedMediaKey)return;renderedMediaKey=key;
+  const container=q('files');
+  if(renderedMediaJob!==jid||!mediaFooter){
+    for(const entry of mediaRows.values()){const video=entry.row.querySelector('video');if(video)video.pause()}
+    mediaRows.clear();container.replaceChildren();renderedMediaJob=jid;
+    mediaFooter=el('div');container.append(mediaFooter);
+  }
+  const icons=files.filter(isWorldIcon),visible=files.filter(file=>!isWorldIcon(file));
+  const present=new Set(visible.map(file=>file.path));
+  for(const [path,entry] of mediaRows){
+    if(present.has(path))continue;
+    const video=entry.row.querySelector('video');
+    if(video&&!video.paused&&!video.ended)continue;
+    entry.row.remove();mediaRows.delete(path);
+  }
+  for(const [fileIndex,file] of visible.entries()){
+    const existing=mediaRows.get(file.path);
+    if(existing&&existing.url===file.url&&existing.type===file.type){
+      existing.row.querySelector('a').textContent=file.path+' ('+(file.size/1024).toFixed(1)+' KiB)';
+      // Never detach, move, reload or change src of an existing video on a poll.
+      if(file.type==='.mp4'){
+        let warning=existing.row.querySelector('.media-warning');
+        const invalid=file.media_status==='FAIL'||file.media_status==='ERROR';
+        if(invalid&&!warning){warning=el('p','media-warning');existing.row.append(warning)}
+        if(invalid)warning.textContent='Запись не прошла проверку изображения: '+(file.media_reason==='blank'?'чёрный экран':file.media_reason||'ошибка захвата')+'.';
+        else if(warning)warning.remove();
+        const note=existing.row.querySelector('.foot');if(file.media_status==='PASS'&&note)note.remove();
+      }
+      continue;
+    }
+    if(existing){existing.row.querySelector('video')?.pause();existing.row.remove()}
+    const row=el('div','file'),link=el('a','',file.path+' ('+(file.size/1024).toFixed(1)+' KiB)');
+    link.href=file.url;link.target='_blank';link.rel='noopener';row.append(link);
+    if(file.type==='.mp4'){
+      const video=el('video');video.controls=true;video.preload='metadata';video.src=file.url;
+      if(file.media_status==='FAIL'||file.media_status==='ERROR'){
+        row.append(el('p','media-warning','Запись не прошла проверку изображения: '+(file.media_reason==='blank'?'чёрный экран':file.media_reason||'ошибка захвата')+'. Наличие MP4 не подтверждает успешную запись игры.'));
+        const details=el('details');details.append(el('summary','','Показать исходную запись'),video);row.append(details);
+      }else{row.append(video);if(file.media_status!=='PASS')row.append(el('p','foot','Содержимое этой записи ещё не проверено.'))}
+    }else if(['.png','.jpg','.jpeg'].includes(file.type)){
+      const image=el('img','media-preview');image.src=file.url;image.alt=file.path;image.loading='lazy';image.tabIndex=0;image.setAttribute('role','button');image.setAttribute('aria-label','Открыть изображение в полном размере');
+      image.onclick=()=>openMedia(file,image);image.onkeydown=event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();openMedia(file,image)}};row.append(image);
+      if(file.path.endsWith('/capture-frame.png'))row.append(el('p','foot','Настоящий кадр из видеозаписи. Нажми для просмотра в полном размере.'));
+    }
+    const next=visible.slice(fileIndex+1).map(f=>mediaRows.get(f.path)?.row).find(node=>node?.isConnected);
+    mediaRows.set(file.path,{row,url:file.url,type:file.type});container.insertBefore(row,next||mediaFooter);
+  }
+  mediaFooter.replaceChildren();
+  if(!mediaRows.size)mediaFooter.append(el('p','muted','Результатов пока нет.'));
+  if(icons.length)mediaFooter.append(el('p','foot','Иконки сохранённых миров ('+icons.length+') исключены из галереи: это служебные картинки 64×64, не скриншоты теста.'));
+}
+
+// Keep evidence players attached while polling: updating a status must not restart a video.
+const acceptanceButton=el('button','primary','Приёмка по ТЗ');acceptanceButton.id='acceptanceOpen';acceptanceButton.type='button';acceptanceButton.disabled=true;acceptanceButton.setAttribute('aria-haspopup','dialog');q('acceptanceSummary').before(acceptanceButton);
+let acceptanceJob=null,acceptanceVersion=0,acceptanceLoading=null,acceptanceOpener=null,acceptanceData=null;const acceptanceRows=new Map(),acceptanceTaskRows=new Map();
+const taskViewLabel=el('label','field muted','Вид приёмки'),taskView=el('select');taskView.id='acceptanceView';taskView.setAttribute('aria-label','Вид приёмки');for(const [value,label] of [['tasks','Задачи по функциям'],['requirements','Исходные условия ТЗ']]){const option=el('option','',label);option.value=value;taskView.append(option)}taskViewLabel.append(taskView);taskViewLabel.hidden=true;q('acceptanceCounts').before(taskViewLabel);const taskRows=el('div');taskRows.id='acceptanceTaskRows';q('acceptanceRows').before(taskRows);const partialOption=el('option','','Выполнено частично');partialOption.value='IN_PROGRESS';q('acceptanceFilter').append(partialOption);
+const taskAssignment=el('section','activity-card'),taskAssignmentTitle=el('h3'),taskAssignmentDetail=el('p'),taskAssignmentNote=el('p','muted');taskAssignment.id='acceptanceAssignment';taskAssignment.hidden=true;taskAssignment.setAttribute('aria-label','Текущая задача разработки');taskAssignmentTitle.id='acceptanceAssignmentTitle';taskAssignmentDetail.id='acceptanceAssignmentDetail';taskAssignment.append(taskAssignmentTitle,taskAssignmentDetail,taskAssignmentNote);q('acceptanceCounts').before(taskAssignment);
+const requirementLabels={IN_PROGRESS:'Выполнено частично — остаются условия ТЗ',TEST_PASSED:'Подтверждено для проверенной версии',FAIL:'Ошибка',NOT_TESTED:'Ещё не проверено',STALE:'Ранее проверено — нужна перепроверка'};
+function acceptanceCoverageDetails(container){
+  const node=el('details','acceptance-coverage'),caption=el('summary'),note=el('p','muted'),list=el('div');node.append(caption,note,list);container.append(node);return {node,caption,note,list,items:new Map()};
+}
+function renderSourceCoverage(view,requirement){
+  const coverage=requirement.coverage,conditions=Array.isArray(coverage?.obligations)?coverage.obligations:[];view.node.hidden=!coverage;
+  if(!coverage)return;
+  const reviewed=conditions.filter(o=>o.reviewed===true).length;
+  view.caption.textContent='Покрытие исходного ТЗ · '+reviewed+'/'+conditions.length+' условий сопоставлено';
+  view.note.textContent=(coverage.complete===true?'Все условия сопоставлены. Успех подтверждается результатами связанных проверок.':'Покрытие неполное. Успех одного сценария не подтверждает весь пункт.')+(coverage.review_round?' Проверка покрытия: раунд '+coverage.review_round+'.':'');
+  const present=new Set();
+  for(const [index,condition] of conditions.entries()){
+    const key=String(condition.id??index);present.add(key);let item=view.items.get(key);
+    if(!item){const row=el('section','history-card'),text=el('p'),source=el('p','muted'),mapping=el('p'),reason=el('p','muted');row.append(text,source,mapping,reason);item={row,text,source,mapping,reason};view.items.set(key,item);view.list.append(row)}
+    item.text.textContent=String(condition.text||'Условие без текста');item.source.textContent='Строки ТЗ: '+(condition.start??'?')+'–'+(condition.end??'?');
+    const ids=Array.isArray(condition.scenario_ids)?condition.scenario_ids:[];
+    item.mapping.textContent=(condition.reviewed===true?'Сопоставление проверено':'Нужна проверка покрытия')+' · Сценарии: '+(ids.length?ids.join(', '):'не назначены');item.reason.textContent=String(condition.reason||'');
+  }
+  for(const [key,item] of view.items)if(!present.has(key)){item.row.remove();view.items.delete(key)}
+}
+function pauseAcceptanceVideos(){for(const container of [q('acceptanceRows'),taskRows])for(const video of container.querySelectorAll('video'))video.pause()}
+function acceptanceSwitchJob(jid){
+  acceptanceButton.disabled=!jid;if(acceptanceJob===jid)return;
+  pauseAcceptanceVideos();acceptanceJob=jid;acceptanceVersion++;acceptanceLoading=null;acceptanceData=null;acceptanceRows.clear();acceptanceTaskRows.clear();taskRows.replaceChildren();taskView.value='tasks';taskViewLabel.hidden=true;taskAssignment.hidden=true;q('acceptanceRows').replaceChildren();q('acceptanceCounts').replaceChildren();q('acceptanceIdentity').textContent=jid?'Задание: '+jid:'';q('acceptanceNotice').textContent=jid?'Загрузка требований…':'Выбери проект.';q('acceptanceCoverage').textContent='';q('acceptancePlanNotes').textContent='';
+}
+function acceptanceEvidenceUrl(value,jid){
+  // Evidence must use this job's authenticated local artifact route. Never accept arbitrary schemes or origins.
+  if(typeof value!=='string'||!value.startsWith('/api/jobs/'+encodeURIComponent(jid)+'/files/')||value.includes('\\'))return null;
+  try{const url=new URL(value,location.href);return url.origin===location.origin&&url.pathname.startsWith('/api/jobs/'+encodeURIComponent(jid)+'/files/')?url.href:null}catch{return null}
+}
+function acceptanceVideoGap(requirement,jid){return requirement.kind==='group'&&typeof requirement.video_gap==='boolean'?requirement.video_gap:requirement.video_required===true&&!(requirement.scenarios||[]).some(s=>acceptanceEvidenceUrl(s.video_url,jid))}
+function acceptanceEvidence(entry,scenario,jid,index){
+  const key=String(scenario.id||index),existing=entry.scenarios.get(key);let item=existing;
+  if(!item){
+    const row=el('section','history-card'),title=el('h4'),detail=el('p','muted'),assertions=el('pre'),breakdown=el('div'),technical=el('details'),links=el('div','row'),proof=el('div');technical.append(el('summary','','Технические данные проверки'),assertions);row.append(title,detail,breakdown,technical,links,proof);entry.proofs.append(row);item={row,title,detail,assertions,breakdown,links,proof,log:null,videoButton:null,video:null,videoUrl:null};entry.scenarios.set(key,item);
+  }
+  item.title.textContent='Сценарий '+key+' · '+(requirementLabels[scenario.status]||scenario.status||'Не проверено');item.detail.textContent=typeof scenario.detail==='string'?scenario.detail:'';
+  const assertion=scenario.assertion_evidence;item.assertions.textContent=assertion?(typeof assertion==='string'?assertion:JSON.stringify(assertion,null,2)):'Подтверждения утверждений сценария не приложены.';
+  window.renderFailureDetails(item.breakdown,scenario.failure_details);
+  const log=acceptanceEvidenceUrl(scenario.log_url,jid),videoUrl=acceptanceEvidenceUrl(scenario.video_url,jid);
+  if(log){if(!item.log){item.log=el('a','','Журнал проверки');item.log.target='_blank';item.log.rel='noopener';item.links.append(item.log)}item.log.href=log}else if(item.log){item.log.remove();item.log=null}
+  if(videoUrl){
+    if(!item.videoButton){item.videoButton=el('button','','Посмотреть видео сценария');item.videoButton.type='button';item.links.append(item.videoButton);item.videoButton.onclick=()=>{
+      if(!item.video){item.video=el('video');item.video.controls=true;item.video.preload='metadata';item.video.src=item.videoUrl;item.video.setAttribute('aria-label','Видео сценария '+key);item.proof.append(item.video)}
+      item.video.focus();
+    }}
+    if(item.videoUrl&&item.videoUrl!==videoUrl&&item.video){item.video.pause();item.video.remove();item.video=null}
+    item.videoUrl=videoUrl;
+  }else{
+    if(item.videoButton){item.videoButton.remove();item.videoButton=null}if(item.video){item.video.pause();item.video.remove();item.video=null}item.videoUrl=null;
+  }
+  return key;
+}
+function renderAcceptance(data,jid){
+  acceptanceData=data;
+  window.dispatchEvent(new CustomEvent('lab-acceptance',{detail:{job_id:jid,data}}));
+  const requirements=Array.isArray(data.requirements)?data.requirements:[],summary=data.summary||{};
+  const history=data.history_summary||{},stale=summary.stale??requirements.filter(r=>r.status==='STALE').length;
+  const state=data.status==='TESTS_PASSED_REVIEW_REQUIRED'?'Связанные тесты пройдены. Нужна проверка полноты и доказательств.':data.status==='IN_PROGRESS'?'Приёмка не завершена.':'Приёмка ещё не выполнена.';
+  q('acceptanceIdentity').textContent='Задание: '+jid+' · ТЗ SHA-256: '+(data.spec_sha256||'не указан');q('acceptanceCoverage').textContent=state+' '+(data.coverage_note||'Каждый пункт должен иметь проверяемый результат. Отсутствие ошибок сборки не подтверждает выполнение всего ТЗ.');
+  const reportRound=data.report_round??history.latest_round,version=reportRound?'Последняя проверка: раунд '+reportRound+'. ':'',progress=data.verification_in_progress?'Проверка выполняется. Ниже результаты последней завершённой проверки; они не подтверждают текущие изменения. ':'';
+  q('acceptanceCoverage').textContent=version+progress+(stale>0?'Код или план изменились: прежние доказательства сохранены, требуется перепроверка. ':'')+q('acceptanceCoverage').textContent;
+  q('acceptancePlanNotes').textContent=(Array.isArray(data.plan_notes)?data.plan_notes:[]).join('\n');
+  q('acceptanceCounts').replaceChildren(...[['Всего',summary.total??requirements.length],['Подтверждено для проверенной версии',summary.test_passed??0],['Выполнено частично',summary.in_progress??requirements.filter(r=>r.status==='IN_PROGRESS').length],['Нужна перепроверка',stale],['Ранее проходили тесты',history.test_passed??'нет данных'],['Ещё не проверено',summary.not_tested??requirements.filter(r=>r.status==='NOT_TESTED').length],['Ошибки',summary.failed??0],['Без обязательного видео',summary.without_video??requirements.filter(r=>acceptanceVideoGap(r,jid)).length]].map(([label,count])=>el('span','',label+': '+count)));
+  const present=new Set();
+  for(const requirement of requirements){
+    const id=String(requirement.id);present.add(id);let entry=acceptanceRows.get(id);
+    if(!entry){
+      const row=el('article','acceptance-card'),heading=el('h3'),status=el('p'),section=el('p','muted'),detail=el('p'),expected=el('p'),gap=el('p','acceptance-gap'),source=el('details'),citation=el('summary'),quote=el('pre'),proofs=el('div');source.append(citation,quote);row.append(heading,status,section,expected,detail,gap,source,proofs);entry={row,heading,status,section,detail,expected,gap,citation,quote,proofs,coverage:acceptanceCoverageDetails(row),scenarios:new Map()};row.insertBefore(entry.coverage.node,proofs);acceptanceRows.set(id,entry);q('acceptanceRows').append(row);
+    }
+    entry.requirement=requirement;entry.heading.textContent=id+' · '+(requirement.title||'Требование');entry.status.textContent=requirementLabels[requirement.status]||'Не проверено';entry.status.className=requirement.status==='TEST_PASSED'?'acceptance-pass':requirement.status==='FAIL'?'acceptance-fail':'acceptance-gap';entry.section.textContent='Раздел: '+(requirement.section||'—')+' · Тип проверки: '+(requirement.kind||'не определён');entry.expected.textContent='Ожидаемый результат: '+(requirement.expected||'Не определён — требуется план проверки.');entry.detail.textContent=requirement.detail||'';
+    renderSourceCoverage(entry.coverage,requirement);
+    const source=requirement.source||{};entry.citation.textContent='Источник в ТЗ: строки '+(source.start_line??'?')+'–'+(source.end_line??'?');entry.quote.textContent=source.text||'Цитата не приложена.';
+    entry.gap.textContent=acceptanceVideoGap(requirement,jid)?'Нет видео, которое демонстрирует это обязательное наблюдаемое поведение.':requirement.video_required===true?'Видео приложено. Его наличие само по себе не подтверждает требование.':'Видео для этого пункта не обязательно. Проверь исполняемые проверки и журнал.';
+    const observed=new Set();for(const [index,scenario] of (requirement.scenarios||[]).entries())observed.add(acceptanceEvidence(entry,scenario,jid,index));
+    for(const [key,item] of entry.scenarios)if(!observed.has(key)){item.video?.pause();item.row.remove();entry.scenarios.delete(key)}
+  }
+  for(const [id,entry] of acceptanceRows)if(!present.has(id)){for(const video of entry.row.querySelectorAll('video'))video.pause();entry.row.remove();acceptanceRows.delete(id)}
+  renderAcceptanceTasks(data,jid);renderTaskAssignment(data);updateAcceptanceView();
+}
+function renderTaskAssignment(data){
+  const assignment=data.assignment,task=['active','regression_verification'].includes(assignment?.status)?assignment.current_task:null;taskAssignment.hidden=!assignment;
+  if(task){taskAssignmentTitle.textContent='Текущая задача: '+String(task.id)+' · '+(task.title||'Без названия');taskAssignmentDetail.textContent='Осталось условий в задаче: '+(Array.isArray(task.unresolved_requirement_ids)?task.unresolved_requirement_ids.length:'нет данных')+' · Условий для регрессионной проверки: '+(Array.isArray(assignment.regression_requirement_ids)?assignment.regression_requirement_ids.length:0);taskAssignmentNote.textContent='Одна задача может занимать несколько раундов. Следующая назначается после независимых проверок. Прежние результаты не подтверждают изменённый код.'}
+  else if(assignment){taskAssignmentTitle.textContent=assignment.status==='all_verified_requires_review'?'Задачи проверены — требуется итоговая приёмка':'Текущая задача ещё не назначена';taskAssignmentDetail.textContent='Задач в очереди: '+(Number.isInteger(assignment.pending_task_count)?assignment.pending_task_count:'нет данных');taskAssignmentNote.textContent='Статус назначения описывает очередь работы. Текущую готовность показывают результаты проверок ниже.'}
+  for(const [id,entry] of acceptanceTaskRows){const current=!!task&&id===String(task.id);entry.row.dataset.currentTask=current?'true':'false';entry.row.style.outline=current?'2px solid #82b7ff':'';entry.row.style.outlineOffset=current?'2px':'';entry.heading.textContent=(current?'Текущая задача · ':'')+id+' · '+(entry.requirement.title||'Задача')}
+}
+function renderAcceptanceTasks(data,jid){
+  const tasks=Array.isArray(data.tasks)?data.tasks:[],requirements=new Map((data.requirements||[]).map(r=>[String(r.id),r])),present=new Set();
+  taskViewLabel.hidden=!tasks.length;
+  for(const task of tasks){
+    const id=String(task.id);present.add(id);let entry=acceptanceTaskRows.get(id);
+    if(!entry){const row=el('article','acceptance-card'),heading=el('h3'),status=el('p'),section=el('p','muted'),coverage=el('p'),members=el('details'),caption=el('summary'),list=el('div'),proofs=el('div');members.append(caption,list);row.append(heading,status,section,coverage,members,proofs);entry={row,heading,status,section,coverage,caption,list,proofs,members:new Map(),scenarios:new Map()};acceptanceTaskRows.set(id,entry);taskRows.append(row)}
+    const linked=(task.requirement_ids||[]).map(id=>requirements.get(String(id))).filter(Boolean),summary=task.summary||{};entry.requirement={...task,video_gap:linked.some(r=>acceptanceVideoGap(r,jid)),video_required:linked.some(r=>r.video_required===true),scenarios:linked.flatMap(r=>r.scenarios||[]),source:{text:linked.map(r=>[r.id,r.title,r.source?.text,r.expected].join(' ')).join(' ')}};
+    entry.heading.textContent=id+' · '+(task.title||'Задача');entry.status.textContent=task.status==='IN_PROGRESS'?'Выполнено частично — задача ещё не принята':requirementLabels[task.status]||'Ещё не проверено';entry.status.className=task.status==='TEST_PASSED'?'acceptance-pass':task.status==='FAIL'?'acceptance-fail':'acceptance-gap';entry.section.textContent='Раздел: '+(task.section||'—');entry.coverage.textContent='Условий: '+(summary.total??linked.length)+' · подтверждено: '+(summary.test_passed??0)+' · ошибок: '+(summary.failed??0)+' · перепроверить: '+(summary.stale??0)+' · не проверено: '+(summary.not_tested??0);entry.caption.textContent='Исходные условия ТЗ ('+linked.length+')';
+    // Member lists contain no media. Keep the surrounding details and players stable while polling.
+    const members=new Set();for(const r of linked){const key=String(r.id);members.add(key);let member=entry.members.get(key);if(!member){const row=el('section'),label=el('p');row.append(label);member={row,label,coverage:acceptanceCoverageDetails(row)};entry.members.set(key,member);entry.list.append(row)}member.label.textContent=key+' · '+(r.title||'Условие')+' — '+(requirementLabels[r.status]||'Ещё не проверено');renderSourceCoverage(member.coverage,r)}for(const [key,member] of entry.members)if(!members.has(key)){member.row.remove();entry.members.delete(key)}
+    const observed=new Set();for(const [index,scenario] of entry.requirement.scenarios.entries()){const key=String(scenario.id||index);if(!observed.has(key)){observed.add(key);acceptanceEvidence(entry,scenario,jid,index)}}for(const [key,item] of entry.scenarios)if(!observed.has(key)){item.video?.pause();item.row.remove();entry.scenarios.delete(key)}
+  }
+  for(const [id,entry] of acceptanceTaskRows)if(!present.has(id)){for(const video of entry.row.querySelectorAll('video'))video.pause();entry.row.remove();acceptanceTaskRows.delete(id)}
+}
+function updateAcceptanceView(){
+  const grouped=acceptanceTaskRows.size>0&&taskView.value==='tasks';taskRows.hidden=!grouped;q('acceptanceRows').hidden=grouped;
+  for(const video of (grouped?q('acceptanceRows'):taskRows).querySelectorAll('video'))video.pause();
+  if(grouped){const summary=acceptanceData.task_summary||{};q('acceptanceCounts').replaceChildren(...[['Задач',summary.total??acceptanceTaskRows.size],['Подтверждено полностью',summary.test_passed??0],['Выполнено частично',summary.in_progress??0],['Нужна перепроверка',summary.stale??0],['Ещё не проверено',summary.not_tested??0],['Ошибки',summary.failed??0],['Исходных условий ТЗ',acceptanceData.summary?.total??acceptanceRows.size]].map(([label,count])=>el('span','',label+': '+count)))}
+  else if(acceptanceData){const summary=acceptanceData.summary||{},requirements=acceptanceData.requirements||[];q('acceptanceCounts').replaceChildren(...[['Всего',summary.total??acceptanceRows.size],['Подтверждено для проверенной версии',summary.test_passed??0],['Выполнено частично',summary.in_progress??requirements.filter(r=>r.status==='IN_PROGRESS').length],['Нужна перепроверка',summary.stale??requirements.filter(r=>r.status==='STALE').length],['Ранее проходили тесты',acceptanceData.history_summary?.test_passed??'нет данных'],['Ещё не проверено',summary.not_tested??requirements.filter(r=>r.status==='NOT_TESTED').length],['Ошибки',summary.failed??0],['Без обязательного видео',summary.without_video??requirements.filter(r=>acceptanceVideoGap(r,acceptanceJob)).length]].map(([label,count])=>el('span','',label+': '+count)))}
+  filterAcceptanceRows();
+}
+function filterAcceptanceRows(){
+  const term=q('acceptanceSearch').value.trim().toLocaleLowerCase('ru-RU'),filter=q('acceptanceFilter').value;let visible=0;
+  const grouped=acceptanceTaskRows.size>0&&taskView.value==='tasks',rows=grouped?acceptanceTaskRows:acceptanceRows;
+  for(const entry of rows.values()){
+    const r=entry.requirement,matchStatus=filter==='ALL'||(filter==='NO_VIDEO'?acceptanceVideoGap(r,acceptanceJob):r.status===filter),matchText=[r.id,r.title,r.section,r.source?.text,r.expected].join(' ').toLocaleLowerCase('ru-RU').includes(term);entry.row.hidden=!(matchStatus&&matchText);if(!entry.row.hidden)visible++;else for(const video of entry.row.querySelectorAll('video'))video.pause();
+  }
+  q('acceptanceNotice').textContent=rows.size?(grouped?'Показано задач: ':'Показано требований: ')+visible+' из '+rows.size:'Пункты ещё не выделены. Это не означает, что ТЗ выполнено.';
+}
+async function refreshAcceptance(){
+  acceptanceSwitchJob(active);if(!q('acceptanceDialog').open||!active)return;
+  const jid=active,version=acceptanceVersion;if(acceptanceLoading===version)return;acceptanceLoading=version;
+  try{const data=await api('/api/jobs/'+encodeURIComponent(jid)+'/acceptance');if(active!==jid||acceptanceJob!==jid||version!==acceptanceVersion||!q('acceptanceDialog').open)return;renderAcceptance(data,jid)}
+  catch(error){if(active===jid&&version===acceptanceVersion&&q('acceptanceDialog').open)q('acceptanceNotice').textContent='Не удалось получить приёмку: '+error.message}
+  finally{if(acceptanceLoading===version)acceptanceLoading=null}
+}
+acceptanceButton.onclick=()=>{if(!active)return;acceptanceOpener=acceptanceButton;acceptanceSwitchJob(active);if(window.labOpenAcceptance)window.labOpenAcceptance();else q('acceptanceDialog').showModal();refreshAcceptance()};
+q('acceptanceClose').onclick=()=>q('acceptanceDialog').close();q('acceptanceDialog').addEventListener('close',()=>{pauseAcceptanceVideos();acceptanceVersion++;acceptanceLoading=null;if(acceptanceOpener?.isConnected)acceptanceOpener.focus()});
+q('acceptanceSearch').oninput=filterAcceptanceRows;q('acceptanceFilter').onchange=filterAcceptanceRows;
+taskView.onchange=()=>{if(acceptanceData)renderAcceptance(acceptanceData,acceptanceJob)};
+setInterval(()=>{acceptanceSwitchJob(active);if(q('acceptanceDialog').open)refreshAcceptance()},5000);
+
+const historyJobs=new Map(),historyAttempts=new Map();let historyJob=null,historyVersion=0;
+function historyJobState(jid){if(!historyJobs.has(jid))historyJobs.set(jid,{attempts:[],selected:null,listing:false,truncated:false});return historyJobs.get(jid)}
+function historyState(jid,tid){const key=jid+'|'+tid;if(!historyAttempts.has(key))historyAttempts.set(key,{offset:0,stream:null,events:[],loading:false,hasMore:false,discarded:0,request:null,attempt:null,filter:'*',revision:0,pending:false});return historyAttempts.get(key)}
+function historyVisible(jid,tid,version){return active===jid&&historyJob===jid&&historyJobs.get(jid)?.selected===tid&&historyVersion===version}
+function historyDate(value){if(!value)return '—';const d=new Date(value);return Number.isNaN(d.getTime())?String(value):d.toLocaleString('ru-RU')}
+function historyAttemptLabel(a){return 'Раунд '+(a.round??'?')+' · '+({planner:'Планировщик',coder:'Кодер',reviewer:'Ревьюер'}[a.role]||'Агент')+' · '+(a.status||'неизвестно')+' · '+a.id}
+function historySwitchJob(jid){if(historyJob===jid)return;historyJob=jid;historyVersion++;q('historyEvents').replaceChildren();q('historyPrompt').textContent='Выбери запуск агента';q('historyRequest').open=false;q('historyMeta').textContent='Загрузка истории…';q('historyNotice').textContent='';q('historyAttempt').replaceChildren();q('historyAgent').replaceChildren(el('option','','Все агенты'));q('historyAgent').firstChild.value='*';q('historyMore').disabled=true;q('historyStart').disabled=true}
+function historySelect(jid,tid){const job=historyJobState(jid);if(job.selected!==tid){job.selected=tid;historyVersion++;q('historyRequest').open=false}q('historyAttempt').value=tid||'';if(!tid)return;const state=historyState(jid,tid);state.attempt=job.attempts.find(a=>a.id===tid)||state.attempt;renderHistory(jid,tid,true);fetchHistoryPage(jid,tid).catch(e=>{if(active===jid&&job.selected===tid)q('historyNotice').textContent='Ошибка истории: '+e.message})}
+function historyEventAgents(event){return [...new Set([event.agent,...(Array.isArray(event.agents)?event.agents:[])].filter(x=>typeof x==='string'&&x))]}
+function historyEventText(event){
+    const data=event.data||{},item=data.item||data;
+    const lines=[];
+    if(typeof item.text==='string')lines.push(item.text);
+    if(typeof item.command==='string')lines.push('$ '+item.command);
+    if(typeof item.aggregated_output==='string'&&item.aggregated_output)lines.push(item.aggregated_output);
+    if(item.exit_code!==undefined&&item.exit_code!==null)lines.push('Код завершения: '+item.exit_code);
+    if(typeof item.prompt==='string')lines.push('Запрос:\n'+item.prompt);
+    if(item.error){const err=typeof item.error==='string'?item.error:JSON.stringify(item.error);lines.push('Ошибка: '+err)}
+    if(!lines.length&&typeof data.message==='string')lines.push(data.message);
+    return lines.join('\n\n');
+}
+function historyCard(event){
+    const card=el('article','history-card'),agents=historyEventAgents(event).map(a=>a==='main'?'основной агент':a).join(', ');
+    card.append(el('div','muted',(event.kind||event.type||'событие')+' · '+(agents||'агент не указан')+' · позиция '+event.offset));
+    const text=historyEventText(event);if(text)card.append(el('pre','',text));if(event.truncated)card.append(el('p','foot','Слишком длинные поля сокращены при чтении журнала.'));
+    const details=el('details');details.append(el('summary','','Данные события: '+(event.type||'')),el('pre','',JSON.stringify(event.data,null,2)));card.append(details);return card;
+}
+function renderHistory(jid,tid,rebuild=false,newEvents=[]){
+    if(active!==jid||historyJob!==jid||historyJobState(jid).selected!==tid)return;
+    const state=historyState(jid,tid),a=state.attempt||{};if(state.renderedVersion!==historyVersion){rebuild=true;state.renderedVersion=historyVersion}
+    q('historyMeta').textContent='Раунд: '+(a.round??'—')+' · статус: '+(a.status||'неизвестно')+'\nМодель: '+(a.model||state.request?.model||'по умолчанию Codex')+' · reasoning: '+(a.reasoning_effort||state.request?.reasoning_effort||'default')+'\nНачало: '+historyDate(a.started_at)+' · завершение: '+historyDate(a.finished_at);
+    const prompt=state.request?.prompt,promptText=typeof prompt==='string'?prompt:(a.prompt_available?'Запрос загружается…':'Для этого запуска исходный запрос не сохранён.');if(q('historyPrompt').textContent!==promptText)q('historyPrompt').textContent=promptText;
+    const agents=new Set();for(const event of state.events)for(const agent of historyEventAgents(event))agents.add(agent);
+    const filter=q('historyAgent'),choices=['*',...agents].sort((a,b)=>a==='*'?-1:b==='*'?1:a.localeCompare(b));
+    // Only observed identifiers appear here; keep selection while polling.
+    if(JSON.stringify([...filter.options].map(o=>o.value))!==JSON.stringify(choices)){filter.replaceChildren(...choices.map(id=>{const option=el('option','',id==='*'?'Все агенты':id==='main'?'Основной агент':id);option.value=id;return option}));}
+    if(!choices.includes(state.filter))state.filter='*';filter.value=state.filter;
+    const matches=event=>state.filter==='*'||historyEventAgents(event).includes(state.filter),list=q('historyEvents');
+    if(rebuild)list.replaceChildren(...state.events.filter(matches).map(historyCard));else for(const event of newEvents)if(matches(event))list.append(historyCard(event));
+    if(!state.events.length&&!state.loading)q('historyEmpty').textContent=a.log_available?'В журнале пока нет доступных сообщений и действий.':'Журнал ещё не создан или не сохранился.';else q('historyEmpty').textContent=state.events.length&&!state.events.some(matches)?'Для выбранного агента в загруженной части истории событий нет.':'';
+    const notes=[];if(historyJobState(jid).truncated)notes.push('Показана ограниченная часть списка запусков.');if(state.discarded)notes.push('В памяти показаны последние 1000 загруженных событий. Нажми «С начала», чтобы прочитать более ранние.');if(state.hasMore)notes.push('В журнале есть ещё события — «Загрузить ещё».');if(state.pending)notes.push('Ожидается завершение записи следующего события.');q('historyNotice').textContent=notes.join(' ');
+    q('historyMore').disabled=state.loading||!state.hasMore;q('historyStart').disabled=state.loading||(!state.offset&&!state.events.length);
+}
+async function fetchHistoryPage(jid,tid){
+    const state=historyState(jid,tid);if(state.loading)return;state.loading=true;const revision=state.revision,version=historyVersion;
+    if(historyVisible(jid,tid,version)){q('historyMore').disabled=true;q('historyStart').disabled=true}
+    try{
+        let path='/api/jobs/'+encodeURIComponent(jid)+'/agent-history/'+encodeURIComponent(tid)+'?after='+state.offset+'&limit=100';if(state.stream)path+='&stream='+encodeURIComponent(state.stream);
+        const result=await api(path);if(revision!==state.revision)return;
+        let rebuild=!!result.reset;if(rebuild){state.events=[];state.discarded=0}
+        const offsets=new Set(state.events.map(e=>e.offset)),added=[];for(const event of result.events||[]){if(offsets.has(event.offset))continue;offsets.add(event.offset);state.events.push(event);added.push(event)}
+        if(state.events.length>1000){state.discarded+=state.events.length-1000;state.events=state.events.slice(-1000);rebuild=true}
+        state.offset=result.next_offset;state.stream=result.stream;state.hasMore=!!result.has_more;state.pending=!!result.pending_line;state.request=result.request;state.attempt=result.attempt||state.attempt;
+        if(historyVisible(jid,tid,version))renderHistory(jid,tid,rebuild,added);else state.renderedVersion=null;
+    }finally{state.loading=false;if(historyVisible(jid,tid,version))renderHistory(jid,tid)}
+}
+async function refreshAgentHistory(jid){
+    if(active!==jid)return;historySwitchJob(jid);const job=historyJobState(jid);if(job.listing)return;job.listing=true;const version=historyVersion;
+    try{
+        const result=await api('/api/jobs/'+encodeURIComponent(jid)+'/agent-history');if(active!==jid||historyJob!==jid||version!==historyVersion)return;
+        job.attempts=result.attempts||[];job.truncated=!!result.truncated;
+        const select=q('historyAttempt'),ids=job.attempts.map(a=>a.id);
+        if(JSON.stringify([...select.options].map(o=>o.value))!==JSON.stringify(ids)){select.replaceChildren(...job.attempts.map(a=>{const option=el('option','',historyAttemptLabel(a));option.value=a.id;return option}))}else job.attempts.forEach((a,i)=>{const label=historyAttemptLabel(a);if(select.options[i].textContent!==label)select.options[i].textContent=label});
+        if(!ids.length){job.selected=null;q('historyMeta').textContent='Запусков агента пока нет. История появится после начала разработки.';q('historyPrompt').textContent='Запрос пока не сформирован.';q('historyEvents').replaceChildren();q('historyEmpty').textContent='';return}
+        // The API returns attempts oldest first; select the latest only initially.
+        if(!job.selected||!ids.includes(job.selected)){historySelect(jid,ids[ids.length-1]);return}
+        select.value=job.selected;const state=historyState(jid,job.selected);state.attempt=job.attempts.find(a=>a.id===job.selected);renderHistory(jid,job.selected);await fetchHistoryPage(jid,job.selected);
+    }catch(e){if(active===jid&&historyJob===jid)q('historyNotice').textContent='Ошибка истории: '+e.message}finally{job.listing=false}
+}
+async function refreshEvents(jid){
+    let state=eventPages.get(jid);
+    if(!state){state={after:0,lines:[],loading:false};eventPages.set(jid,state)}
+    if(state.loading)return;
+    state.loading=true;
+    try{
+        // Drain full pages with a bounded amount of work per poll; keep the cursor
+        // even when older display lines are discarded.
+        for(let page=0;page<10;page++){
+            const events=await api('/api/jobs/'+jid+'/events?after='+state.after);
+            for(const event of events){
+                if(event.id<=state.after)continue;
+                state.lines.push(event.created_at+' ['+event.level+'] '+event.text);
+                state.after=event.id;
+            }
+            if(state.lines.length>2000)state.lines=state.lines.slice(-2000);
+            if(active===jid)q('events').textContent=state.lines.join('\n')||'Ожидание…';
+            if(events.length<500)break;
+        }
+    }finally{state.loading=false}
+}
+q('updateSettings').onsubmit=async e=>{e.preventDefault();if(!active)return;try{await api('/api/jobs/'+active+'/codex-settings',{method:'POST',body:new FormData(q('updateSettings'))});q('settingsNote').textContent='Настройки сохранены для следующих раундов';await refresh()}catch(err){q('settingsNote').textContent='Ошибка: '+err.message}};
+q('form').onsubmit=async e=>{e.preventDefault();let f=new FormData(q('form'));if(q('newUnlimited').checked)f.set('max_rounds','0');q('upload').textContent='Загружаю…';try{let res=await api('/api/projects',{method:'POST',body:f});q('upload').textContent='Проект создан: '+res.project_id;window.dispatchEvent(new Event('lab-created'));active=res.job_id;acceptanceSwitchJob(active);await refresh()}catch(x){q('upload').textContent='Ошибка: '+x.message}};
+let extendingJob=null,extensionFor=null;
+function renderRoundExtension(job){
+ const finished=job.status==='FINISHED'&&job.phase==='max_rounds_reached'&&job.max_rounds>0;
+ q('extendRounds').hidden=!finished;
+ if(!finished)return;
+ const input=q('additionalRounds');
+ if(extensionFor!==job.id){input.value='5';extensionFor=job.id}
+ q('extendButton').disabled=extendingJob===job.id;input.disabled=extendingJob===job.id;
+ if(extendingJob!==job.id)q('extendNote').textContent='Продолжение с раунда '+(job.round+1)+'. Код, ТЗ и история сохранятся. Количество дополнительных раундов задаёшь ты.';
+}
+let roundLimitFor=null,savingLimitJob=null;
+q('newUnlimited').onchange=()=>{q('rounds').disabled=q('newUnlimited').checked};
+q('roundLimitUnlimited').onchange=()=>{q('roundLimitValue').disabled=q('roundLimitUnlimited').checked||q('saveRoundLimit').disabled};
+function renderRoundLimitSettings(job){
+ const editable=['QUEUED','USER_PAUSED','QUOTA_PAUSED','FAILED'].includes(job.status)||(job.status==='FINISHED'&&job.phase==='max_rounds_reached');
+ const key=job.id+'|'+job.max_rounds;
+ if(roundLimitFor!==key){
+   q('roundLimitUnlimited').checked=job.max_rounds===0;
+   q('roundLimitValue').value=String(job.max_rounds>job.round?job.max_rounds:job.round+5);
+   roundLimitFor=key;
+ }
+ const disabled=!editable||savingLimitJob===job.id;
+ q('saveRoundLimit').disabled=disabled;q('roundLimitUnlimited').disabled=disabled;
+ q('roundLimitValue').min=String(job.round+1);q('roundLimitValue').disabled=disabled||q('roundLimitUnlimited').checked;
+ if(savingLimitJob!==job.id)q('roundLimitNote').textContent=editable?'Сохранение не возобновляет приостановленное или завершённое задание. Для запуска нажми «Продолжить».':'Для изменения работающего задания сначала нажми «Пауза».';
+}
+q('roundLimitSettings').onsubmit=async event=>{
+ event.preventDefault();const jid=active;if(!jid||savingLimitJob)return;
+ const body=new FormData();body.set('max_rounds',q('roundLimitUnlimited').checked?'0':q('roundLimitValue').value);
+ savingLimitJob=jid;q('saveRoundLimit').disabled=true;q('roundLimitUnlimited').disabled=true;q('roundLimitValue').disabled=true;
+ q('roundLimitNote').textContent='Сохраняю лимит…';
+ try{await api('/api/jobs/'+jid+'/round-limit',{method:'POST',body});savingLimitJob=null;await refresh()}
+ catch(error){if(active===jid)q('roundLimitNote').textContent='Ошибка: '+error.message}
+ finally{savingLimitJob=null;if(active===jid){q('saveRoundLimit').disabled=false;q('roundLimitUnlimited').disabled=false;q('roundLimitValue').disabled=q('roundLimitUnlimited').checked}}
+};
+q('extendRounds').onsubmit=async event=>{
+ event.preventDefault();const jid=active;if(!jid||extendingJob)return;
+ const body=new FormData(q('extendRounds'));extendingJob=jid;
+ q('extendButton').disabled=true;q('additionalRounds').disabled=true;
+ q('extendNote').textContent='Добавляю раунды…';
+ try{await api('/api/jobs/'+jid+'/extend-rounds',{method:'POST',body});await refresh()}
+ catch(error){if(active===jid)q('extendNote').textContent='Ошибка: '+error.message}
+ finally{extendingJob=null;if(active===jid){q('extendButton').disabled=false;q('additionalRounds').disabled=false}}
+};
+async function action(act){if(!active)return;try{await api('/api/jobs/'+active+'/'+act,{method:'POST'});refresh()}catch(e){alert(e.message)}}
+async function refresh(){
+ const jobs=await api('/api/jobs');
+ if(active&&!jobs.some(job=>job.id===active))active=null;
+ if(!active&&jobs.length)active=jobs[0].id;
+ if(window.labRenderProjects)window.labRenderProjects(jobs);
+ else{q('jobs').replaceChildren();for(const job of jobs){const button=el('button','item',job.title);button.type='button';button.onclick=()=>{active=job.id;activitySwitchJob(active);acceptanceSwitchJob(active);refresh()};q('jobs').append(button)}}
+ acceptanceSwitchJob(active);activitySwitchJob(active);if(!active)return;
+ const jid=active,j=await api('/api/jobs/'+jid);if(jid!==active||j.id!==jid)return;
+ window.dispatchEvent(new CustomEvent('lab-job',{detail:j}));refreshCurrentActivity(j);
+ if(settingsFor!==jid){q('updateModel').value=j.model||'';q('updateReasoning').value=j.reasoning_effort||'default';if(window.loadProviderSettings)window.loadProviderSettings(j);settingsFor=jid}
+ q('saveSettings').disabled=!['QUEUED','USER_PAUSED','QUOTA_PAUSED'].includes(j.status);
+ q('title').textContent=j.title;
+ q('status').textContent='Состояние: '+roundStatus(j)+' · '+j.phase+' · цикл '+displayRound(j)+'/'+roundLimitText(j)+'\n'+modelSelectionSummary(j)+(j.last_error?'\nОшибка: '+j.last_error:'')+(j.status==='FINISHED'?'\nЛимит исчерпан. Готовность мода определяется отчётом и покрытием требований ТЗ.':'');
+ q('pause').disabled=!['QUEUED','RUNNING','QUOTA_PAUSED'].includes(j.status);
+ q('resume').disabled=!['USER_PAUSED','QUOTA_PAUSED','FAILED'].includes(j.status);
+ q('stop').disabled=['STOPPED','FAILED','FINISHED'].includes(j.status);
+ renderRoundExtension(j);renderRoundLimitSettings(j);
+ const results=await Promise.allSettled([
+  refreshAgentHistory(jid),refreshEvents(jid),refreshMediaCatalog(jid),
+  api('/api/jobs/'+jid+'/verification'),api('/api/jobs/'+jid+'/backups'),api('/api/jobs/'+jid+'/s3')]);
+ if(jid!==active)return;
+ if(results[3].status==='fulfilled'){const v=results[3].value;q('acceptanceSummary').textContent=acceptanceText(v);q('verification').textContent=JSON.stringify(v,null,2).slice(0,9000)}
+ if(results[4].status==='fulfilled'){
+  const backups=results[4].value;q('backups').replaceChildren(el('span','','Резервные копии: '));
+  for(const bk of backups){const a=el('a','',bk.filename+' ');a.href='/api/jobs/'+jid+'/backups/'+encodeURIComponent(bk.filename);q('backups').append(a)}
+  if(!backups.length)q('backups').append(el('span','','пока нет'));
+ }
+ if(results[5].status==='fulfilled'){
+  const objects=results[5].value;q('s3').replaceChildren(el('p','muted','Видео в Yandex S3: '+objects.length));
+  for(const object of objects){const button=el('button','',object.key.split('/').pop()+' · открыть');button.onclick=async()=>{try{const response=await api('/api/jobs/'+jid+'/s3-link?key='+encodeURIComponent(object.key));if(active===jid)window.open(response.url,'_blank','noopener')}catch(error){alert(error.message)}};q('s3').append(button)}
+ }
+ for(const result of results)if(result.status==='rejected'){console.warn(result.reason);window.dispatchEvent(new Event('lab-connection-error'))}
+}
+// Gallery pagination is separate from logs: service JSON cannot hide new media.
+let galleryJob=null,galleryRound=null,galleryPages=1,galleryRevision=0,galleryLoading=false;
+const galleryControls=el('div','row'),galleryLabel=el('label','field muted','Раунд результатов'),gallerySelect=el('select');
+gallerySelect.id='galleryRound';galleryLabel.htmlFor=gallerySelect.id;galleryLabel.append(gallerySelect);
+const galleryMore=el('button','','Загрузить ещё результаты');galleryMore.id='galleryMore';galleryMore.type='button';galleryMore.hidden=true;
+const galleryNote=el('p','foot');galleryNote.id='galleryNote';galleryNote.setAttribute('role','status');
+galleryControls.append(galleryLabel,galleryMore);q('files').before(galleryControls,galleryNote);
+function resetGallerySelection(){
+ galleryRevision++;galleryLoading=false;galleryPages=1;
+ for(const entry of mediaRows.values())entry.row.querySelector('video')?.pause();
+ renderedMediaKey='';renderMediaFiles([],active);
+}
+gallerySelect.onchange=()=>{galleryRound=gallerySelect.value?Number(gallerySelect.value):null;resetGallerySelection();refreshMediaCatalog(active).catch(error=>galleryNote.textContent='Ошибка галереи: '+error.message)};
+galleryMore.onclick=()=>{galleryPages++;galleryMore.disabled=true;refreshMediaCatalog(active).catch(error=>galleryNote.textContent='Ошибка галереи: '+error.message)};
+async function refreshMediaCatalog(jid){
+ if(jid!==active)return;
+ if(galleryJob!==jid){galleryJob=jid;galleryRound=null;galleryPages=1;galleryRevision++;galleryLoading=false;gallerySelect.replaceChildren();galleryMore.hidden=true}
+ if(galleryLoading)return;galleryLoading=true;
+ const revision=galleryRevision,round=galleryRound,pages=galleryPages;
+ try{
+  let response,first;const all=new Map();
+  for(let page=0;page<pages;page++){
+   const path='/api/jobs/'+encodeURIComponent(jid)+'/media?limit=100&offset='+(page*100)+(round!==null?'&round_number='+round:'');
+   response=await api(path);if(active!==jid||revision!==galleryRevision||galleryJob!==jid)return;
+   first=first||response;for(const file of response.files||[])all.set(file.path,file);
+   if(!response.has_more)break;
+  }
+  const values=['',...(first.rounds||[]).map(String)];
+  if(JSON.stringify([...gallerySelect.options].map(o=>o.value))!==JSON.stringify(values)){
+   gallerySelect.replaceChildren(...values.map(value=>{const option=el('option','',value?'Раунд '+value:'Все раунды · сначала новые');option.value=value;return option}));
+  }
+  gallerySelect.value=round===null?'':String(round);
+  renderMediaFiles([...all.values()],jid);
+  galleryMore.hidden=!response.has_more;galleryMore.disabled=false;
+  galleryNote.textContent='Показано '+all.size+' из '+first.total+' файлов'+(first.truncated?'. Каталог ограничен — выбери конкретный раунд.':'.')+(all.size?'':' Результаты появятся после завершения проверки; unit-тестам видео не требуется.');
+ }catch(error){if(active===jid&&revision===galleryRevision)galleryNote.textContent='Галерея временно недоступна: '+error.message+'. Последние результаты сохранены.'}
+ finally{if(revision===galleryRevision){galleryLoading=false;galleryMore.disabled=false}}
+}
+q('historyAttempt').onchange=()=>{if(active&&historyJob===active)historySelect(active,q('historyAttempt').value)};
+q('historyAgent').onchange=()=>{if(!active||historyJob!==active)return;const tid=historyJobState(active).selected;if(!tid)return;historyState(active,tid).filter=q('historyAgent').value;renderHistory(active,tid,true)};
+q('historyMore').onclick=()=>{if(!active||historyJob!==active)return;const jid=active,tid=historyJobState(jid).selected;if(tid)fetchHistoryPage(jid,tid).catch(e=>{if(active===jid&&historyJobState(jid).selected===tid)q('historyNotice').textContent='Ошибка истории: '+e.message})};
+q('historyStart').onclick=()=>{if(!active||historyJob!==active)return;const jid=active,tid=historyJobState(jid).selected;if(!tid)return;const state=historyState(jid,tid);if(state.loading)return;state.revision++;state.offset=0;state.stream=null;state.events=[];state.discarded=0;state.hasMore=false;state.pending=false;renderHistory(jid,tid,true);fetchHistoryPage(jid,tid).catch(e=>{if(active===jid&&historyJobState(jid).selected===tid)q('historyNotice').textContent='Ошибка истории: '+e.message})};
+setInterval(()=>refresh().catch(e=>{console.warn(e);window.dispatchEvent(new Event('lab-connection-error'))}),5000);refresh().catch(e=>{q('jobs').textContent=e.message;window.dispatchEvent(new Event('lab-connection-error'))});
+</script><script src="/provider.js"></script><script src="/memory.js"></script><script src="/planner.js"></script><script src="/pipeline.js"></script><script src="/agent-models.js"></script><script src="/dashboard.js"></script></body></html>

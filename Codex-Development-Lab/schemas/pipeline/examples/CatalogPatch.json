@@ -1,0 +1,34 @@
+{
+  "contract": "CatalogPatch",
+  "version": "v1",
+  "scope": {
+    "project_id": "demo-trees",
+    "spec_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "source_revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "round": 3
+  },
+  "base_catalog_ref": {
+    "path": "planning/requirements.json",
+    "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "media_type": "application/json"
+  },
+  "rationale": "Clarify only C1; preserve all other records.",
+  "addressed_finding_ids": [
+    "F1"
+  ],
+  "requirements_upsert": [],
+  "requirements_remove": [],
+  "conditions_upsert": [
+    {
+      "id": "C1",
+      "requirement_id": "R1",
+      "expected": "The planted sapling is present at the chosen position.",
+      "verification": "automated"
+    }
+  ],
+  "conditions_remove": [],
+  "questions_add": [],
+  "question_resolutions_upsert": [],
+  "unclassified_add": [],
+  "unclassified_remove": []
+}

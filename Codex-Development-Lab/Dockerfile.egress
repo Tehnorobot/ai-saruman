@@ -1,0 +1,6 @@
+FROM python:3.12-slim-bookworm
+COPY network/egress.py /opt/lab/egress.py
+USER 1000:1000
+WORKDIR /tmp
+EXPOSE 3128
+CMD ["python3", "-I", "/opt/lab/egress.py"]

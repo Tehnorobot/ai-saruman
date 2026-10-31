@@ -1,0 +1,17 @@
+.env
+minimax-probe-results/
+**/__pycache__/
+.pytest_cache/
+projects/*
+!projects/.gitkeep
+artifacts/*
+!artifacts/.gitkeep
+data/*
+!data/.gitkeep
+backups/*
+!backups/.gitkeep
+agent-tasks/*
+!agent-tasks/.gitkeep
+planner-tasks/*
+!planner-tasks/.gitkeep
+runner-output/

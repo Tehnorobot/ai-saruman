@@ -1,0 +1,8 @@
+{
+  "summary": "Run the currently unverified movement scenario.",
+  "action": {
+    "kind": "implement_or_verify_scenario",
+    "target": "movement",
+    "reason": "Run the currently unverified movement scenario."
+  }
+}

@@ -1,0 +1,69 @@
+{
+  "contract": "ScenarioManifest",
+  "version": "proposal-v1",
+  "scope": {
+    "project_id": "demo-trees",
+    "spec_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "source_revision": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "round": 3
+  },
+  "scenarios": [
+    {
+      "id": "S1",
+      "task_ids": [
+        "T1",
+        "T2"
+      ],
+      "condition_ids": [
+        "C1",
+        "C2"
+      ],
+      "setup": [
+        "Плоская площадка; саженец и костная мука доступны"
+      ],
+      "steps": [
+        "Запустить посадку",
+        "Запустить выращивание"
+      ],
+      "checkpoints": [
+        {
+          "id": "CP1",
+          "condition_ids": [],
+          "assertion": "Площадка найдена",
+          "observable": "site_found",
+          "comparator": "eq",
+          "expected": true
+        },
+        {
+          "id": "CP2",
+          "condition_ids": [
+            "C1"
+          ],
+          "assertion": "Саженец установлен",
+          "observable": "sapling_placed",
+          "comparator": "eq",
+          "expected": true
+        },
+        {
+          "id": "CP3",
+          "condition_ids": [
+            "C2"
+          ],
+          "assertion": "Дерево выросло",
+          "observable": "tree_present",
+          "comparator": "eq",
+          "expected": true
+        }
+      ],
+      "test_file": {
+        "path": "src/gametest/PlantTest.java",
+        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "media_type": "text/x-java-source"
+      },
+      "runner_profile": "minecraft-client-gametest",
+      "media": [
+        "video"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,8 @@
+# Rich track: Fish TTS on GPU, Parakeet on CPU, text filter.
+# Copy to docker-compose.override.yml; that local file is ignored by Git.
+# Compose loads the base automatically: do not include docker-compose.yml here.
+# Start: docker compose --env-file .env.saruman up -d --build
+include:
+  - docker-compose.tts.yml
+  - docker-compose.stt.yml
+  - docker-compose.filter.yml

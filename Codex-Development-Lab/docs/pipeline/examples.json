@@ -1,0 +1,993 @@
+{
+  "ProjectInput": {
+    "contract": "ProjectInput",
+    "version": "proposal-v1",
+    "project_id": "demo-trees",
+    "spec_file": {
+      "path": "input/spec.md",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "media_type": "text/markdown"
+    },
+    "clarifications": [],
+    "roles": [
+      {
+        "role": "planner",
+        "provider": "selected-provider",
+        "model": "selected-model",
+        "reasoning": "default"
+      },
+      {
+        "role": "coder",
+        "provider": "selected-provider",
+        "model": "selected-model",
+        "reasoning": "default"
+      },
+      {
+        "role": "reviewer",
+        "provider": "selected-provider",
+        "model": "selected-model",
+        "reasoning": "default"
+      }
+    ],
+    "budget": {
+      "remaining_tokens": 100000,
+      "remaining_seconds": 3600
+    }
+  },
+  "ProjectSnapshot": {
+    "contract": "ProjectSnapshot",
+    "version": "proposal-v1",
+    "scope": {
+      "project_id": "demo-trees",
+      "spec_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "source_revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "round": 3
+    },
+    "spec_file": {
+      "path": "input/spec.md",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "media_type": "text/markdown"
+    },
+    "clarifications": [],
+    "roles": [
+      {
+        "role": "planner",
+        "provider": "selected-provider",
+        "model": "selected-model",
+        "reasoning": "default"
+      },
+      {
+        "role": "coder",
+        "provider": "selected-provider",
+        "model": "selected-model",
+        "reasoning": "default"
+      },
+      {
+        "role": "reviewer",
+        "provider": "selected-provider",
+        "model": "selected-model",
+        "reasoning": "default"
+      }
+    ],
+    "budget": {
+      "remaining_tokens": 100000,
+      "remaining_seconds": 3600
+    }
+  },
+  "DecompositionInput": {
+    "contract": "DecompositionInput",
+    "version": "proposal-v1",
+    "scope": {
+      "project_id": "demo-trees",
+      "spec_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "source_revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "round": 3
+    },
+    "spec_file": {
+      "path": "input/spec.md",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "media_type": "text/markdown"
+    },
+    "clarifications": [],
+    "previous_catalog_refs": [],
+    "instructions": [
+      "Выдели функции без новых требований. Сохрани ссылки на исходник."
+    ]
+  },
+  "RequirementsCatalog": {
+    "contract": "RequirementsCatalog",
+    "version": "proposal-v1",
+    "scope": {
+      "project_id": "demo-trees",
+      "spec_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "source_revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "round": 3
+    },
+    "requirements": [
+      {
+        "id": "R1",
+        "statement": "Посадить саженец",
+        "source_refs": [
+          {
+            "artifact": {
+              "path": "input/spec.md",
+              "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "media_type": "text/markdown"
+            },
+            "start_line": 1,
+            "end_line": 2,
+            "excerpt": "Посадить саженец.\nВырастить дерево костной мукой."
+          }
+        ],
+        "condition_ids": [
+          "C1"
+        ]
+      },
+      {
+        "id": "R2",
+        "statement": "Вырастить дерево",
+        "source_refs": [
+          {
+            "artifact": {
+              "path": "input/spec.md",
+              "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "media_type": "text/markdown"
+            },
+            "start_line": 1,
+            "end_line": 2,
+            "excerpt": "Посадить саженец.\nВырастить дерево костной мукой."
+          }
+        ],
+        "condition_ids": [
+          "C2"
+        ]
+      }
+    ],
+    "conditions": [
+      {
+        "id": "C1",
+        "requirement_id": "R1",
+        "expected": "В мире установлен саженец",
+        "verification": "automated"
+      },
+      {
+        "id": "C2",
+        "requirement_id": "R2",
+        "expected": "Дерево выросло",
+        "verification": "automated"
+      }
+    ],
+    "open_questions": [],
+    "unclassified_source_refs": []
+  },
+  "TaskGraph": {
+    "contract": "TaskGraph",
+    "version": "proposal-v1",
+    "scope": {
+      "project_id": "demo-trees",
+      "spec_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "source_revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "round": 3
+    },
+    "catalog_ref": {
+      "path": "planning/requirements.json",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "media_type": "application/json"
+    },
+    "tasks": [
+      {
+        "id": "T1",
+        "title": "Посадка саженца",
+        "requirement_ids": [
+          "R1"
+        ],
+        "condition_ids": [
+          "C1"
+        ],
+        "depends_on": [],
+        "outcome": "Саженец установлен в мире",
+        "verification_approach": "Измерить блок после посадки"
+      },
+      {
+        "id": "T2",
+        "title": "Выращивание дерева",
+        "requirement_ids": [
+          "R2"
+        ],
+        "condition_ids": [
+          "C2"
+        ],
+        "depends_on": [
+          "T1"
+        ],
+        "outcome": "Саженец заменён деревом",
+        "verification_approach": "Проверить ствол после применения костной муки"
+      }
+    ]
+  },
+  "PlannerInput": {
+    "contract": "PlannerInput",
+    "version": "proposal-v1",
+    "scope": {
+      "project_id": "demo-trees",
+      "spec_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "source_revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "round": 3
+    },
+    "catalog_ref": {
+      "path": "planning/requirements.json",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "media_type": "application/json"
+    },
+    "graph_ref": {
+      "path": "planning/tasks.json",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "media_type": "application/json"
+    },
+    "task_states": [
+      {
+        "task_id": "T1",
+        "status": "in_progress",
+        "result_refs": [
+          {
+            "path": "rounds/2/verification.json",
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "media_type": "application/json"
+          }
+        ]
+      },
+      {
+        "task_id": "T2",
+        "status": "pending",
+        "result_refs": []
+      }
+    ],
+    "latest_result_refs": [
+      {
+        "path": "rounds/2/verification.json",
+        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "media_type": "application/json"
+      }
+    ],
+    "memory_index_ref": {
+      "path": "memory/index.json",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "media_type": "application/json"
+    },
+    "reflection_requested": true,
+    "budget": {
+      "remaining_tokens": 100000,
+      "remaining_seconds": 3600
+    }
+  },
+  "PlannerDecision": {
+    "contract": "PlannerDecision",
+    "version": "proposal-v1",
+    "scope": {
+      "project_id": "demo-trees",
+      "spec_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "source_revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "round": 3
+    },
+    "strategy": "repair",
+    "rationale": "Место найдено, но посадка не подтверждена. Проверить действие установки.",
+    "actions": [
+      {
+        "id": "A1",
+        "task_ids": [
+          "T1"
+        ],
+        "kind": "repair",
+        "goal": "Устранить отсутствие посадки",
+        "expected_observation": "sapling_placed=true",
+        "depends_on_action_ids": [],
+        "condition_ids": [
+          "C1"
+        ]
+      }
+    ],
+    "hypotheses": [
+      {
+        "id": "H1",
+        "statement": "Команда посадки не вызывается",
+        "observation_refs": [
+          {
+            "artifact": {
+              "path": "runs/2/game.log",
+              "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+              "media_type": "text/plain"
+            },
+            "start_line": 18,
+            "end_line": 18,
+            "excerpt": "sapling_placed=false"
+          }
+        ],
+        "experiment": "Записать событие вызова посадки",
+        "prediction": "Событие отсутствует при воспроизведении"
+      }
+    ],
+    "deferred": [
+      {
+        "task_id": "T2",
+        "reason": "Нужен установленный саженец",
+        "return_when": "C1 подтверждён либо T1 реализован перед T2 в общем пакете"
+      }
+    ],
+    "manual_checks": [],
+    "replacement_graph_ref": null
+  },
+  "ValidationRequest": {
+    "contract": "ValidationRequest",
+    "version": "proposal-v1",
+    "scope": {
+      "project_id": "demo-trees",
+      "spec_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "source_revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "round": 3
+    },
+    "payload_ref": {
+      "path": "rounds/3/plan.json",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "media_type": "application/json"
+    },
+    "schema_name": "PlannerDecision",
+    "catalog_ref": {
+      "path": "planning/requirements.json",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "media_type": "application/json"
+    },
+    "graph_ref": {
+      "path": "planning/tasks.json",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "media_type": "application/json"
+    }
+  },
+  "ValidationResult": {
+    "contract": "ValidationResult",
+    "version": "proposal-v1",
+    "scope": {
+      "project_id": "demo-trees",
+      "spec_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "source_revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "round": 3
+    },
+    "submission_ref": {
+      "path": "rounds/3/plan.json",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "media_type": "application/json"
+    },
+    "valid": false,
+    "checks_passed": [
+      "json_syntax",
+      "known_task_ids"
+    ],
+    "issues": [
+      {
+        "path": "$.actions[0].task_ids",
+        "code": "type",
+        "expected": "array<string>",
+        "received_type": "string",
+        "example_json": "[\"T1\"]",
+        "instruction": "Передай массив строк. Не перечитывай проект ради этой правки."
+      }
+    ],
+    "schema_ref": {
+      "path": "contracts/PlannerDecision.schema.json",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "media_type": "application/json"
+    },
+    "example_ref": {
+      "path": "contracts/examples/PlannerDecision.json",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "media_type": "application/json"
+    }
+  },
+  "CoderAssignment": {
+    "contract": "CoderAssignment",
+    "version": "proposal-v1",
+    "scope": {
+      "project_id": "demo-trees",
+      "spec_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "source_revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "round": 3
+    },
+    "plan_ref": {
+      "path": "rounds/3/plan.json",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "media_type": "application/json"
+    },
+    "catalog_ref": {
+      "path": "planning/requirements.json",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "media_type": "application/json"
+    },
+    "graph_ref": {
+      "path": "planning/tasks.json",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "media_type": "application/json"
+    },
+    "memory_index_ref": {
+      "path": "memory/index.json",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "media_type": "application/json"
+    },
+    "writable_roots": [
+      "workspace/"
+    ],
+    "instructions": [
+      "Реализуй A1. Добавь измеримый сценарий. Не объявляй PASS."
+    ]
+  },
+  "CoderReport": {
+    "contract": "CoderReport",
+    "version": "proposal-v1",
+    "scope": {
+      "project_id": "demo-trees",
+      "spec_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "source_revision": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "round": 3
+    },
+    "base_source_revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "plan_ref": {
+      "path": "rounds/3/plan.json",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "media_type": "application/json"
+    },
+    "action_ids": [
+      "A1"
+    ],
+    "summary": "Добавлен вызов посадки",
+    "changed_files": [
+      {
+        "path": "src/main/java/PlantTask.java",
+        "sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "media_type": "text/x-java-source"
+      }
+    ],
+    "scenario_manifest_ref": {
+      "path": "tests/scenarios.json",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "media_type": "application/json"
+    },
+    "review_response_refs": [
+      {
+        "path": "rounds/3/review-response.json",
+        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "media_type": "application/json"
+      }
+    ],
+    "unverified_claims": [
+      "Посадка должна завершаться"
+    ],
+    "open_issues": []
+  },
+  "ScenarioManifest": {
+    "contract": "ScenarioManifest",
+    "version": "proposal-v1",
+    "scope": {
+      "project_id": "demo-trees",
+      "spec_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "source_revision": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "round": 3
+    },
+    "scenarios": [
+      {
+        "id": "S1",
+        "task_ids": [
+          "T1",
+          "T2"
+        ],
+        "condition_ids": [
+          "C1",
+          "C2"
+        ],
+        "setup": [
+          "Плоская площадка; саженец и костная мука доступны"
+        ],
+        "steps": [
+          "Запустить посадку",
+          "Запустить выращивание"
+        ],
+        "checkpoints": [
+          {
+            "id": "CP1",
+            "condition_ids": [],
+            "assertion": "Площадка найдена",
+            "observable": "site_found",
+            "comparator": "eq",
+            "expected": true
+          },
+          {
+            "id": "CP2",
+            "condition_ids": [
+              "C1"
+            ],
+            "assertion": "Саженец установлен",
+            "observable": "sapling_placed",
+            "comparator": "eq",
+            "expected": true
+          },
+          {
+            "id": "CP3",
+            "condition_ids": [
+              "C2"
+            ],
+            "assertion": "Дерево выросло",
+            "observable": "tree_present",
+            "comparator": "eq",
+            "expected": true
+          }
+        ],
+        "test_file": {
+          "path": "src/gametest/PlantTest.java",
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "media_type": "text/x-java-source"
+        },
+        "runner_profile": "minecraft-client-gametest",
+        "media": [
+          "video"
+        ]
+      }
+    ]
+  },
+  "ReviewRequest": {
+    "contract": "ReviewRequest",
+    "version": "proposal-v1",
+    "scope": {
+      "project_id": "demo-trees",
+      "spec_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "source_revision": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "round": 3
+    },
+    "subject": "code",
+    "context_ref": {
+      "path": "rounds/3/assignment.json",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "media_type": "application/json"
+    },
+    "catalog_ref": {
+      "path": "planning/requirements.json",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "media_type": "application/json"
+    },
+    "subject_refs": [
+      {
+        "path": "rounds/3/coder-initial.json",
+        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "media_type": "application/json"
+      },
+      {
+        "path": "rounds/3/scenarios-initial.json",
+        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "media_type": "application/json"
+      }
+    ],
+    "diff_ref": {
+      "path": "rounds/3/changes-initial.diff",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "media_type": "text/plain"
+    },
+    "memory_index_ref": {
+      "path": "memory/index.json",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "media_type": "application/json"
+    },
+    "focus": [
+      "Переход от выбора места к посадке",
+      "Тест действительно проверяет блок в мире"
+    ]
+  },
+  "ReviewResult": {
+    "contract": "ReviewResult",
+    "version": "proposal-v1",
+    "scope": {
+      "project_id": "demo-trees",
+      "spec_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "source_revision": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "round": 3
+    },
+    "request_ref": {
+      "path": "rounds/3/review-request.json",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "media_type": "application/json"
+    },
+    "disposition": "changes_requested",
+    "findings": [
+      {
+        "id": "F1",
+        "kind": "requirement_violation",
+        "severity": "high",
+        "requirement_ids": [
+          "R1"
+        ],
+        "code_refs": [
+          {
+            "artifact": {
+              "path": "src/main/java/PlantTask.java",
+              "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+              "media_type": "text/x-java-source"
+            },
+            "start_line": 40,
+            "end_line": 40,
+            "excerpt": "if (site != null) { moveTo(site); }"
+          }
+        ],
+        "observation": "После движения нет действия посадки",
+        "consequence": "C1 может не выполняться",
+        "suggested_check": "Проверить появление саженца в мире"
+      }
+    ],
+    "unknowns": [
+      "Поведение игры ещё не проверено"
+    ]
+  },
+  "ReviewResponse": {
+    "contract": "ReviewResponse",
+    "version": "proposal-v1",
+    "scope": {
+      "project_id": "demo-trees",
+      "spec_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "source_revision": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "round": 3
+    },
+    "review_ref": {
+      "path": "rounds/3/review.json",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "media_type": "application/json"
+    },
+    "responses": [
+      {
+        "finding_id": "F1",
+        "disposition": "fixed",
+        "explanation": "После прибытия вызывается посадка. Независимый запуск ещё не выполнен.",
+        "evidence_refs": [
+          {
+            "artifact": {
+              "path": "src/main/java/PlantTask.java",
+              "sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+              "media_type": "text/x-java-source"
+            },
+            "start_line": 41,
+            "end_line": 41,
+            "excerpt": "if (arrivedAt(site)) { plantSapling(site); }"
+          }
+        ]
+      }
+    ]
+  },
+  "VerificationRequest": {
+    "contract": "VerificationRequest",
+    "version": "proposal-v1",
+    "scope": {
+      "project_id": "demo-trees",
+      "spec_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "source_revision": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "round": 3
+    },
+    "source_snapshot_ref": {
+      "path": "snapshots/source-e.tar",
+      "sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "media_type": "application/x-tar"
+    },
+    "scenario_manifest_ref": {
+      "path": "tests/scenarios.json",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "media_type": "application/json"
+    },
+    "scenario_ids": [
+      "S1"
+    ],
+    "regression_scenario_ids": [],
+    "run_kind": "targeted",
+    "runner_profile": "minecraft-client-gametest"
+  },
+  "VerificationResult": {
+    "contract": "VerificationResult",
+    "version": "proposal-v1",
+    "scope": {
+      "project_id": "demo-trees",
+      "spec_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "source_revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "round": 2
+    },
+    "request_ref": {
+      "path": "rounds/2/verification-request.json",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "media_type": "application/json"
+    },
+    "runner_run_id": "RUN-2",
+    "build_status": "PASS",
+    "scenario_results": [
+      {
+        "scenario_id": "S1",
+        "status": "FAIL",
+        "checkpoints": [
+          {
+            "checkpoint_id": "CP1",
+            "status": "PASS",
+            "actual": "site_found=true",
+            "evidence_refs": [
+              {
+                "artifact": {
+                  "path": "runs/2/game.log",
+                  "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+                  "media_type": "text/plain"
+                },
+                "start_line": 17,
+                "end_line": 17,
+                "excerpt": "site_found=true"
+              }
+            ]
+          },
+          {
+            "checkpoint_id": "CP2",
+            "status": "FAIL",
+            "actual": "sapling_placed=false",
+            "evidence_refs": [
+              {
+                "artifact": {
+                  "path": "runs/2/game.log",
+                  "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+                  "media_type": "text/plain"
+                },
+                "start_line": 18,
+                "end_line": 18,
+                "excerpt": "sapling_placed=false"
+              }
+            ]
+          },
+          {
+            "checkpoint_id": "CP3",
+            "status": "NOT_EXECUTED",
+            "actual": "До выращивания выполнение не дошло",
+            "evidence_refs": []
+          }
+        ],
+        "media_refs": [
+          {
+            "path": "rounds/2/S1.mp4",
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "media_type": "video/mp4"
+          }
+        ]
+      }
+    ],
+    "infrastructure_errors": [],
+    "raw_report_refs": [
+      {
+        "path": "rounds/2/junit.xml",
+        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "media_type": "application/xml"
+      },
+      {
+        "path": "runs/2/game.log",
+        "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "media_type": "text/plain"
+      }
+    ]
+  },
+  "MemoryWrite": {
+    "contract": "MemoryWrite",
+    "version": "proposal-v1",
+    "scope": {
+      "project_id": "demo-trees",
+      "spec_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "source_revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "round": 2
+    },
+    "kind": "verification",
+    "producer": "runner",
+    "payload_ref": {
+      "path": "rounds/2/verification.json",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "media_type": "application/json"
+    },
+    "task_ids": [
+      "T1"
+    ],
+    "requirement_ids": [
+      "R1"
+    ],
+    "tags": [
+      "verified_fail"
+    ],
+    "links": [
+      {
+        "relation": "verifies",
+        "record_id": "M-plan-2"
+      }
+    ]
+  },
+  "MemoryRecord": {
+    "contract": "MemoryRecord",
+    "version": "proposal-v1",
+    "record_id": "M-result-3",
+    "created_at": "2026-10-26T12:00:00Z",
+    "entry": {
+      "contract": "MemoryWrite",
+      "version": "proposal-v1",
+      "scope": {
+        "project_id": "demo-trees",
+        "spec_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "source_revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "round": 2
+      },
+      "kind": "verification",
+      "producer": "runner",
+      "payload_ref": {
+        "path": "rounds/2/verification.json",
+        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "media_type": "application/json"
+      },
+      "task_ids": [
+        "T1"
+      ],
+      "requirement_ids": [
+        "R1"
+      ],
+      "tags": [
+        "verified_fail"
+      ],
+      "links": [
+        {
+          "relation": "verifies",
+          "record_id": "M-plan-2"
+        }
+      ]
+    },
+    "index_ref": {
+      "path": "memory/index.json",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "media_type": "application/json"
+    }
+  },
+  "MemoryQuery": {
+    "contract": "MemoryQuery",
+    "version": "proposal-v1",
+    "project_id": "demo-trees",
+    "task_ids": [
+      "T1"
+    ],
+    "record_ids": [],
+    "query": "ошибка посадки",
+    "cursor": null
+  },
+  "MemoryResult": {
+    "contract": "MemoryResult",
+    "version": "proposal-v1",
+    "records": [
+      {
+        "record_id": "M-result-3",
+        "summary": "Место найдено; посадка не выполнена",
+        "full_record_ref": {
+          "path": "memory/records/M-result-3.json",
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "media_type": "application/json"
+        }
+      }
+    ],
+    "next_cursor": null,
+    "omitted_records": 0
+  },
+  "GatewayRequest": {
+    "contract": "GatewayRequest",
+    "version": "proposal-v1",
+    "request_id": "Q-3",
+    "scope": {
+      "project_id": "demo-trees",
+      "spec_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "source_revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "round": 3
+    },
+    "role_config": {
+      "role": "planner",
+      "provider": "selected-provider",
+      "model": "selected-model",
+      "reasoning": "default"
+    },
+    "messages": [
+      {
+        "role": "user",
+        "content": "Выбери следующий пакет по PlannerInput."
+      }
+    ],
+    "attachment_refs": [
+      {
+        "path": "rounds/3/planner-input.json",
+        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "media_type": "application/json"
+      }
+    ],
+    "tools": [
+      {
+        "name": "read_file",
+        "description": "Читает разрешённый файл",
+        "input_schema": {
+          "path": "tools/read_file.schema.json",
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "media_type": "application/json"
+        }
+      }
+    ],
+    "output_contract": "PlannerDecision",
+    "budget": {
+      "remaining_tokens": 100000,
+      "remaining_seconds": 3600
+    }
+  },
+  "GatewayResult": {
+    "contract": "GatewayResult",
+    "version": "proposal-v1",
+    "request_id": "Q-3",
+    "outcome": "completed",
+    "actual_role_config": {
+      "role": "planner",
+      "provider": "selected-provider",
+      "model": "selected-model",
+      "reasoning": "default"
+    },
+    "model_changed": false,
+    "model_change_reason": null,
+    "output_ref": {
+      "path": "rounds/3/plan.json",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "media_type": "application/json"
+    },
+    "public_transcript_ref": {
+      "path": "rounds/3/planner-public.jsonl",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "media_type": "application/x-ndjson"
+    },
+    "usage": {
+      "input_tokens": 12000,
+      "output_tokens": 800,
+      "cache_read_tokens": 9000,
+      "cache_write_tokens": 0,
+      "measurement": "provider"
+    },
+    "error": null
+  },
+  "ProjectStatus": {
+    "contract": "ProjectStatus",
+    "version": "proposal-v1",
+    "scope": {
+      "project_id": "demo-trees",
+      "spec_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "source_revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "round": 3
+    },
+    "stage": "planning",
+    "active_task_ids": [
+      "T1"
+    ],
+    "coverage": [
+      {
+        "condition_id": "C1",
+        "status": "failed",
+        "result_refs": [
+          {
+            "path": "rounds/2/verification.json",
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "media_type": "application/json"
+          }
+        ]
+      },
+      {
+        "condition_id": "C2",
+        "status": "untested",
+        "result_refs": []
+      }
+    ],
+    "manual_pending": [],
+    "ready": false,
+    "readiness_reasons": [
+      "C1 не пройден",
+      "C2 не проверен"
+    ],
+    "latest_memory_ref": {
+      "path": "memory/records/M-result-3.json",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "media_type": "application/json"
+    }
+  }
+}

@@ -1,0 +1,128 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CoderAssignment — proposal-v1",
+  "$ref": "#/$defs/CoderAssignment",
+  "$defs": {
+    "ArtifactRef": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "MIME-тип файла."
+        },
+        "sha256": {
+          "$ref": "#/$defs/Hash",
+          "description": "Хеш точного содержимого файла; проверяется при чтении."
+        },
+        "media_type": {
+          "type": "string",
+          "minLength": 1,
+          "description": "MIME-тип файла."
+        }
+      },
+      "required": [
+        "path",
+        "sha256",
+        "media_type"
+      ],
+      "additionalProperties": false
+    },
+    "CoderAssignment": {
+      "type": "object",
+      "properties": {
+        "contract": {
+          "const": "CoderAssignment",
+          "description": "Имя типа сообщения; выбирает схему."
+        },
+        "version": {
+          "const": "proposal-v1",
+          "description": "Версия формата; здесь только proposal-v1."
+        },
+        "scope": {
+          "$ref": "#/$defs/Scope",
+          "description": "Проект, версия ТЗ, версия кода и раунд."
+        },
+        "plan_ref": {
+          "$ref": "#/$defs/ArtifactRef",
+          "description": "Принятый план раунда."
+        },
+        "catalog_ref": {
+          "$ref": "#/$defs/ArtifactRef",
+          "description": "Принятый каталог требований; null допустим при начальной проверке."
+        },
+        "graph_ref": {
+          "$ref": "#/$defs/ArtifactRef",
+          "description": "Принятый граф задач; null допустим при начальной проверке."
+        },
+        "memory_index_ref": {
+          "$ref": "#/$defs/ArtifactRef",
+          "description": "Индекс полного архива; записи читаются по необходимости."
+        },
+        "writable_roots": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Разрешённые области записи; физически задаются исполнителем."
+        },
+        "instructions": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Явные инструкции этапа."
+        }
+      },
+      "required": [
+        "contract",
+        "version",
+        "scope",
+        "plan_ref",
+        "catalog_ref",
+        "graph_ref",
+        "memory_index_ref",
+        "writable_roots",
+        "instructions"
+      ],
+      "additionalProperties": false,
+      "description": "Контроллер → кодер. Принятый план и границы рабочей области."
+    },
+    "Hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "Scope": {
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Устойчивый ID проекта."
+        },
+        "spec_revision": {
+          "$ref": "#/$defs/Hash",
+          "description": "SHA-256 канонического манифеста ТЗ и явных уточнений."
+        },
+        "source_revision": {
+          "$ref": "#/$defs/Hash",
+          "description": "SHA-256 канонического манифеста исходников снимка."
+        },
+        "round": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Номер попытки; не процент готовности."
+        }
+      },
+      "required": [
+        "project_id",
+        "spec_revision",
+        "source_revision",
+        "round"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

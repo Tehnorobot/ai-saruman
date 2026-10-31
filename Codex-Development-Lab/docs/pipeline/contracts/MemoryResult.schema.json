@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "MemoryResult — proposal-v1",
+  "$ref": "#/$defs/MemoryResult",
+  "$defs": {
+    "ArtifactRef": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "MIME-тип файла."
+        },
+        "sha256": {
+          "$ref": "#/$defs/Hash",
+          "description": "Хеш точного содержимого файла; проверяется при чтении."
+        },
+        "media_type": {
+          "type": "string",
+          "minLength": 1,
+          "description": "MIME-тип файла."
+        }
+      },
+      "required": [
+        "path",
+        "sha256",
+        "media_type"
+      ],
+      "additionalProperties": false
+    },
+    "Hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "MemoryResult": {
+      "type": "object",
+      "properties": {
+        "contract": {
+          "const": "MemoryResult",
+          "description": "Имя типа сообщения; выбирает схему."
+        },
+        "version": {
+          "const": "proposal-v1",
+          "description": "Версия формата; здесь только proposal-v1."
+        },
+        "records": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "record_id": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Краткое описание записи или изменения."
+              },
+              "summary": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Краткое описание записи или изменения."
+              },
+              "full_record_ref": {
+                "$ref": "#/$defs/ArtifactRef",
+                "description": "Ссылка на полный MemoryRecord без сокращения."
+              }
+            },
+            "required": [
+              "record_id",
+              "summary",
+              "full_record_ref"
+            ],
+            "additionalProperties": false
+          },
+          "description": "Найденные записи с кратким описанием."
+        },
+        "next_cursor": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Продолжение выдачи; null означает последнюю страницу."
+        },
+        "omitted_records": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Записи вне этой страницы; остаются в архиве."
+        }
+      },
+      "required": [
+        "contract",
+        "version",
+        "records",
+        "next_cursor",
+        "omitted_records"
+      ],
+      "additionalProperties": false,
+      "description": "Индекс → агент. Краткие результаты и ссылки на полные записи. Есть продолжение."
+    }
+  }
+}

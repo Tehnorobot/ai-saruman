@@ -1,0 +1,245 @@
+{
+  "type": "object",
+  "properties": {
+    "contract": {
+      "type": "string",
+      "const": "AgentScenarios"
+    },
+    "version": {
+      "type": "string",
+      "const": "v1"
+    },
+    "scenarios": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Scenario"
+      },
+      "description": "Сценарии и их измеримые контрольные точки."
+    },
+    "notes_md": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "contract",
+    "version",
+    "scenarios",
+    "notes_md"
+  ],
+  "additionalProperties": false,
+  "description": "Кодер → ревьюер → исполнитель. Исполняемые тесты плюс явные утверждения.",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AgentScenarios - compact agent message",
+  "$defs": {
+    "ArtifactRef": {
+      "type": "string",
+      "minLength": 1
+    },
+    "Checkpoint": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Уникальный ID внутри соответствующего каталога."
+        },
+        "condition_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Имя измеряемого состояния или события."
+          },
+          "description": "Проверяемые условия; ID должны существовать."
+        },
+        "assertion": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Какое свойство проверяется."
+        },
+        "observable": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Имя измеряемого состояния или события."
+        },
+        "comparator": {
+          "type": "string",
+          "enum": [
+            "eq",
+            "ne",
+            "lt",
+            "le",
+            "gt",
+            "ge",
+            "contains",
+            "event"
+          ],
+          "description": "Операция сравнения: eq равно, ne не равно; lt/le/gt/ge; contains; event."
+        },
+        "expected": {
+          "type": [
+            "string",
+            "number",
+            "boolean"
+          ],
+          "description": "Ожидаемый результат; в Checkpoint это сравниваемое значение."
+        }
+      },
+      "required": [
+        "id",
+        "condition_ids",
+        "assertion",
+        "observable",
+        "comparator",
+        "expected"
+      ],
+      "additionalProperties": false
+    },
+    "Scenario": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
+          "maxLength": 64
+        },
+        "task_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Имя доверенного профиля; не произвольная shell-команда модели."
+          },
+          "description": "Задачи, затронутые сообщением."
+        },
+        "condition_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Имя доверенного профиля; не произвольная shell-команда модели."
+          },
+          "description": "Проверяемые условия; ID должны существовать."
+        },
+        "setup": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Имя доверенного профиля; не произвольная shell-команда модели."
+          },
+          "description": "Исходные условия воспроизводимого сценария."
+        },
+        "steps": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Имя доверенного профиля; не произвольная shell-команда модели."
+          },
+          "description": "Последовательность действий."
+        },
+        "checkpoints": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Checkpoint"
+          },
+          "description": "Контрольные точки и проверяемые утверждения."
+        },
+        "test_file": {
+          "$ref": "#/$defs/ArtifactRef",
+          "description": "Исполняемый тест. Текстовый сценарий сам не запускается."
+        },
+        "runner_profile": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Имя доверенного профиля; не произвольная shell-команда модели."
+        },
+        "execution": {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "gameplay",
+                "unit",
+                "integration"
+              ]
+            },
+            "gradle_task": {
+              "type": "string",
+              "pattern": "^[A-Za-z][A-Za-z0-9_]{0,95}$"
+            },
+            "expected_tests": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "classname": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "classname",
+                  "name"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "checkpoint_tests": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "checkpoint_id": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "classname": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "checkpoint_id",
+                  "classname",
+                  "name"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "kind",
+            "gradle_task",
+            "expected_tests",
+            "checkpoint_tests"
+          ],
+          "additionalProperties": false,
+          "description": "Safe Gradle/JUnit binding; checkpoint status comes from these independently executed test cases."
+        }
+      },
+      "required": [
+        "id",
+        "task_ids",
+        "condition_ids",
+        "setup",
+        "steps",
+        "checkpoints",
+        "test_file",
+        "runner_profile",
+        "execution"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

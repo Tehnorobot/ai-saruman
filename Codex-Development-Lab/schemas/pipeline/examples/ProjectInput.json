@@ -1,0 +1,35 @@
+{
+  "contract": "ProjectInput",
+  "version": "v1",
+  "project_id": "demo-trees",
+  "spec_file": {
+    "path": "input/spec.md",
+    "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "media_type": "text/markdown"
+  },
+  "clarifications": [],
+  "roles": [
+    {
+      "role": "planner",
+      "provider": "selected-provider",
+      "model": "selected-model",
+      "reasoning": "default"
+    },
+    {
+      "role": "coder",
+      "provider": "selected-provider",
+      "model": "selected-model",
+      "reasoning": "default"
+    },
+    {
+      "role": "reviewer",
+      "provider": "selected-provider",
+      "model": "selected-model",
+      "reasoning": "default"
+    }
+  ],
+  "budget": {
+    "remaining_tokens": 100000,
+    "remaining_seconds": 3600
+  }
+}

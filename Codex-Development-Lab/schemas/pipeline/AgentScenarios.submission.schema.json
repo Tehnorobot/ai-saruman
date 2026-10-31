@@ -1,0 +1,229 @@
+{
+  "type": "object",
+  "required": [
+    "contract",
+    "version",
+    "scenarios",
+    "notes_md"
+  ],
+  "additionalProperties": false,
+  "description": "Кодер → ревьюер → исполнитель. Исполняемые тесты плюс явные утверждения.",
+  "properties": {
+    "contract": {
+      "type": "string",
+      "enum": [
+        "AgentScenarios"
+      ]
+    },
+    "version": {
+      "type": "string",
+      "enum": [
+        "v1"
+      ]
+    },
+    "scenarios": {
+      "type": "array",
+      "description": "Сценарии и их измеримые контрольные точки.",
+      "items": {
+        "$ref": "#/$defs/Scenario"
+      }
+    },
+    "notes_md": {
+      "type": "string"
+    }
+  },
+  "$defs": {
+    "ArtifactRef": {
+      "type": "string"
+    },
+    "Checkpoint": {
+      "type": "object",
+      "required": [
+        "id",
+        "condition_ids",
+        "assertion",
+        "observable",
+        "comparator",
+        "expected"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Уникальный ID внутри соответствующего каталога."
+        },
+        "condition_ids": {
+          "type": "array",
+          "description": "Проверяемые условия; ID должны существовать.",
+          "items": {
+            "type": "string",
+            "description": "Имя измеряемого состояния или события."
+          }
+        },
+        "assertion": {
+          "type": "string",
+          "description": "Какое свойство проверяется."
+        },
+        "observable": {
+          "type": "string",
+          "description": "Имя измеряемого состояния или события."
+        },
+        "comparator": {
+          "type": "string",
+          "enum": [
+            "eq",
+            "ne",
+            "lt",
+            "le",
+            "gt",
+            "ge",
+            "contains",
+            "event"
+          ],
+          "description": "Операция сравнения: eq равно, ne не равно; lt/le/gt/ge; contains; event."
+        },
+        "expected": {
+          "type": [
+            "string",
+            "number",
+            "boolean"
+          ],
+          "description": "Ожидаемый результат; в Checkpoint это сравниваемое значение."
+        }
+      }
+    },
+    "Scenario": {
+      "type": "object",
+      "required": [
+        "id",
+        "task_ids",
+        "condition_ids",
+        "setup",
+        "steps",
+        "checkpoints",
+        "test_file",
+        "runner_profile",
+        "execution"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "task_ids": {
+          "type": "array",
+          "description": "Задачи, затронутые сообщением.",
+          "items": {
+            "type": "string",
+            "description": "Имя доверенного профиля; не произвольная shell-команда модели."
+          }
+        },
+        "condition_ids": {
+          "type": "array",
+          "description": "Проверяемые условия; ID должны существовать.",
+          "items": {
+            "type": "string",
+            "description": "Имя доверенного профиля; не произвольная shell-команда модели."
+          }
+        },
+        "setup": {
+          "type": "array",
+          "description": "Исходные условия воспроизводимого сценария.",
+          "items": {
+            "type": "string",
+            "description": "Имя доверенного профиля; не произвольная shell-команда модели."
+          }
+        },
+        "steps": {
+          "type": "array",
+          "description": "Последовательность действий.",
+          "items": {
+            "type": "string",
+            "description": "Имя доверенного профиля; не произвольная shell-команда модели."
+          }
+        },
+        "checkpoints": {
+          "type": "array",
+          "description": "Контрольные точки и проверяемые утверждения.",
+          "items": {
+            "$ref": "#/$defs/Checkpoint"
+          }
+        },
+        "test_file": {
+          "$ref": "#/$defs/ArtifactRef",
+          "description": "Исполняемый тест. Текстовый сценарий сам не запускается."
+        },
+        "runner_profile": {
+          "type": "string",
+          "description": "Имя доверенного профиля; не произвольная shell-команда модели."
+        },
+        "execution": {
+          "type": "object",
+          "required": [
+            "kind",
+            "gradle_task",
+            "expected_tests",
+            "checkpoint_tests"
+          ],
+          "additionalProperties": false,
+          "description": "Safe Gradle/JUnit binding; checkpoint status comes from these independently executed test cases.",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "gameplay",
+                "unit",
+                "integration"
+              ]
+            },
+            "gradle_task": {
+              "type": "string"
+            },
+            "expected_tests": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "classname",
+                  "name"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "classname": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "checkpoint_tests": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "checkpoint_id",
+                  "classname",
+                  "name"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "checkpoint_id": {
+                    "type": "string"
+                  },
+                  "classname": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

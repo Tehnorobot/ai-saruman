@@ -1,0 +1,44 @@
+{
+  "contract": "ReviewResult",
+  "version": "proposal-v1",
+  "scope": {
+    "project_id": "demo-trees",
+    "spec_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "source_revision": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "round": 3
+  },
+  "request_ref": {
+    "path": "rounds/3/review-request.json",
+    "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "media_type": "application/json"
+  },
+  "disposition": "changes_requested",
+  "findings": [
+    {
+      "id": "F1",
+      "kind": "requirement_violation",
+      "severity": "high",
+      "requirement_ids": [
+        "R1"
+      ],
+      "code_refs": [
+        {
+          "artifact": {
+            "path": "src/main/java/PlantTask.java",
+            "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+            "media_type": "text/x-java-source"
+          },
+          "start_line": 40,
+          "end_line": 40,
+          "excerpt": "if (site != null) { moveTo(site); }"
+        }
+      ],
+      "observation": "После движения нет действия посадки",
+      "consequence": "C1 может не выполняться",
+      "suggested_check": "Проверить появление саженца в мире"
+    }
+  ],
+  "unknowns": [
+    "Поведение игры ещё не проверено"
+  ]
+}

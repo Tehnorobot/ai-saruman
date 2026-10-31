@@ -1,0 +1,251 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "VerificationResult — proposal-v1",
+  "$ref": "#/$defs/VerificationResult",
+  "$defs": {
+    "ArtifactRef": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "MIME-тип файла."
+        },
+        "sha256": {
+          "$ref": "#/$defs/Hash",
+          "description": "Хеш точного содержимого файла; проверяется при чтении."
+        },
+        "media_type": {
+          "type": "string",
+          "minLength": 1,
+          "description": "MIME-тип файла."
+        }
+      },
+      "required": [
+        "path",
+        "sha256",
+        "media_type"
+      ],
+      "additionalProperties": false
+    },
+    "Hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "Observation": {
+      "type": "object",
+      "properties": {
+        "checkpoint_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Фактическое наблюдение либо причина отсутствия выполнения."
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "PASS",
+            "FAIL",
+            "NOT_EXECUTED",
+            "SKIPPED",
+            "ERROR"
+          ],
+          "description": "Наблюдаемый статус; допустимые значения заданы enum."
+        },
+        "actual": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Фактическое наблюдение либо причина отсутствия выполнения."
+        },
+        "evidence_refs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SourceRef"
+          },
+          "description": "Цитаты из файлов; доверие к выводу проверяется отдельно."
+        }
+      },
+      "required": [
+        "checkpoint_id",
+        "status",
+        "actual",
+        "evidence_refs"
+      ],
+      "additionalProperties": false
+    },
+    "ScenarioResult": {
+      "type": "object",
+      "properties": {
+        "scenario_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "ID сценария."
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "PASS",
+            "FAIL",
+            "NOT_EXECUTED",
+            "SKIPPED",
+            "ERROR"
+          ],
+          "description": "Наблюдаемый статус; допустимые значения заданы enum."
+        },
+        "checkpoints": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Observation"
+          },
+          "description": "Контрольные точки и проверяемые утверждения."
+        },
+        "media_refs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ArtifactRef"
+          },
+          "description": "Файлы видео и изображений; не замена измерениям."
+        }
+      },
+      "required": [
+        "scenario_id",
+        "status",
+        "checkpoints",
+        "media_refs"
+      ],
+      "additionalProperties": false
+    },
+    "Scope": {
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Устойчивый ID проекта."
+        },
+        "spec_revision": {
+          "$ref": "#/$defs/Hash",
+          "description": "SHA-256 канонического манифеста ТЗ и явных уточнений."
+        },
+        "source_revision": {
+          "$ref": "#/$defs/Hash",
+          "description": "SHA-256 канонического манифеста исходников снимка."
+        },
+        "round": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Номер попытки; не процент готовности."
+        }
+      },
+      "required": [
+        "project_id",
+        "spec_revision",
+        "source_revision",
+        "round"
+      ],
+      "additionalProperties": false
+    },
+    "SourceRef": {
+      "type": "object",
+      "properties": {
+        "artifact": {
+          "$ref": "#/$defs/ArtifactRef",
+          "description": "Файл, из которого взята цитата."
+        },
+        "start_line": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Первая строка фрагмента, с 1."
+        },
+        "end_line": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Последняя строка фрагмента включительно."
+        },
+        "excerpt": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Точная цитата из указанной версии файла."
+        }
+      },
+      "required": [
+        "artifact",
+        "start_line",
+        "end_line",
+        "excerpt"
+      ],
+      "additionalProperties": false
+    },
+    "VerificationResult": {
+      "type": "object",
+      "properties": {
+        "contract": {
+          "const": "VerificationResult",
+          "description": "Имя типа сообщения; выбирает схему."
+        },
+        "version": {
+          "const": "proposal-v1",
+          "description": "Версия формата; здесь только proposal-v1."
+        },
+        "scope": {
+          "$ref": "#/$defs/Scope",
+          "description": "Проект, версия ТЗ, версия кода и раунд."
+        },
+        "request_ref": {
+          "$ref": "#/$defs/ArtifactRef",
+          "description": "Исходный запрос этого результата."
+        },
+        "runner_run_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "ID независимого запуска, назначенный исполнителем."
+        },
+        "build_status": {
+          "type": "string",
+          "enum": [
+            "PASS",
+            "FAIL",
+            "NOT_EXECUTED",
+            "ERROR"
+          ],
+          "description": "Сборка: PASS, FAIL, не выполнялась либо ошибка среды."
+        },
+        "scenario_results": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ScenarioResult"
+          },
+          "description": "Независимые результаты сценариев."
+        },
+        "infrastructure_errors": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "ID независимого запуска, назначенный исполнителем."
+          },
+          "description": "Ошибки среды, отдельно от неверного поведения мода."
+        },
+        "raw_report_refs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ArtifactRef"
+          },
+          "description": "Оригинальные отчёты и журналы."
+        }
+      },
+      "required": [
+        "contract",
+        "version",
+        "scope",
+        "request_ref",
+        "runner_run_id",
+        "build_status",
+        "scenario_results",
+        "infrastructure_errors",
+        "raw_report_refs"
+      ],
+      "additionalProperties": false,
+      "description": "Исполнитель → контроллер, планировщик и память. Наблюдения конкретного снимка."
+    }
+  }
+}

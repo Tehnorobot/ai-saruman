@@ -1,0 +1,34 @@
+{
+  "contract": "ReviewResponse",
+  "version": "v1",
+  "scope": {
+    "project_id": "demo-trees",
+    "spec_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "source_revision": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "round": 3
+  },
+  "review_ref": {
+    "path": "rounds/3/review.json",
+    "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "media_type": "application/json"
+  },
+  "responses": [
+    {
+      "finding_id": "F1",
+      "disposition": "fixed",
+      "explanation": "После прибытия вызывается посадка. Независимый запуск ещё не выполнен.",
+      "evidence_refs": [
+        {
+          "artifact": {
+            "path": "src/main/java/PlantTask.java",
+            "sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+            "media_type": "text/x-java-source"
+          },
+          "start_line": 41,
+          "end_line": 41,
+          "excerpt": "if (arrivedAt(site)) { plantSapling(site); }"
+        }
+      ]
+    }
+  ]
+}

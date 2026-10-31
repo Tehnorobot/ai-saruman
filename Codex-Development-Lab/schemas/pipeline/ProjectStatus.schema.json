@@ -1,0 +1,302 @@
+{
+  "type": "object",
+  "properties": {
+    "contract": {
+      "const": "ProjectStatus",
+      "description": "Имя типа сообщения; выбирает схему."
+    },
+    "version": {
+      "const": "v1",
+      "description": "Версия формата; здесь только v1."
+    },
+    "scope": {
+      "$ref": "#/$defs/Scope",
+      "description": "Проект, версия ТЗ, версия кода и раунд."
+    },
+    "stage": {
+      "type": "string",
+      "enum": [
+        "ingest",
+        "decompose",
+        "planning",
+        "coding",
+        "review",
+        "verification",
+        "reflection",
+        "waiting",
+        "paused",
+        "done"
+      ],
+      "description": "Текущий этап контроллера."
+    },
+    "active_task_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "Задачи активного пакета."
+    },
+    "coverage": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Coverage"
+      },
+      "description": "Статусы условий для текущей версии кода."
+    },
+    "manual_pending": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/ManualCheck"
+      },
+      "description": "Ручные пункты с инструкциями; всё ещё не подтверждены."
+    },
+    "ready": {
+      "type": "boolean",
+      "description": "Есть ли доказательства готовности; вычисляет контроллер."
+    },
+    "readiness_reasons": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "Почему проект ещё не признан готовым."
+    },
+    "latest_memory_ref": {
+      "$ref": "#/$defs/ArtifactRef",
+      "description": "Последняя полная запись истории."
+    }
+  },
+  "required": [
+    "contract",
+    "version",
+    "scope",
+    "stage",
+    "active_task_ids",
+    "coverage",
+    "manual_pending",
+    "ready",
+    "readiness_reasons",
+    "latest_memory_ref"
+  ],
+  "additionalProperties": false,
+  "description": "Контроллер → панель. Фактический этап и состояние условий, не самооценка модели.",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ProjectStatus — runtime v1",
+  "$defs": {
+    "ArtifactRef": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Для ArtifactRef: путь относительно корня проекта; для Issue: путь поля в JSON.",
+          "pattern": "^(?!/)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//)(?!.*[\\\\:\\x00])[^/]+(?:/[^/]+)*$"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Hash",
+          "description": "Хеш точного содержимого файла; проверяется при чтении."
+        },
+        "media_type": {
+          "type": "string",
+          "minLength": 1,
+          "description": "MIME-тип файла."
+        }
+      },
+      "required": [
+        "path",
+        "sha256",
+        "media_type"
+      ],
+      "additionalProperties": false
+    },
+    "Coverage": {
+      "type": "object",
+      "properties": {
+        "condition_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "ID проверяемого условия."
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "verified",
+            "failed",
+            "untested",
+            "manual_pending",
+            "needs_retest"
+          ],
+          "description": "Наблюдаемый статус; допустимые значения заданы enum."
+        },
+        "result_refs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ArtifactRef"
+          },
+          "description": "Доказательства статуса, а не текстовая самооценка агента."
+        }
+      },
+      "required": [
+        "condition_id",
+        "status",
+        "result_refs"
+      ],
+      "additionalProperties": false
+    },
+    "Hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "ManualCheck": {
+      "type": "object",
+      "properties": {
+        "condition_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Ожидаемый результат; в Checkpoint это сравниваемое значение."
+          },
+          "description": "Проверяемые условия; ID должны существовать."
+        },
+        "steps": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Ожидаемый результат; в Checkpoint это сравниваемое значение."
+          },
+          "description": "Последовательность действий."
+        },
+        "expected": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Ожидаемый результат; в Checkpoint это сравниваемое значение."
+        }
+      },
+      "required": [
+        "condition_ids",
+        "steps",
+        "expected"
+      ],
+      "additionalProperties": false
+    },
+    "ProjectStatus": {
+      "type": "object",
+      "properties": {
+        "contract": {
+          "const": "ProjectStatus",
+          "description": "Имя типа сообщения; выбирает схему."
+        },
+        "version": {
+          "const": "v1",
+          "description": "Версия формата; здесь только v1."
+        },
+        "scope": {
+          "$ref": "#/$defs/Scope",
+          "description": "Проект, версия ТЗ, версия кода и раунд."
+        },
+        "stage": {
+          "type": "string",
+          "enum": [
+            "ingest",
+            "decompose",
+            "planning",
+            "coding",
+            "review",
+            "verification",
+            "reflection",
+            "waiting",
+            "paused",
+            "done"
+          ],
+          "description": "Текущий этап контроллера."
+        },
+        "active_task_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Задачи активного пакета."
+        },
+        "coverage": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Coverage"
+          },
+          "description": "Статусы условий для текущей версии кода."
+        },
+        "manual_pending": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ManualCheck"
+          },
+          "description": "Ручные пункты с инструкциями; всё ещё не подтверждены."
+        },
+        "ready": {
+          "type": "boolean",
+          "description": "Есть ли доказательства готовности; вычисляет контроллер."
+        },
+        "readiness_reasons": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Почему проект ещё не признан готовым."
+        },
+        "latest_memory_ref": {
+          "$ref": "#/$defs/ArtifactRef",
+          "description": "Последняя полная запись истории."
+        }
+      },
+      "required": [
+        "contract",
+        "version",
+        "scope",
+        "stage",
+        "active_task_ids",
+        "coverage",
+        "manual_pending",
+        "ready",
+        "readiness_reasons",
+        "latest_memory_ref"
+      ],
+      "additionalProperties": false,
+      "description": "Контроллер → панель. Фактический этап и состояние условий, не самооценка модели."
+    },
+    "Scope": {
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Устойчивый ID проекта."
+        },
+        "spec_revision": {
+          "$ref": "#/$defs/Hash",
+          "description": "SHA-256 канонического манифеста ТЗ и явных уточнений."
+        },
+        "source_revision": {
+          "$ref": "#/$defs/Hash",
+          "description": "SHA-256 канонического манифеста исходников снимка."
+        },
+        "round": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Номер попытки; не процент готовности."
+        }
+      },
+      "required": [
+        "project_id",
+        "spec_revision",
+        "source_revision",
+        "round"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "contract": "VerificationRequest",
+  "version": "v1",
+  "scope": {
+    "project_id": "demo-trees",
+    "spec_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "source_revision": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "round": 3
+  },
+  "source_snapshot_ref": {
+    "path": "snapshots/source-e.tar",
+    "sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "media_type": "application/x-tar"
+  },
+  "scenario_manifest_ref": {
+    "path": "tests/scenarios.json",
+    "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "media_type": "application/json"
+  },
+  "scenario_ids": [
+    "s1"
+  ],
+  "regression_scenario_ids": [],
+  "run_kind": "targeted",
+  "runner_profile": "minecraft-client-gametest"
+}

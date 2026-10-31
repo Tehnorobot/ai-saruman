@@ -1,0 +1,202 @@
+{
+  "type": "object",
+  "properties": {
+    "contract": {
+      "const": "ValidationRequest",
+      "description": "Имя типа сообщения; выбирает схему."
+    },
+    "version": {
+      "const": "v1",
+      "description": "Версия формата; здесь только v1."
+    },
+    "scope": {
+      "$ref": "#/$defs/Scope",
+      "description": "Проект, версия ТЗ, версия кода и раунд."
+    },
+    "payload_ref": {
+      "$ref": "#/$defs/ArtifactRef",
+      "description": "Оригинальное сообщение в файле; сохраняется без смысловой правки."
+    },
+    "schema_name": {
+      "type": "string",
+      "enum": [
+        "RequirementsCatalog",
+        "TaskGraph",
+        "PlannerDecision",
+        "CoderReport",
+        "ScenarioManifest",
+        "ReviewResult",
+        "ReviewResponse",
+        "CatalogPatch",
+        "PreparationHandoff"
+      ],
+      "description": "Схема из доверенного реестра."
+    },
+    "catalog_ref": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Принятый каталог требований; null допустим при начальной проверке."
+    },
+    "graph_ref": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Принятый граф задач; null допустим при начальной проверке."
+    }
+  },
+  "required": [
+    "contract",
+    "version",
+    "scope",
+    "payload_ref",
+    "schema_name",
+    "catalog_ref",
+    "graph_ref"
+  ],
+  "additionalProperties": false,
+  "description": "Внутренний вызов контроллера. Проверяемый JSON и доверенная схема.",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ValidationRequest — runtime v1",
+  "$defs": {
+    "ArtifactRef": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Для ArtifactRef: путь относительно корня проекта; для Issue: путь поля в JSON.",
+          "pattern": "^(?!/)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//)(?!.*[\\\\:\\x00])[^/]+(?:/[^/]+)*$"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Hash",
+          "description": "Хеш точного содержимого файла; проверяется при чтении."
+        },
+        "media_type": {
+          "type": "string",
+          "minLength": 1,
+          "description": "MIME-тип файла."
+        }
+      },
+      "required": [
+        "path",
+        "sha256",
+        "media_type"
+      ],
+      "additionalProperties": false
+    },
+    "Hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "Scope": {
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Устойчивый ID проекта."
+        },
+        "spec_revision": {
+          "$ref": "#/$defs/Hash",
+          "description": "SHA-256 канонического манифеста ТЗ и явных уточнений."
+        },
+        "source_revision": {
+          "$ref": "#/$defs/Hash",
+          "description": "SHA-256 канонического манифеста исходников снимка."
+        },
+        "round": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Номер попытки; не процент готовности."
+        }
+      },
+      "required": [
+        "project_id",
+        "spec_revision",
+        "source_revision",
+        "round"
+      ],
+      "additionalProperties": false
+    },
+    "ValidationRequest": {
+      "type": "object",
+      "properties": {
+        "contract": {
+          "const": "ValidationRequest",
+          "description": "Имя типа сообщения; выбирает схему."
+        },
+        "version": {
+          "const": "v1",
+          "description": "Версия формата; здесь только v1."
+        },
+        "scope": {
+          "$ref": "#/$defs/Scope",
+          "description": "Проект, версия ТЗ, версия кода и раунд."
+        },
+        "payload_ref": {
+          "$ref": "#/$defs/ArtifactRef",
+          "description": "Оригинальное сообщение в файле; сохраняется без смысловой правки."
+        },
+        "schema_name": {
+          "type": "string",
+          "enum": [
+            "RequirementsCatalog",
+            "TaskGraph",
+            "PlannerDecision",
+            "CoderReport",
+            "ScenarioManifest",
+            "ReviewResult",
+            "ReviewResponse",
+            "CatalogPatch",
+            "PreparationHandoff"
+          ],
+          "description": "Схема из доверенного реестра."
+        },
+        "catalog_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ArtifactRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Принятый каталог требований; null допустим при начальной проверке."
+        },
+        "graph_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ArtifactRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Принятый граф задач; null допустим при начальной проверке."
+        }
+      },
+      "required": [
+        "contract",
+        "version",
+        "scope",
+        "payload_ref",
+        "schema_name",
+        "catalog_ref",
+        "graph_ref"
+      ],
+      "additionalProperties": false,
+      "description": "Внутренний вызов контроллера. Проверяемый JSON и доверенная схема."
+    }
+  }
+}

@@ -1,0 +1,23 @@
+# English profanity roots for the chat filter. One per line.
+# Matching is substring-based over a canonicalised word, so a root covers
+# every inflection at once: "fuck" catches "fucking", "fucked", "motherfucker".
+#
+# Slurs targeting nationality, religion or orientation do NOT belong here —
+# see sensitive_topics.txt for topic-level blocking.
+
+fuck
+shit
+bitch
+cunt
+dick
+cock
+asshole
+bastard
+whore
+slut
+wank
+jerkoff
+motherfuck
+bullshit
+dumbass
+jackass

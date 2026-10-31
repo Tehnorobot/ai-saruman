@@ -1,0 +1,20 @@
+{
+  "summary": "Implement shared movement behavior before its related lifecycle behavior.",
+  "action": {
+    "kind": "implement_and_map_requirement",
+    "target": "REQ-00001-0123456789ab",
+    "reason": "Implement shared movement behavior before its related lifecycle behavior."
+  },
+  "additional_actions": [
+    {
+      "kind": "implement_and_map_requirement",
+      "target": "REQ-00002-abcdef012345",
+      "reason": "Implement the related lifecycle behavior using the shared movement controller.",
+      "depends_on": [
+        "REQ-00001-0123456789ab"
+      ]
+    }
+  ],
+  "bundle_reason": "Both behaviors share the same movement controller and bounded fixture.",
+  "verification_limit": 2
+}

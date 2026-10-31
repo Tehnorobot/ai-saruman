@@ -1,0 +1,46 @@
+{
+  "contract": "GatewayRequest",
+  "version": "proposal-v1",
+  "request_id": "Q-3",
+  "scope": {
+    "project_id": "demo-trees",
+    "spec_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "source_revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "round": 3
+  },
+  "role_config": {
+    "role": "planner",
+    "provider": "selected-provider",
+    "model": "selected-model",
+    "reasoning": "default"
+  },
+  "messages": [
+    {
+      "role": "user",
+      "content": "Выбери следующий пакет по PlannerInput."
+    }
+  ],
+  "attachment_refs": [
+    {
+      "path": "rounds/3/planner-input.json",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "media_type": "application/json"
+    }
+  ],
+  "tools": [
+    {
+      "name": "read_file",
+      "description": "Читает разрешённый файл",
+      "input_schema": {
+        "path": "tools/read_file.schema.json",
+        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "media_type": "application/json"
+      }
+    }
+  ],
+  "output_contract": "PlannerDecision",
+  "budget": {
+    "remaining_tokens": 100000,
+    "remaining_seconds": 3600
+  }
+}

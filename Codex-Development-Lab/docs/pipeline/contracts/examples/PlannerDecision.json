@@ -1,0 +1,56 @@
+{
+  "contract": "PlannerDecision",
+  "version": "proposal-v1",
+  "scope": {
+    "project_id": "demo-trees",
+    "spec_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "source_revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "round": 3
+  },
+  "strategy": "repair",
+  "rationale": "Место найдено, но посадка не подтверждена. Проверить действие установки.",
+  "actions": [
+    {
+      "id": "A1",
+      "task_ids": [
+        "T1"
+      ],
+      "kind": "repair",
+      "goal": "Устранить отсутствие посадки",
+      "expected_observation": "sapling_placed=true",
+      "depends_on_action_ids": [],
+      "condition_ids": [
+        "C1"
+      ]
+    }
+  ],
+  "hypotheses": [
+    {
+      "id": "H1",
+      "statement": "Команда посадки не вызывается",
+      "observation_refs": [
+        {
+          "artifact": {
+            "path": "runs/2/game.log",
+            "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+            "media_type": "text/plain"
+          },
+          "start_line": 18,
+          "end_line": 18,
+          "excerpt": "sapling_placed=false"
+        }
+      ],
+      "experiment": "Записать событие вызова посадки",
+      "prediction": "Событие отсутствует при воспроизведении"
+    }
+  ],
+  "deferred": [
+    {
+      "task_id": "T2",
+      "reason": "Нужен установленный саженец",
+      "return_when": "C1 подтверждён либо T1 реализован перед T2 в общем пакете"
+    }
+  ],
+  "manual_checks": [],
+  "replacement_graph_ref": null
+}

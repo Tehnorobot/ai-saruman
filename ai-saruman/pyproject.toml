@@ -1,0 +1,14 @@
+[project]
+name = "saruman"
+version = "0.1.0"
+description = "Local character lab for Saruman: chat, memory graph and Codex usage analytics"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = []
+
+[project.scripts]
+saruman = "saruman:main"
+
+[build-system]
+requires = ["uv_build>=0.13.1,<0.14.0"]
+build-backend = "uv_build"

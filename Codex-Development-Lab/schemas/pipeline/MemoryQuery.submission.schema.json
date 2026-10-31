@@ -1,0 +1,124 @@
+{
+  "type": "object",
+  "description": "Агент → инструмент чтения. Поиск записей или чтение полного фрагмента.",
+  "required": [
+    "contract",
+    "version",
+    "project_id",
+    "task_ids",
+    "record_ids",
+    "query",
+    "cursor"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "contract": {
+      "description": "Имя типа сообщения; выбирает схему.",
+      "enum": [
+        "MemoryQuery"
+      ],
+      "type": "string"
+    },
+    "version": {
+      "description": "Версия формата; здесь только v1.",
+      "enum": [
+        "v1"
+      ],
+      "type": "string"
+    },
+    "project_id": {
+      "type": "string",
+      "description": "Устойчивый ID проекта."
+    },
+    "task_ids": {
+      "type": "array",
+      "description": "Задачи, затронутые сообщением.",
+      "items": {
+        "type": "string",
+        "description": "Устойчивый ID проекта."
+      }
+    },
+    "record_ids": {
+      "type": "array",
+      "description": "Явно запрошенные записи.",
+      "items": {
+        "type": "string",
+        "description": "Устойчивый ID проекта."
+      }
+    },
+    "query": {
+      "type": "string",
+      "description": "Поисковая строка; может быть пустой."
+    },
+    "cursor": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Позиция продолжения; null для первой страницы."
+    }
+  },
+  "$defs": {
+    "MemoryQuery": {
+      "type": "object",
+      "description": "Агент → инструмент чтения. Поиск записей или чтение полного фрагмента.",
+      "required": [
+        "contract",
+        "version",
+        "project_id",
+        "task_ids",
+        "record_ids",
+        "query",
+        "cursor"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "contract": {
+          "description": "Имя типа сообщения; выбирает схему.",
+          "enum": [
+            "MemoryQuery"
+          ],
+          "type": "string"
+        },
+        "version": {
+          "description": "Версия формата; здесь только v1.",
+          "enum": [
+            "v1"
+          ],
+          "type": "string"
+        },
+        "project_id": {
+          "type": "string",
+          "description": "Устойчивый ID проекта."
+        },
+        "task_ids": {
+          "type": "array",
+          "description": "Задачи, затронутые сообщением.",
+          "items": {
+            "type": "string",
+            "description": "Устойчивый ID проекта."
+          }
+        },
+        "record_ids": {
+          "type": "array",
+          "description": "Явно запрошенные записи.",
+          "items": {
+            "type": "string",
+            "description": "Устойчивый ID проекта."
+          }
+        },
+        "query": {
+          "type": "string",
+          "description": "Поисковая строка; может быть пустой."
+        },
+        "cursor": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Позиция продолжения; null для первой страницы."
+        }
+      }
+    }
+  }
+}

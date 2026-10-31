@@ -1,0 +1,97 @@
+{
+  "type": "object",
+  "properties": {
+    "contract": {
+      "type": "string",
+      "const": "AgentGraph"
+    },
+    "version": {
+      "type": "string",
+      "const": "v1"
+    },
+    "tasks": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Task"
+      },
+      "description": "Компактные функциональные задачи; число не фиксировано."
+    },
+    "notes_md": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "contract",
+    "version",
+    "tasks",
+    "notes_md"
+  ],
+  "additionalProperties": false,
+  "description": "LLM → контроллер. Зависимости задач; смысл проверяет LLM, циклы — алгоритм.",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AgentGraph - compact agent message",
+  "$defs": {
+    "Task": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Уникальный ID внутри соответствующего каталога."
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Краткое имя функции для пользователя."
+        },
+        "requirement_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Как наблюдать результат; затем превращается в исполняемый тест."
+          },
+          "description": "Связанные требования; ID должны существовать."
+        },
+        "condition_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Как наблюдать результат; затем превращается в исполняемый тест."
+          },
+          "description": "Проверяемые условия; ID должны существовать."
+        },
+        "depends_on": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Как наблюдать результат; затем превращается в исполняемый тест."
+          },
+          "description": "Задачи-предпосылки; связи должны образовать DAG."
+        },
+        "outcome": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Для Task: результат функции; для шлюза: завершение или ошибка."
+        },
+        "verification_approach": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Как наблюдать результат; затем превращается в исполняемый тест."
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "requirement_ids",
+        "condition_ids",
+        "depends_on",
+        "outcome",
+        "verification_approach"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

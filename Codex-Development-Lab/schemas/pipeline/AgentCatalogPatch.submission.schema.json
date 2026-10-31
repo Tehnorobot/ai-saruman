@@ -1,0 +1,243 @@
+{
+  "type": "object",
+  "required": [
+    "contract",
+    "version",
+    "addressed_finding_ids",
+    "requirements_upsert",
+    "requirements_remove",
+    "conditions_upsert",
+    "conditions_remove",
+    "questions_add",
+    "question_resolutions_upsert",
+    "unclassified_add",
+    "unclassified_remove",
+    "notes_md"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "contract": {
+      "type": "string",
+      "enum": [
+        "AgentCatalogPatch"
+      ]
+    },
+    "version": {
+      "type": "string",
+      "enum": [
+        "v1"
+      ]
+    },
+    "addressed_finding_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "requirements_upsert": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Requirement"
+      }
+    },
+    "requirements_remove": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "conditions_upsert": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Condition"
+      }
+    },
+    "conditions_remove": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "questions_add": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "question_resolutions_upsert": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "question",
+          "kind",
+          "status",
+          "owner",
+          "condition_ids",
+          "answer",
+          "reason",
+          "source_refs"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "question": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "implementation_decision",
+              "experiment",
+              "user_clarification"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "resolved"
+            ]
+          },
+          "owner": {
+            "type": "string",
+            "enum": [
+              "planner",
+              "coder",
+              "user"
+            ]
+          },
+          "condition_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "answer": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reason": {
+            "type": "string"
+          },
+          "source_refs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/SourceRef"
+            }
+          }
+        }
+      }
+    },
+    "unclassified_add": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/SourceRef"
+      }
+    },
+    "unclassified_remove": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/SourceRef"
+      }
+    },
+    "notes_md": {
+      "type": "string"
+    }
+  },
+  "$defs": {
+    "Condition": {
+      "type": "object",
+      "required": [
+        "id",
+        "requirement_id",
+        "expected",
+        "verification"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Уникальный ID внутри соответствующего каталога."
+        },
+        "requirement_id": {
+          "type": "string",
+          "description": "ID родительского требования."
+        },
+        "expected": {
+          "type": "string",
+          "description": "Ожидаемый результат; в Checkpoint это сравниваемое значение."
+        },
+        "verification": {
+          "type": "string",
+          "enum": [
+            "automated",
+            "manual",
+            "mixed"
+          ],
+          "description": "Способ проверки: автоматический, ручной или смешанный."
+        }
+      }
+    },
+    "Requirement": {
+      "type": "object",
+      "required": [
+        "id",
+        "statement",
+        "source_refs",
+        "condition_ids"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Уникальный ID внутри соответствующего каталога."
+        },
+        "statement": {
+          "type": "string",
+          "description": "Утверждение или проверяемая гипотеза."
+        },
+        "source_refs": {
+          "type": "array",
+          "description": "Фрагменты исходного ТЗ, из которых выведено требование.",
+          "items": {
+            "$ref": "#/$defs/SourceRef"
+          }
+        },
+        "condition_ids": {
+          "type": "array",
+          "description": "Проверяемые условия; ID должны существовать.",
+          "items": {
+            "type": "string",
+            "description": "Утверждение или проверяемая гипотеза."
+          }
+        }
+      }
+    },
+    "SourceRef": {
+      "type": "object",
+      "required": [
+        "path",
+        "start_line",
+        "end_line"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "start_line": {
+          "type": "integer"
+        },
+        "end_line": {
+          "type": "integer"
+        }
+      }
+    }
+  }
+}

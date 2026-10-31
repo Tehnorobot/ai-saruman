@@ -1,0 +1,174 @@
+{
+  "type": "object",
+  "description": "Контроллер → LLM-планировщик. Исходное ТЗ доступно целиком по ссылке.",
+  "required": [
+    "contract",
+    "version",
+    "scope",
+    "spec_file",
+    "clarifications",
+    "previous_catalog_refs",
+    "instructions"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "contract": {
+      "description": "Имя типа сообщения; выбирает схему.",
+      "enum": [
+        "DecompositionInput"
+      ],
+      "type": "string"
+    },
+    "version": {
+      "description": "Версия формата; здесь только v1.",
+      "enum": [
+        "v1"
+      ],
+      "type": "string"
+    },
+    "scope": {
+      "description": "Проект, версия ТЗ, версия кода и раунд.",
+      "$ref": "#/$defs/Scope"
+    },
+    "spec_file": {
+      "description": "Сохранённый исходный Markdown.",
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "clarifications": {
+      "type": "array",
+      "description": "Явные уточнения пользователя; отдельные файлы.",
+      "items": {
+        "$ref": "#/$defs/ArtifactRef"
+      }
+    },
+    "previous_catalog_refs": {
+      "type": "array",
+      "description": "Предыдущие каталоги при изменении ТЗ.",
+      "items": {
+        "$ref": "#/$defs/ArtifactRef"
+      }
+    },
+    "instructions": {
+      "type": "array",
+      "description": "Явные инструкции этапа.",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "$defs": {
+    "ArtifactRef": {
+      "type": "object",
+      "required": [
+        "path",
+        "sha256",
+        "media_type"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Для ArtifactRef: путь относительно корня проекта; для Issue: путь поля в JSON."
+        },
+        "sha256": {
+          "description": "Хеш точного содержимого файла; проверяется при чтении.",
+          "$ref": "#/$defs/Hash"
+        },
+        "media_type": {
+          "type": "string",
+          "description": "MIME-тип файла."
+        }
+      }
+    },
+    "DecompositionInput": {
+      "type": "object",
+      "description": "Контроллер → LLM-планировщик. Исходное ТЗ доступно целиком по ссылке.",
+      "required": [
+        "contract",
+        "version",
+        "scope",
+        "spec_file",
+        "clarifications",
+        "previous_catalog_refs",
+        "instructions"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "contract": {
+          "description": "Имя типа сообщения; выбирает схему.",
+          "enum": [
+            "DecompositionInput"
+          ],
+          "type": "string"
+        },
+        "version": {
+          "description": "Версия формата; здесь только v1.",
+          "enum": [
+            "v1"
+          ],
+          "type": "string"
+        },
+        "scope": {
+          "description": "Проект, версия ТЗ, версия кода и раунд.",
+          "$ref": "#/$defs/Scope"
+        },
+        "spec_file": {
+          "description": "Сохранённый исходный Markdown.",
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        "clarifications": {
+          "type": "array",
+          "description": "Явные уточнения пользователя; отдельные файлы.",
+          "items": {
+            "$ref": "#/$defs/ArtifactRef"
+          }
+        },
+        "previous_catalog_refs": {
+          "type": "array",
+          "description": "Предыдущие каталоги при изменении ТЗ.",
+          "items": {
+            "$ref": "#/$defs/ArtifactRef"
+          }
+        },
+        "instructions": {
+          "type": "array",
+          "description": "Явные инструкции этапа.",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "Hash": {
+      "type": "string"
+    },
+    "Scope": {
+      "type": "object",
+      "required": [
+        "project_id",
+        "spec_revision",
+        "source_revision",
+        "round"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "description": "Устойчивый ID проекта."
+        },
+        "spec_revision": {
+          "description": "SHA-256 канонического манифеста ТЗ и явных уточнений.",
+          "$ref": "#/$defs/Hash"
+        },
+        "source_revision": {
+          "description": "SHA-256 канонического манифеста исходников снимка.",
+          "$ref": "#/$defs/Hash"
+        },
+        "round": {
+          "type": "integer",
+          "description": "Номер попытки; не процент готовности."
+        }
+      }
+    }
+  }
+}

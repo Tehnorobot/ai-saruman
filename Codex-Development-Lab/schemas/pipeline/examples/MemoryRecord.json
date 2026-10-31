@@ -1,0 +1,43 @@
+{
+  "contract": "MemoryRecord",
+  "version": "v1",
+  "record_id": "M-result-3",
+  "created_at": "2026-10-26T12:00:00Z",
+  "entry": {
+    "contract": "MemoryWrite",
+    "version": "v1",
+    "scope": {
+      "project_id": "demo-trees",
+      "spec_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "source_revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "round": 2
+    },
+    "kind": "verification",
+    "producer": "runner",
+    "payload_ref": {
+      "path": "rounds/2/verification.json",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "media_type": "application/json"
+    },
+    "task_ids": [
+      "T1"
+    ],
+    "requirement_ids": [
+      "R1"
+    ],
+    "tags": [
+      "verified_fail"
+    ],
+    "links": [
+      {
+        "relation": "verifies",
+        "record_id": "M-plan-2"
+      }
+    ]
+  },
+  "index_ref": {
+    "path": "memory/index.json",
+    "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "media_type": "application/json"
+  }
+}

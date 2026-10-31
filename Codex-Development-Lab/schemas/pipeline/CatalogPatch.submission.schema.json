@@ -1,0 +1,474 @@
+{
+  "type": "object",
+  "required": [
+    "contract",
+    "version",
+    "scope",
+    "base_catalog_ref",
+    "rationale",
+    "addressed_finding_ids",
+    "requirements_upsert",
+    "requirements_remove",
+    "conditions_upsert",
+    "conditions_remove",
+    "questions_add",
+    "question_resolutions_upsert",
+    "unclassified_add",
+    "unclassified_remove"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "contract": {
+      "enum": [
+        "CatalogPatch"
+      ],
+      "type": "string"
+    },
+    "version": {
+      "enum": [
+        "v1"
+      ],
+      "type": "string"
+    },
+    "scope": {
+      "$ref": "#/$defs/Scope"
+    },
+    "base_catalog_ref": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "rationale": {
+      "type": "string"
+    },
+    "addressed_finding_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "requirements_upsert": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Requirement"
+      }
+    },
+    "requirements_remove": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "conditions_upsert": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Condition"
+      }
+    },
+    "conditions_remove": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "questions_add": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "question_resolutions_upsert": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "question",
+          "kind",
+          "status",
+          "owner",
+          "condition_ids",
+          "answer",
+          "reason",
+          "source_refs"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "question": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "implementation_decision",
+              "experiment",
+              "user_clarification"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "resolved"
+            ]
+          },
+          "owner": {
+            "type": "string",
+            "enum": [
+              "planner",
+              "coder",
+              "user"
+            ]
+          },
+          "condition_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "answer": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reason": {
+            "type": "string"
+          },
+          "source_refs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/SourceRef"
+            }
+          }
+        }
+      }
+    },
+    "unclassified_add": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/SourceRef"
+      }
+    },
+    "unclassified_remove": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/SourceRef"
+      }
+    }
+  },
+  "$defs": {
+    "ArtifactRef": {
+      "type": "object",
+      "required": [
+        "path",
+        "sha256",
+        "media_type"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Для ArtifactRef: путь относительно корня проекта; для Issue: путь поля в JSON."
+        },
+        "sha256": {
+          "description": "Хеш точного содержимого файла; проверяется при чтении.",
+          "$ref": "#/$defs/Hash"
+        },
+        "media_type": {
+          "type": "string",
+          "description": "MIME-тип файла."
+        }
+      }
+    },
+    "CatalogPatch": {
+      "type": "object",
+      "required": [
+        "contract",
+        "version",
+        "scope",
+        "base_catalog_ref",
+        "rationale",
+        "addressed_finding_ids",
+        "requirements_upsert",
+        "requirements_remove",
+        "conditions_upsert",
+        "conditions_remove",
+        "questions_add",
+        "question_resolutions_upsert",
+        "unclassified_add",
+        "unclassified_remove"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "contract": {
+          "enum": [
+            "CatalogPatch"
+          ],
+          "type": "string"
+        },
+        "version": {
+          "enum": [
+            "v1"
+          ],
+          "type": "string"
+        },
+        "scope": {
+          "$ref": "#/$defs/Scope"
+        },
+        "base_catalog_ref": {
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        "rationale": {
+          "type": "string"
+        },
+        "addressed_finding_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "requirements_upsert": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Requirement"
+          }
+        },
+        "requirements_remove": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "conditions_upsert": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Condition"
+          }
+        },
+        "conditions_remove": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "questions_add": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "question_resolutions_upsert": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "question",
+              "kind",
+              "status",
+              "owner",
+              "condition_ids",
+              "answer",
+              "reason",
+              "source_refs"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "question": {
+                "type": "string"
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "implementation_decision",
+                  "experiment",
+                  "user_clarification"
+                ]
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "open",
+                  "resolved"
+                ]
+              },
+              "owner": {
+                "type": "string",
+                "enum": [
+                  "planner",
+                  "coder",
+                  "user"
+                ]
+              },
+              "condition_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "answer": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "reason": {
+                "type": "string"
+              },
+              "source_refs": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/SourceRef"
+                }
+              }
+            }
+          }
+        },
+        "unclassified_add": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SourceRef"
+          }
+        },
+        "unclassified_remove": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SourceRef"
+          }
+        }
+      }
+    },
+    "Condition": {
+      "type": "object",
+      "required": [
+        "id",
+        "requirement_id",
+        "expected",
+        "verification"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Уникальный ID внутри соответствующего каталога."
+        },
+        "requirement_id": {
+          "type": "string",
+          "description": "ID родительского требования."
+        },
+        "expected": {
+          "type": "string",
+          "description": "Ожидаемый результат; в Checkpoint это сравниваемое значение."
+        },
+        "verification": {
+          "type": "string",
+          "description": "Способ проверки: автоматический, ручной или смешанный.",
+          "enum": [
+            "automated",
+            "manual",
+            "mixed"
+          ]
+        }
+      }
+    },
+    "Hash": {
+      "type": "string"
+    },
+    "Requirement": {
+      "type": "object",
+      "required": [
+        "id",
+        "statement",
+        "source_refs",
+        "condition_ids"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Уникальный ID внутри соответствующего каталога."
+        },
+        "statement": {
+          "type": "string",
+          "description": "Утверждение или проверяемая гипотеза."
+        },
+        "source_refs": {
+          "type": "array",
+          "description": "Фрагменты исходного ТЗ, из которых выведено требование.",
+          "items": {
+            "$ref": "#/$defs/SourceRef"
+          }
+        },
+        "condition_ids": {
+          "type": "array",
+          "description": "Проверяемые условия; ID должны существовать.",
+          "items": {
+            "type": "string",
+            "description": "Утверждение или проверяемая гипотеза."
+          }
+        }
+      }
+    },
+    "Scope": {
+      "type": "object",
+      "required": [
+        "project_id",
+        "spec_revision",
+        "source_revision",
+        "round"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "description": "Устойчивый ID проекта."
+        },
+        "spec_revision": {
+          "description": "SHA-256 канонического манифеста ТЗ и явных уточнений.",
+          "$ref": "#/$defs/Hash"
+        },
+        "source_revision": {
+          "description": "SHA-256 канонического манифеста исходников снимка.",
+          "$ref": "#/$defs/Hash"
+        },
+        "round": {
+          "type": "integer",
+          "description": "Номер попытки; не процент готовности."
+        }
+      }
+    },
+    "SourceRef": {
+      "type": "object",
+      "required": [
+        "artifact",
+        "start_line",
+        "end_line",
+        "excerpt"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "artifact": {
+          "description": "Файл, из которого взята цитата.",
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        "start_line": {
+          "type": "integer",
+          "description": "Первая строка фрагмента, с 1."
+        },
+        "end_line": {
+          "type": "integer",
+          "description": "Последняя строка фрагмента включительно."
+        },
+        "excerpt": {
+          "type": "string",
+          "description": "Точная цитата из указанной версии файла."
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,243 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ScenarioManifest — proposal-v1",
+  "$ref": "#/$defs/ScenarioManifest",
+  "$defs": {
+    "ArtifactRef": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "MIME-тип файла."
+        },
+        "sha256": {
+          "$ref": "#/$defs/Hash",
+          "description": "Хеш точного содержимого файла; проверяется при чтении."
+        },
+        "media_type": {
+          "type": "string",
+          "minLength": 1,
+          "description": "MIME-тип файла."
+        }
+      },
+      "required": [
+        "path",
+        "sha256",
+        "media_type"
+      ],
+      "additionalProperties": false
+    },
+    "Checkpoint": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Имя измеряемого состояния или события."
+        },
+        "condition_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Имя измеряемого состояния или события."
+          },
+          "description": "Проверяемые условия; ID должны существовать."
+        },
+        "assertion": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Имя измеряемого состояния или события."
+        },
+        "observable": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Имя измеряемого состояния или события."
+        },
+        "comparator": {
+          "type": "string",
+          "enum": [
+            "eq",
+            "ne",
+            "lt",
+            "le",
+            "gt",
+            "ge",
+            "contains",
+            "event"
+          ],
+          "description": "Операция сравнения: eq равно, ne не равно; lt/le/gt/ge; contains; event."
+        },
+        "expected": {
+          "type": [
+            "string",
+            "number",
+            "boolean"
+          ],
+          "description": "Ожидаемый результат; в Checkpoint это сравниваемое значение."
+        }
+      },
+      "required": [
+        "id",
+        "condition_ids",
+        "assertion",
+        "observable",
+        "comparator",
+        "expected"
+      ],
+      "additionalProperties": false
+    },
+    "Hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "Scenario": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Имя доверенного профиля; не произвольная shell-команда модели."
+        },
+        "task_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Имя доверенного профиля; не произвольная shell-команда модели."
+          },
+          "description": "Задачи, затронутые сообщением."
+        },
+        "condition_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Имя доверенного профиля; не произвольная shell-команда модели."
+          },
+          "description": "Проверяемые условия; ID должны существовать."
+        },
+        "setup": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Имя доверенного профиля; не произвольная shell-команда модели."
+          },
+          "description": "Исходные условия воспроизводимого сценария."
+        },
+        "steps": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Имя доверенного профиля; не произвольная shell-команда модели."
+          },
+          "description": "Последовательность действий."
+        },
+        "checkpoints": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Checkpoint"
+          },
+          "description": "Контрольные точки и проверяемые утверждения."
+        },
+        "test_file": {
+          "$ref": "#/$defs/ArtifactRef",
+          "description": "Исполняемый тест. Текстовый сценарий сам не запускается."
+        },
+        "runner_profile": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Имя доверенного профиля; не произвольная shell-команда модели."
+        },
+        "media": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "video",
+              "screenshot"
+            ]
+          },
+          "description": "Какие медиа нужны сценарию; пустой массив разрешён."
+        }
+      },
+      "required": [
+        "id",
+        "task_ids",
+        "condition_ids",
+        "setup",
+        "steps",
+        "checkpoints",
+        "test_file",
+        "runner_profile",
+        "media"
+      ],
+      "additionalProperties": false
+    },
+    "ScenarioManifest": {
+      "type": "object",
+      "properties": {
+        "contract": {
+          "const": "ScenarioManifest",
+          "description": "Имя типа сообщения; выбирает схему."
+        },
+        "version": {
+          "const": "proposal-v1",
+          "description": "Версия формата; здесь только proposal-v1."
+        },
+        "scope": {
+          "$ref": "#/$defs/Scope",
+          "description": "Проект, версия ТЗ, версия кода и раунд."
+        },
+        "scenarios": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Scenario"
+          },
+          "description": "Сценарии и их измеримые контрольные точки."
+        }
+      },
+      "required": [
+        "contract",
+        "version",
+        "scope",
+        "scenarios"
+      ],
+      "additionalProperties": false,
+      "description": "Кодер → ревьюер → исполнитель. Исполняемые тесты плюс явные утверждения."
+    },
+    "Scope": {
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Устойчивый ID проекта."
+        },
+        "spec_revision": {
+          "$ref": "#/$defs/Hash",
+          "description": "SHA-256 канонического манифеста ТЗ и явных уточнений."
+        },
+        "source_revision": {
+          "$ref": "#/$defs/Hash",
+          "description": "SHA-256 канонического манифеста исходников снимка."
+        },
+        "round": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Номер попытки; не процент готовности."
+        }
+      },
+      "required": [
+        "project_id",
+        "spec_revision",
+        "source_revision",
+        "round"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

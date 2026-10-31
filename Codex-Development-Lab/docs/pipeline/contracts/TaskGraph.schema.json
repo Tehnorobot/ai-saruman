@@ -1,0 +1,165 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "TaskGraph — proposal-v1",
+  "$ref": "#/$defs/TaskGraph",
+  "$defs": {
+    "ArtifactRef": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "MIME-тип файла."
+        },
+        "sha256": {
+          "$ref": "#/$defs/Hash",
+          "description": "Хеш точного содержимого файла; проверяется при чтении."
+        },
+        "media_type": {
+          "type": "string",
+          "minLength": 1,
+          "description": "MIME-тип файла."
+        }
+      },
+      "required": [
+        "path",
+        "sha256",
+        "media_type"
+      ],
+      "additionalProperties": false
+    },
+    "Hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "Scope": {
+      "type": "object",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Устойчивый ID проекта."
+        },
+        "spec_revision": {
+          "$ref": "#/$defs/Hash",
+          "description": "SHA-256 канонического манифеста ТЗ и явных уточнений."
+        },
+        "source_revision": {
+          "$ref": "#/$defs/Hash",
+          "description": "SHA-256 канонического манифеста исходников снимка."
+        },
+        "round": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Номер попытки; не процент готовности."
+        }
+      },
+      "required": [
+        "project_id",
+        "spec_revision",
+        "source_revision",
+        "round"
+      ],
+      "additionalProperties": false
+    },
+    "Task": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Как наблюдать результат; затем превращается в исполняемый тест."
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Как наблюдать результат; затем превращается в исполняемый тест."
+        },
+        "requirement_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Как наблюдать результат; затем превращается в исполняемый тест."
+          },
+          "description": "Связанные требования; ID должны существовать."
+        },
+        "condition_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Как наблюдать результат; затем превращается в исполняемый тест."
+          },
+          "description": "Проверяемые условия; ID должны существовать."
+        },
+        "depends_on": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Как наблюдать результат; затем превращается в исполняемый тест."
+          },
+          "description": "Задачи-предпосылки; связи должны образовать DAG."
+        },
+        "outcome": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Как наблюдать результат; затем превращается в исполняемый тест."
+        },
+        "verification_approach": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Как наблюдать результат; затем превращается в исполняемый тест."
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "requirement_ids",
+        "condition_ids",
+        "depends_on",
+        "outcome",
+        "verification_approach"
+      ],
+      "additionalProperties": false
+    },
+    "TaskGraph": {
+      "type": "object",
+      "properties": {
+        "contract": {
+          "const": "TaskGraph",
+          "description": "Имя типа сообщения; выбирает схему."
+        },
+        "version": {
+          "const": "proposal-v1",
+          "description": "Версия формата; здесь только proposal-v1."
+        },
+        "scope": {
+          "$ref": "#/$defs/Scope",
+          "description": "Проект, версия ТЗ, версия кода и раунд."
+        },
+        "catalog_ref": {
+          "$ref": "#/$defs/ArtifactRef",
+          "description": "Принятый каталог требований; null допустим при начальной проверке."
+        },
+        "tasks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Task"
+          },
+          "description": "Компактные функциональные задачи; число не фиксировано."
+        }
+      },
+      "required": [
+        "contract",
+        "version",
+        "scope",
+        "catalog_ref",
+        "tasks"
+      ],
+      "additionalProperties": false,
+      "description": "LLM → контроллер. Зависимости задач; смысл проверяет LLM, циклы — алгоритм."
+    }
+  }
+}
