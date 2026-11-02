@@ -17,6 +17,7 @@ from common import acceptance, pipeline_contracts as contracts, pipeline_memory 
 from common import task_graph, catalog_patch, preparation, correction_journal as corrections, submission_patch
 from common import agent_protocol
 from common import evidence_policy
+from common import condition_progress
 from common.execution_limits import role_timeout
 from common.history import _open
 from common.memory_archive import read_json, write_json, _directory
@@ -40,8 +41,15 @@ def input_binding(value):
     """
     def stable(node):
         if isinstance(node,list):return [stable(v) for v in node]
-        if isinstance(node,dict):return {key:({**item,'sha256':'dynamic-navigation-index'}
-            if key=='memory_index_ref' and isinstance(item,dict) else stable(item)) for key,item in node.items()}
+        if isinstance(node,dict):
+            result={}
+            for key,item in node.items():
+                if key=='memory_index_ref' and isinstance(item,dict):
+                    result[key]={**item,'sha256':'dynamic-navigation-index'}
+                elif key=='condition_progress_ref' and isinstance(item,dict):
+                    result[key]={**item,'path':'condition-progress-navigation','sha256':'dynamic-navigation-index'}
+                else:result[key]=stable(item)
+            return result
         return node
     return digest(stable(value))
 
@@ -344,6 +352,7 @@ class Cycle:
         snapshot['supplemental_evidence']=self.state.get('supplemental_evidence',[])
         snapshot['preparation']=self.state.get('preparation')
         snapshot['handoff']=self.state.get('preparation_handoff')
+        snapshot['condition_progress']=self.state.get('condition_progress')
         write_json(self.output,'pipeline/public.json',snapshot)
         if ready:
             acceptance_state=read_json(self.output,'latest_acceptance.json')
@@ -381,6 +390,48 @@ class Cycle:
             status='verified' if all(s=='verified' for s in statuses) else 'manual_pending' if all(s=='manual_pending' for s in statuses) else 'needs_retest' if 'needs_retest' in statuses else 'pending'
             states.append({'task_id':task['id'],'status':status,'result_refs':[r for c in task['condition_ids'] for r in conditions[c]['result_refs']]})
         return states
+
+    def refresh_condition_progress(self,catalog,graph=None):
+        def historical_manifest(scope):
+            snapshot=read_json(self.output,f"round-{scope['round']:02d}/pipeline/development-ready.json")
+            return snapshot.get('manifest') if snapshot else None
+        projection=condition_progress.reconstruct(self.output,catalog,self.scope,historical_manifest,
+            last_plan_id=self.state.get('last_plan_record'))
+        summaries=[]
+        for profile in projection['conditions']:
+            name='condition-history-'+digest(profile)+'.json'
+            write_json(self.output,'pipeline/condition-progress/'+name,profile)
+            ref=export_json(self.ws,name,profile)
+            compact={k:v for k,v in profile.items() if k not in ('history','checkpoints')}
+            failed_keys={(r['scenario_id'],r['checkpoint_id']) for r in profile['history'] if r['status'] in ('FAIL','ERROR')}
+            compact['checkpoint_count']=len(profile['checkpoints'])
+            compact['changed_test_contract_keys']=[{'scenario_id':cp['scenario_id'],'checkpoint_id':cp['checkpoint_id']}
+                for cp in profile['checkpoints'] if cp['contract_changed']]
+            compact['checkpoints']=[{k:v for k,v in cp.items()
+                if k not in ('last_test_contract','last_proposal_fingerprint')} for cp in profile['checkpoints']
+                if cp['unresolved_observations'] or (cp['scenario_id'],cp['checkpoint_id']) in failed_keys]
+            for cp in compact['checkpoints']:
+                trace={'condition_id':profile['condition_id'],'scenario_id':cp['scenario_id'],
+                    'checkpoint_id':cp['checkpoint_id'],'history':[r for r in profile['history']
+                    if (r['scenario_id'],r['checkpoint_id'])==(cp['scenario_id'],cp['checkpoint_id'])]}
+                trace_name='checkpoint-history-'+digest(trace)+'.json'
+                write_json(self.output,'pipeline/condition-progress/'+trace_name,trace)
+                cp['history_ref']=export_json(self.ws,trace_name,trace)
+            summaries.append(compact|{'history_ref':ref})
+        summary={k:v for k,v in projection.items() if k!='conditions'}
+        summary['conditions']=summaries
+        if graph:
+            summary['selection_advice']=condition_progress.selection_advice(projection,graph,self.coverage(catalog))
+            summary['selection_advice']['deferred_returns']=self.state.get('return_agenda',[])
+        write_json(self.output,'pipeline/condition-progress.json',summary)
+        index_name='condition-progress-'+digest(summary)+'.json'
+        write_json(self.output,'pipeline/condition-progress/'+index_name,summary)
+        ref=export_json(self.ws,index_name,summary)
+        export_json(self.ws,'condition-progress.json',summary)
+        self.state['condition_progress']={'index_ref':ref,
+            'repeated_condition_ids':[p['condition_id'] for p in summaries if p['repeated_unresolved']],
+            'unmapped_verification_refs':projection['unmapped_verification_refs']}
+        return summary,ref
 
     def validation_result(self,name,raw_ref,valid,issues):
         request=message('ValidationRequest',scope=self.scope,payload_ref=raw_ref,schema_name=name,
@@ -662,11 +713,13 @@ class Cycle:
                     self.scope={**self.scope,'source_revision':acceptance.source_fingerprint(self.ws)}
                     start_state['continuation_source_revision']=self.scope['source_revision']
                 consecutive=start_state.get('consecutive_provider_failures',0)+1 if retryable else 0
-                delay=min(60,2**min(consecutive,6)) if retryable else 0
+                from common.provider_failures import retry_delay
+                delay=retry_delay(result,consecutive,quota_interval=getattr(self.e,'QUOTA_WAIT',900)) if retryable else 0
                 start_state.update(attempt=attempt+1,consecutive_provider_failures=consecutive,feedback={
                     'executor_error': {'stream_interrupted':'Interrupted API stream',
                         'provider_generation_error':'Provider returned stop_reason=error; root cause unavailable',
                         'provider_unavailable':'Provider temporarily unavailable',
+                        'rate_limit':'Provider quota/rate limit reached; waiting for provider availability without discarding saved work',
                         'executor_timeout':'Historical executor timeout; continue saved work with a concise handoff instead of restarting analysis'} .get(category,'Executor failed; full diagnostics retained in the transcript and memory'),
                     'retry_category':category,'retry_delay_seconds':delay,
                     'status':result['status'],'transcript_ref':log_ref,
@@ -682,6 +735,7 @@ class Cycle:
                     continue
                 raise AgentFailure({**result,'label':role,'role':role})
             start_state['consecutive_provider_failures']=0
+            write_json(folder,'progress.json',start_state)
             from common.coverage import observed_tool_text
             if role=='coder':self.scope={**self.scope,'source_revision':acceptance.source_fingerprint(self.ws)}
             observed=observed_tool_text(attempt_dir/'codex.jsonl')
@@ -838,14 +892,17 @@ class Cycle:
 
     def retry_wait(self,role,delay):
         """Back off without blocking pause or resetting cumulative budgets."""
-        for _ in range(delay):
+        for elapsed in range(delay):
             self.poll()
-            allowance=self.allowance(role)
-            if allowance is not None and (allowance['tokens']<=0 or allowance['calls']<=0):
-                raise AgentFailure({'label':role,'role':role,'status':'ERROR',
-                    'tail':'Configured cumulative round token/request budget exhausted during provider recovery; checkpoints preserved'})
+            # Long provider-quota waits still heartbeat/cancel every second.
+            # Usage reads need not hit the gateway once per second for hours.
+            if elapsed%30==0:
+                allowance=self.allowance(role)
+                if allowance is not None and (allowance['tokens']<=0 or allowance['calls']<=0):
+                    raise AgentFailure({'label':role,'role':role,'status':'ERROR',
+                        'tail':'Configured cumulative round token/request budget exhausted during provider recovery; checkpoints preserved'})
             time.sleep(1)
-            self.save()
+            if elapsed%30==29 or elapsed==delay-1:self.save()
 
     def draft(self,catalog,graph=None,review=None,phase='catalog'):
         """Publish durable structural milestones without bypassing semantic review."""
@@ -1226,6 +1283,15 @@ Only the independent runner can establish test success. Reviewer agreement is no
             'Revisit previous experiment results when available. Keep stable requirement/condition IDs; changes in meaning will invalidate prior proof.')
 
     def review(self,subject,catalog,graph,context,refs,*,all_conditions=False,label=None,required_conditions=None):
+        _,progress_ref=self.refresh_condition_progress(catalog,graph)
+        context={**context,'condition_progress_ref':progress_ref,
+            'test_meaning_review':'Compare current executable assertions with the normative clauses and historical '
+                'test_contract entries in the linked condition histories. Inspect actual code, not just labels. '
+                'A legitimate correction of a fixture or an incorrect observable must retain the required action '
+                'and its real effect. Removing assertions, weakening them behind a calibration/skip, testing only '
+                'a decision token or renaming a failing checkpoint does not establish the missing behaviour. '
+                'Explain which previous hypothesis the measurements support or refute, and which remain unknown. '
+                'Scheduling advice is not a new product requirement or a reason to demand unrelated work.'}
         if required_conditions is not None:
             context={**context,'required_condition_ids':sorted(required_conditions),'full_review':False,
                 'review_instruction':'Review this delta, linked conditions and every prior unresolved finding. Reuse prior review for unchanged clauses; do not re-review the entire catalog unless a changed dependency requires it.'}
@@ -1275,12 +1341,14 @@ Only the independent runner can establish test success. Reviewer agreement is no
         self.scope['source_revision']=acceptance.source_fingerprint(self.ws)
         if self.state.get('preparation_handoff') or getattr(self.e,'COMPACT_PROTOCOL',True):
             self.ensure_handoff(catalog,graph,self.state.get('last_preparation_review'))
-        repeated=self.state.get('repeated_observation',0)>0
+        progress,progress_ref=self.refresh_condition_progress(catalog,graph)
+        repeated=bool(self.state['condition_progress']['repeated_condition_ids']) or self.state.get('repeated_observation',0)>0
         self.publish('reflection' if repeated else 'planning',catalog=catalog,graph=graph)
         inp=message('PlannerInput',scope=self.scope,catalog_ref=export_json(self.ws,'catalog.json',catalog),
             graph_ref=export_json(self.ws,'graph.json',graph),task_states=self.task_states(catalog,graph),
             latest_result_refs=[export_json(self.ws,'latest-result.json',previous)] if previous else [],
             memory_index_ref=artifact(self.ws,'.lab-memory/pipeline/index.json','application/json'),reflection_requested=repeated,
+            condition_progress_ref=progress_ref,
             budget={'remaining_tokens':self.job['dslab_token_budget'],'remaining_seconds':self.request_seconds('planner')})
         contracts.validate('PlannerInput',inp)
         def validate_decision(value,observed):
@@ -1305,6 +1373,18 @@ Only the independent runner can establish test success. Reviewer agreement is no
             validate_extra=validate_decision,
             instruction='Choose the most useful adaptive package from ANY available project tasks, not one Markdown group. Combine related work when efficient. No quota of new features. Repair a real regression or falsify a hypothesis when useful. '
             'For repeated failures read original attempts and existing diagnostics, change the experiment or implementation, or select independent work with an explicit return condition. Do not blindly repeat the same patch. '
+            'Read condition_progress_ref first: its per-condition history_ref links every actual checkpoint attempt '
+            'to the full hypothesis/plan, coder changes, independent result and subsequent analysis. '
+            'For a specific repeated checkpoint prefer its own history_ref; do not dump the condition history or whole archive. '
+            'A different source revision, message or successful neighbour is not progress on a failing checkpoint. '
+            'In notes_md explain what observations confirmed/refuted prior hypotheses; otherwise label them unknown. '
+            'If a hypothesis already failed, choose an experiment whose possible outcomes distinguish causes, '
+            'not another equivalent patch or a reread of the same material. Include the observation to measure. '
+            'Consider selection_advice.independent_options for a useful new functional slice alongside diagnosis '
+            'or instead of repeating it. Choose any efficient package size. If you focus exclusively on a repeated '
+            'failure, explain why new independent work is less useful or genuinely dependent. '
+            'For unresolved tasks you defer, use the existing deferred entries with a concrete next step in reason '
+            'and an observable return_when. Counters are advice, never permission to pause or waive a condition. '
             'manual_checks only for genuinely human-only verification, with executable instructions. Missing code, compile errors, failing automated tests and provider errors are not human-only. '
             'Set regression_condition_ids to affected existing conditions to rerun. Use the graph, changed shared components and .lab-pipeline/manifest.json. Do not rerun every independent game scenario each round without a reason. Full final verification will run all. '
             'Keep the accepted graph stable during ordinary package scheduling. Request a graph change only for an actual change in functional grouping or dependency meaning, never to bypass an unscheduled/unverified prerequisite. Do not invent dependencies on build or verification solely to start editing code. If a genuine graph change helps, set replacement_graph_ref to existing graph_ref and explain it in notes_md. '
@@ -1327,6 +1407,11 @@ Only the independent runner can establish test success. Reviewer agreement is no
                 if handoff:preparation.validate_package(decision,handoff,graph,catalog)
             except (ValueError,TypeError,KeyError) as error:raise PackageReplan(graph,decision,error) from error
         self.state['manual_checks']=decision['manual_checks']
+        returns={x['task_id']:x for x in self.state.get('return_agenda',[])}
+        returns.update({x['task_id']:x for x in decision['deferred']})
+        verified={x['task_id'] for x in self.task_states(catalog,graph) if x['status']=='verified'}
+        known_tasks={x['id'] for x in graph['tasks']}
+        self.state['return_agenda']=[v for k,v in returns.items() if k not in verified and k in known_tasks]
         self.state['decision']=decision;self.save()
         write_json(self.output,'planner-state.json',{'round':self.number,'summary':decision['rationale'],'actions':decision['actions'],'mode':decision['strategy'],'pipeline_version':'v1'})
         return decision,graph
@@ -1346,12 +1431,15 @@ Only the independent runner can establish test success. Reviewer agreement is no
         if self.state.get('preparation_handoff'):
             preparation.validate_package(decision,self.state['preparation_handoff'],graph,catalog)
         plan_ref=export_json(self.ws,'decision.json',decision)
+        _,progress_ref=self.refresh_condition_progress(catalog,graph)
         assignment=message('CoderAssignment',scope=self.scope,plan_ref=plan_ref,
             catalog_ref=export_json(self.ws,'catalog.json',catalog),graph_ref=export_json(self.ws,'graph.json',graph),
             memory_index_ref=artifact(self.ws,'.lab-memory/pipeline/index.json','application/json'),writable_roots=['.'],
+            condition_progress_ref=progress_ref,
             instructions=['Implement this related package in dependency order. Preserve source, existing tests and useful functions.',
                 'Research and implement within this package using observed facts. Inspect API/source as needed; a technical experiment status does not require separate planner permission to code.',
                 'If a fact remains unavailable, preserve the observed findings and open issue, defer only affected work and continue independent assigned tasks. Prepare real scenarios for independent Minecraft execution; never manufacture results.',
+                'Read condition_progress_ref for each assigned unresolved condition: compare previous hypotheses, changes and independent outcomes. Explain supported/refuted/unknown conclusions in notes_md and avoid repeating a failed approach without a discriminating new measurement. Preserve the normative meaning of executable tests; correcting a bad oracle is not permission to remove the required action or its real effect.',
                 'Write ScenarioManifest v1 to .lab-pipeline/scenarios-proposed.json and reference it. Controller JSON is excluded from the source fingerprint to avoid a self-referencing hash. Each checkpoint has a real named JUnit test mapping in execution.checkpoint_tests.',
                 'Write ReviewResponse files under .lab-pipeline/ as well. After all source/test edits use source_revision to compute the real resulting hash.',
                 'Use the supplied compatibility JARs only when this project actually requires them. No generic product assumptions.',
@@ -1370,7 +1458,8 @@ Only the independent runner can establish test success. Reviewer agreement is no
             except (ValueError,TypeError,KeyError) as error:
                 self.reject_checkpoint('coding-state',saved,error);saved={}
         if saved and saved.get('decision_hash')==digest(decision):
-            assignment=saved['assignment'];revision=saved['revision'];review=saved.get('review')
+            assignment={**saved['assignment'],'condition_progress_ref':progress_ref}
+            revision=saved['revision'];review=saved.get('review')
             reviewed=set(saved.get('review_signatures',[]))
             self.scope=dict(assignment['scope'])
         else:
@@ -1455,22 +1544,13 @@ Only the independent runner can establish test success. Reviewer agreement is no
         task_ids=list(dict.fromkeys(t for a in decision['actions'] for t in a['task_ids']))
         record=self.event('verification',result,'runner',task_ids=task_ids,tags=tags)
         immutable_reference=record['entry']['payload_ref']
-        by_id={r['scenario_id']:r for r in result['scenario_results']}
+        self.event('reflection',{'artifact_type':'ConditionObservationMapping',
+            'summary':'Immutable condition/checkpoint mapping for independent observation',
+            'verification_record_id':record['record_id'],'manifest':manifest},'controller',
+            links=[{'relation':'responds_to','record_id':record['record_id']}],tags=['untested'])
         per_condition={c['id']:[] for c in catalog['conditions']}
-        for scenario in manifest['scenarios']:
-            if scenario['id'] not in by_id:continue
-            actual={c['checkpoint_id']:c for c in by_id.get(scenario['id'],{}).get('checkpoints',[])}
-            for checkpoint in scenario['checkpoints']:
-                observed=actual.get(checkpoint['id'],{'status':'NOT_EXECUTED'})
-                # Optional media never changes a functional assertion verdict.
-                # Missing executions and actual scenario failures still do.
-                scenario_status=by_id.get(scenario['id'],{}).get('status','NOT_EXECUTED')
-                outcome=observed['status']
-                failed_ids={cp['checkpoint_id'] for cp in by_id[scenario['id']]['checkpoints'] if cp['status']=='FAIL'}
-                global_failure=(scenario_status=='FAIL' and (not failed_ids or any(cp['id'] in failed_ids and not cp['condition_ids'] for cp in scenario['checkpoints'])))
-                if outcome=='PASS' and (scenario_status in ('ERROR','NOT_EXECUTED','SKIPPED') or global_failure):
-                    outcome='FAIL' if global_failure else 'NOT_EXECUTED'
-                for cid in checkpoint['condition_ids']:per_condition[cid].append(outcome)
+        for observation in condition_progress.observations(manifest,result):
+            per_condition[observation['condition_id']].append(observation['status'])
         entries=self.state.setdefault('condition_results',{})
         for cid,statuses in per_condition.items():
             if not statuses and not full:continue  # Unselected work retains its historical proof.
@@ -1479,14 +1559,17 @@ Only the independent runner can establish test success. Reviewer agreement is no
             entries[cid]={'status':status,'source_revision':self.scope['source_revision'],'spec_revision':self.scope['spec_revision'],
                 'condition_definition':self.condition_definition(catalog,definition),
                 'result_refs':[immutable_reference]}
-        failure_signature=digest([(r['scenario_id'],[(c['checkpoint_id'],c['status'],c['actual']) for c in r['checkpoints']]) for r in result['scenario_results']])
-        previous=self.state.get('last_observation_signature')
-        if previous==failure_signature and any(c['status']!='verified' for c in self.coverage(catalog)):
-            self.state['repeated_observation']=self.state.get('repeated_observation',0)+1
-            self.state['reflection']={'reason':'Repeated independent observation','signature':failure_signature,'decision':decision,
-                'instruction':'Compare past hypotheses/experiments. Produce a new measurement, concrete repair or independent functional package; never reset the project.'}
-        else:self.state['repeated_observation']=0
-        self.state['last_observation_signature']=failure_signature
+        progress,progress_ref=self.refresh_condition_progress(catalog,read_json(self.output,'pipeline/graph.json'))
+        repetitions=max((cp['unresolved_observations']-1 for p in progress['conditions']
+                        for cp in p['checkpoints']),default=0)
+        self.state['repeated_observation']=max(0,repetitions)
+        if repetitions>0:
+            self.state['reflection']={'reason':'Repeated unresolved condition/checkpoint observations',
+                'condition_progress_ref':progress_ref,
+                'condition_ids':self.state['condition_progress']['repeated_condition_ids'],
+                'instruction':'Read each condition history. Compare hypotheses, edits and actual independent outcomes. '
+                    'Change the causal experiment or implement independent available functionality with an explicit '
+                    'next step/return condition. Do not reset the project, waive tests or pause because of counters.'}
         self.save()
         # Existing dashboard/media/backup paths continue to work.
         legacy['pipeline_version']='v1';legacy['pipeline_result']=result

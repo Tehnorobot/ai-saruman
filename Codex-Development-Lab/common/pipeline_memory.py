@@ -466,6 +466,12 @@ def compact_summary(job_root):
             'export_errors': index.get('export_errors', []), 'provenance': PROVENANCE}
 
 
+def index_entries(job_root):
+    """Controller navigation over all committed events, without a retention cap."""
+    with _lock(job_root):
+        return list(_restore_committed_tail(job_root, _read_index(job_root))['records'])
+
+
 def refresh_export(job_root, workspace):
     """Rebuild a tampered or previously unavailable mirror from canonical data."""
     with _lock(job_root):

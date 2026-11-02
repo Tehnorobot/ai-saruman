@@ -1,21 +1,38 @@
 """Typed public execution failures. Diagnostic prose never decides retry policy."""
 import json
+import math
 import re
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 
 CODES={'provider_unavailable','stream_interrupted','provider_generation_error','authentication',
        'rate_limit','budget_exhausted','configuration','invalid_request','output_limit','request_limit','protocol_error'}
 RETRY={'provider_unavailable':'provider_unavailable','stream_interrupted':'stream_interrupted',
-       'provider_generation_error':'provider_generation_error'}
+       'provider_generation_error':'provider_generation_error','rate_limit':'rate_limit'}
 
 
 class ProviderFailure(RuntimeError):
-    def __init__(self,message,code,http_status=None,upstream_status=None):
+    def __init__(self,message,code,http_status=None,upstream_status=None,*,retry_after_seconds=None):
         if code not in CODES:raise ValueError('Unknown provider failure code')
         super().__init__(message)
         self.code,self.http_status,self.upstream_status=code,http_status,upstream_status
+        self.retry_after_seconds=retry_after_seconds
 
     def metadata(self):
-        return {'message':str(self)[:500],'code':self.code,'http_status':self.http_status,'upstream_status':self.upstream_status}
+        value={'message':str(self)[:500],'code':self.code,'http_status':self.http_status,'upstream_status':self.upstream_status}
+        if self.retry_after_seconds is not None:value['retry_after_seconds']=self.retry_after_seconds
+        return value
+
+
+def parse_retry_after(value):
+    """Interpret only a provider Retry-After header, never diagnostic prose."""
+    if not isinstance(value,str):return None
+    try:
+        if value.strip().isdigit():return int(value.strip())
+        instant=parsedate_to_datetime(value)
+        if instant.tzinfo is None:instant=instant.replace(tzinfo=timezone.utc)
+        return max(0,math.ceil((instant-datetime.now(timezone.utc)).total_seconds()))
+    except (ValueError,TypeError,OverflowError):return None
 
 
 def status_code(status):
@@ -26,11 +43,15 @@ def status_code(status):
 
 
 def from_http(status,detail):
-    upstream=None
+    upstream=None;retry_after=None
     if isinstance(detail,dict):
         diagnostic=detail.get('diagnostic',{})
         if isinstance(diagnostic,dict) and type(diagnostic.get('upstream_status')) is int:
             upstream=diagnostic['upstream_status']
+            headers=diagnostic.get('response_headers',{})
+            if isinstance(headers,dict):
+                retry_after=next((parse_retry_after(v) for k,v in headers.items()
+                    if isinstance(k,str) and k.lower()=='retry-after'),None)
     local={
         'Provider API key is not configured':'configuration',
         'Invalid LiteLLM endpoint configuration':'configuration',
@@ -41,7 +62,18 @@ def from_http(status,detail):
     code=status_code(upstream if upstream is not None else status)
     if upstream is None and isinstance(detail,str):code=local.get(detail,code)
     rendered=json.dumps(detail,ensure_ascii=False) if isinstance(detail,dict) else detail if isinstance(detail,str) else ''
-    return ProviderFailure('API request stopped (HTTP %d)'%status+(': '+rendered if rendered else ''),code,status,upstream)
+    return ProviderFailure('API request stopped (HTTP %d)'%status+(': '+rendered if rendered else ''),code,status,upstream,
+        retry_after_seconds=retry_after)
+
+
+def retry_delay(result,failures,*,quota_interval=900):
+    """Bound retry frequency, never the number of attempts or total waiting time."""
+    if error_code(result)!='rate_limit':return min(60,2**min(failures,6))
+    delay=min(max(1,quota_interval),60*2**min(max(0,failures-1),6))
+    suggested=terminal(result).get('retry_after_seconds')
+    if (type(suggested) is int or type(suggested) is float and math.isfinite(suggested)) and suggested>=0:
+        delay=max(delay,math.ceil(suggested))
+    return delay
 
 
 def terminal(result):

@@ -51,5 +51,10 @@
   "budget": {
     "remaining_tokens": 100000,
     "remaining_seconds": 3600
+  },
+  "condition_progress_ref": {
+    "path": ".lab-pipeline/condition-progress-example.json",
+    "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "media_type": "application/json"
   }
 }

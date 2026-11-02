@@ -15,7 +15,7 @@ class RejectionRetryTests(unittest.TestCase):
             self.assertEqual(retry_category({'status':'FAIL','tail':message}),'provider_unavailable')
 
     def test_nonretryable_upstream_status_is_not_hidden_by_wrapper_or_error_body(self):
-        for status in (400,401,403,429,501):
+        for status in (400,401,403,501):
             text='API request stopped (HTTP 502): '+json.dumps({
                 'message':f'Provider rejected request (HTTP {status})','diagnostic':{
                     'response_body':'Provider rejected request (HTTP 503); try again'}})

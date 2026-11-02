@@ -11,7 +11,8 @@
     "latest_result_refs",
     "memory_index_ref",
     "reflection_requested",
-    "budget"
+    "budget",
+    "condition_progress_ref"
   ],
   "additionalProperties": false,
   "properties": {
@@ -66,6 +67,10 @@
     "budget": {
       "description": "Оставшийся пользовательский бюджет на момент запроса.",
       "$ref": "#/$defs/Budget"
+    },
+    "condition_progress_ref": {
+      "$ref": "#/$defs/ArtifactRef",
+      "description": "Controller-owned per-condition attempt index; full histories and scheduling advice are linked, not repeated inline. Optional for older checkpoints."
     }
   },
   "$defs": {
@@ -126,7 +131,8 @@
         "latest_result_refs",
         "memory_index_ref",
         "reflection_requested",
-        "budget"
+        "budget",
+        "condition_progress_ref"
       ],
       "additionalProperties": false,
       "properties": {
@@ -181,6 +187,10 @@
         "budget": {
           "description": "Оставшийся пользовательский бюджет на момент запроса.",
           "$ref": "#/$defs/Budget"
+        },
+        "condition_progress_ref": {
+          "$ref": "#/$defs/ArtifactRef",
+          "description": "Controller-owned per-condition attempt index; full histories and scheduling advice are linked, not repeated inline. Optional for older checkpoints."
         }
       }
     },

@@ -146,6 +146,8 @@ def job_pipeline(jid:str):
     value['status']['latest_memory_ref']=value['memory_summary']['latest_record_ref']
     if row['status'] in ('USER_PAUSED','QUOTA_PAUSED','STOPPED','FAILED'):
         value['status']={**value['status'],'stage':'paused','readiness_reasons':[row.get('last_error') or 'Задание приостановлено; состояние сохранено']}
+    from common.verification_display import for_pipeline
+    value['verification_display']=for_pipeline(root,value)
     return value
 
 

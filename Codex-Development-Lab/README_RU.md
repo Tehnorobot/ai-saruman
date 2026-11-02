@@ -14,6 +14,7 @@ JSON для машинных действий, свободный Markdown дл�
 [интерактивная HTML-схема](docs/pipeline/index.html). Открой файл в браузере.
 
 Память раундов, ошибки и выборочное чтение ТЗ: [ROUND_MEMORY_RU.md](ROUND_MEMORY_RU.md).
+Учёт попыток каждого условия и выбор независимой работы: [CONDITION_PROGRESS_RU.md](docs/CONDITION_PROGRESS_RU.md).
 
 Полнота требований и частичные результаты: [COVERAGE_RU.md](COVERAGE_RU.md).
 

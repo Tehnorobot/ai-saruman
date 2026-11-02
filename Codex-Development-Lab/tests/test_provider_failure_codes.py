@@ -18,13 +18,13 @@ class ProviderFailureCodeTests(unittest.TestCase):
         self.assertEqual(retry_category({'status':'FAIL','error':error.metadata()}),'provider_unavailable')
 
     def test_terminal_code_is_authoritative_even_when_message_looks_retryable(self):
-        for code in ('authentication','budget_exhausted','rate_limit','output_limit','configuration','invalid_request'):
+        for code in ('authentication','budget_exhausted','output_limit','configuration','invalid_request'):
             self.assertIsNone(retry_category({'status':'FAIL','error':{'code':code,
                 'message':'API request stopped (HTTP 502): Provider connection failed'}}))
         self.assertIsNone(retry_category({'status':'FAIL','error':{'code':{},'message':'HTTP 503'}}))
 
     def test_upstream_4xx_and_local_budget_are_not_retried(self):
-        for status in (400,401,403,429):
+        for status in (400,401,403):
             error=from_http(502,{'diagnostic':{'upstream_status':status,'response_body':'temporary overload HTTP 503'}})
             self.assertIsNone(retry_category({'status':'FAIL','error':error.metadata()}))
         self.assertEqual(from_http(429,'Insufficient remaining task token budget').code,'budget_exhausted')

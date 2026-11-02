@@ -46,6 +46,10 @@
     "budget": {
       "$ref": "#/$defs/Budget",
       "description": "Оставшийся пользовательский бюджет на момент запроса."
+    },
+    "condition_progress_ref": {
+      "$ref": "#/$defs/ArtifactRef",
+      "description": "Controller-owned per-condition attempt index; full histories and scheduling advice are linked, not repeated inline. Optional for older checkpoints."
     }
   },
   "required": [
@@ -163,6 +167,10 @@
         "budget": {
           "$ref": "#/$defs/Budget",
           "description": "Оставшийся пользовательский бюджет на момент запроса."
+        },
+        "condition_progress_ref": {
+          "$ref": "#/$defs/ArtifactRef",
+          "description": "Controller-owned per-condition attempt index; full histories and scheduling advice are linked, not repeated inline. Optional for older checkpoints."
         }
       },
       "required": [

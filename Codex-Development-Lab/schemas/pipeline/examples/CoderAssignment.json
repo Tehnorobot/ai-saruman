@@ -32,5 +32,10 @@
   ],
   "instructions": [
     "Реализуй A1. Добавь измеримый сценарий. Не объявляй PASS."
-  ]
+  ],
+  "condition_progress_ref": {
+    "path": ".lab-pipeline/condition-progress-example.json",
+    "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "media_type": "application/json"
+  }
 }

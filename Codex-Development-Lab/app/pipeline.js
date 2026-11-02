@@ -30,15 +30,16 @@
  let job=null,generation=0,tab='overview',overview=null,overviewPending=null,pagePending=null,fingerprint='';
  let cursor=null,nextCursor=null,cursorHistory=[],memoryLoaded=false,filterTask='',filterQuery='',opener=null;
  const recordRequests=new Set();
+ const openVerificationHistory=new Set();
  const stages={ingest:'Приём ТЗ',decompose:'Разбираю ТЗ и зависимости',planning:'Выбираю пакет работы',coding:'Реализую код',review:'Проверяю код и сценарии',verification:'Независимая сборка и тесты',reflection:'Пересматриваю подход',waiting:'Ожидаю внешние условия',paused:'На паузе',done:'Проверка завершена'};
- const statuses={verified:'Подтверждено',failed:'Не пройдено',untested:'Не проверено',manual_pending:'Нужна ручная проверка',needs_retest:'Нужна перепроверка',pending:'Ожидает',in_progress:'В работе',blocked:'Есть внешняя зависимость'};
+ const statuses={verified:'Подтверждено',failed:'Не пройдено',untested:'Ещё не проверено',incomplete:'Проверка не завершена',partial:'Частично подтверждено',manual_pending:'Нужна ручная проверка',needs_retest:'Нужна перепроверка',pending:'Ожидает',in_progress:'В работе',blocked:'Есть внешняя зависимость'};
  const actions={implement:'Реализация',repair:'Исправление',diagnose:'Исследование',verify:'Проверка',manual:'Ручная проверка'};
  const verdicts={changes_requested:'Нужны изменения',ready_for_verification:'Можно передавать на независимую проверку',needs_experiment:'Нужен эксперимент'};
  const empty=(parent,text)=>parent.append(make('p','muted',text));
  function card(parent,heading,text){const block=make('section','pipeline-card');block.append(make('h3','',heading));if(text!==undefined)block.append(make('p','',text));parent.append(block);return block;}
  function jsonDetails(parent,label,value){if(value===null||value===undefined)return;const detail=make('details','pipeline-json');detail.append(make('summary','',label),make('pre','',JSON.stringify(value,null,2)));parent.append(detail);}
  function list(parent,items){const values=asArray(items);if(!values.length)return;const ul=make('ul');for(const value of values)ul.append(make('li','',typeof value==='string'?value:JSON.stringify(value)));parent.append(ul);}
- function resultClass(value){return ['verified','verified_pass','PASS'].includes(value)?'pipeline-ok':['failed','verified_fail','FAIL','ERROR'].includes(value)?'pipeline-error':'muted';}
+ function resultClass(value){return ['verified','verified_pass','PASS'].includes(value)?'pipeline-ok':['failed','verified_fail','FAIL','ERROR'].includes(value)?'pipeline-error':['needs_retest','incomplete','partial'].includes(value)?'pipeline-warning':'muted';}
  async function request(path){const response=await fetch(path,{cache:'no-store'});if(!response.ok)throw Error('HTTP '+response.status);return response.json();}
  function base(jid=job){return '/api/jobs/'+encodeURIComponent(jid)+'/pipeline';}
  function renderPackage(parent){
@@ -82,18 +83,30 @@
   const taskStates=new Map(asArray(overview.status?.task_states).map(row=>[row.task_id,row]));
   const active=new Set(asArray(overview.status?.active_task_ids));
   const names=new Map(asArray(graph.tasks).map(row=>[row.id,row.title]));
+  const display=overview.verification_display||{};
   for(const task of asArray(graph.tasks)){
    const section=card(parent,task.id+' · '+task.title,task.outcome);
    section.className+=' pipeline-task'+(active.has(task.id)?' pipeline-task-active':'');
-   const state=taskStates.get(task.id)?.status;
+   const taskDisplay=display.tasks?.[task.id];
+   const state=taskDisplay?.state||taskStates.get(task.id)?.status;
    if(active.has(task.id))section.append(make('p','pipeline-active-label','В текущем пакете'));
-   if(state)section.append(make('p',resultClass(state),statuses[state]||state));
+   if(state)section.append(make('p','pipeline-task-status '+resultClass(state),statuses[state]||state));
    const dependencies=asArray(task.depends_on);
    section.append(make('p','muted',dependencies.length?'Зависит от: '+dependencies.map(id=>id+' · '+(names.get(id)||'неизвестная задача')).join('; '):'Нет задач-предпосылок'));
    section.append(make('p','foot','Требования ТЗ: '+asArray(task.requirement_ids).join(', ')));
    const ids=new Set(asArray(task.condition_ids)),linked=conditions.filter(row=>ids.has(row.id));
    if(!linked.length)empty(section,'Условия задачи ещё не сопоставлены. Готовность не подтверждена.');
-   for(const condition of linked){const status=coverage.get(condition.id)?.status||'untested';section.append(make('p',resultClass(status),condition.id+' · '+(statuses[status]||status)+' — '+condition.expected));}
+   for(const condition of linked){const status=display.conditions?.[condition.id]?.state||coverage.get(condition.id)?.status||'untested';
+    const line=make('p');line.append(make('span','',condition.id+' · '),make('span',resultClass(status),statuses[status]||status),make('span','', ' — '+condition.expected));section.append(line);}
+   if(taskDisplay?.has_history){const detail=make('details','pipeline-verification-history');
+    detail.append(make('summary','','История проверки'));
+    if(taskDisplay.last_common_success)detail.append(make('p','foot','Все условия проходили: раунд '+taskDisplay.last_common_success.round+'.'));
+    if(taskDisplay.latest){const last=taskDisplay.latest;
+     detail.append(make('p','foot','Последний прогон: раунд '+last.round+' — '+(last.reason==='partial_selection'?'проверялась часть условий':({passed:'проверки прошли',failed:'есть непройденные проверки',incomplete:'проверка не завершена'}[last.outcome]||'нет полного результата'))+'.'));}
+    if(state==='needs_retest')detail.append(make('p','foot','Для текущей версии нужно новое подтверждение. Предыдущий успех сохранён в истории.'));
+    const key=job+':'+task.id;detail.open=openVerificationHistory.has(key);
+    detail.addEventListener('toggle',()=>{if(detail.open)openVerificationHistory.add(key);else openVerificationHistory.delete(key);});
+    section.append(detail);}
    if(task.verification_approach)section.append(make('p','foot','Способ проверки: '+task.verification_approach));
   }
   if(asArray(catalog?.open_questions).length){const section=card(parent,'Вопросы и решения');
@@ -129,9 +142,9 @@
   identity.textContent='Задание: '+job+' · версия пайплайна: '+(overview.version||'—')+' · раунд '+(overview.scope?.round??overview.status?.scope?.round??'—');
   if(overview.enabled===false){stage.textContent='Для этого задания новый пайплайн ещё не активирован.';content.hidden=false;content.replaceChildren(make('p','muted','История старого задания остаётся в «Памяти по раундам».'));memory.hidden=true;return;}
   const current=overview.status||{};stage.textContent=stages[current.stage]||current.stage||'Этап ещё не записан';
-  if(overview.operation){const operation=overview.operation;const label={running:'выполняется',completed:'завершено',retrying:'восстанавливаю соединение',failed:'ошибка',correcting_format:'исправляю формат'}[operation.status]||'последний этап';
+  if(overview.operation){const operation=overview.operation;const label={running:'выполняется',completed:'завершено',retrying:operation.retry_category==='rate_limit'?'ожидаю доступную квоту провайдера':'восстанавливаю соединение',failed:'ошибка',correcting_format:'исправляю формат'}[operation.status]||'последний этап';
    stage.textContent+=' · '+label+': '+operation.role+' / '+operation.contract+' · попытка '+operation.attempt;
-   if(operation.status==='retrying')stage.textContent+=' · '+({provider_unavailable:'API временно недоступен',provider_generation_error:'API завершил генерацию с ошибкой',stream_interrupted:'обрыв потока'}[operation.retry_category]||'восстановление')+' · задержка '+operation.retry_delay_seconds+' с';}
+   if(operation.status==='retrying')stage.textContent+=' · '+({provider_unavailable:'API временно недоступен',provider_generation_error:'API завершил генерацию с ошибкой',stream_interrupted:'обрыв потока',rate_limit:'повторные попытки включены'}[operation.retry_category]||'восстановление')+' · интервал '+operation.retry_delay_seconds+' с';}
   if(overview.decomposition?.semantic_review==='pending')stage.textContent+=' · разбор ТЗ ещё не одобрен';
   if(overview.decomposition?.semantic_review==='deferred_to_work')stage.textContent+=' · подготовка передана в работу, итоговое ревью впереди';
   if(current.ready===true)stage.textContent+=' · готовность подтверждена';

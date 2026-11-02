@@ -721,7 +721,7 @@ class CycleTest(unittest.TestCase):
             'API request stopped (HTTP 503): temporary overload':'provider_unavailable',
             'API turn incomplete (stop reason: error)':'provider_generation_error',
             'API request stopped (HTTP 502): Provider rejected request (HTTP 401)':None,
-            'API request stopped (HTTP 502): Provider rejected request (HTTP 429)':None,
+            'API request stopped (HTTP 502): Provider rejected request (HTTP 429)':'rate_limit',
             'API request stopped (HTTP 503): Provider API key is not configured':None,
             'API turn incomplete: output limit reached (stop reason: max_tokens)':None,
         }
@@ -794,6 +794,73 @@ class CycleTest(unittest.TestCase):
         with patch('worker.pipeline.time.sleep',side_effect=lambda _:setattr(self.engine,'status','USER_PAUSED')):
             with self.assertRaises(pipeline.Interrupted):pipeline.Cycle(self.engine,self.job,self.ws,self.out,1).decomposition()
         self.assertEqual(len(attempts),1)
+
+    def test_provider_quota_retries_same_phase_without_restarting_accepted_catalog(self):
+        original=self.engine.request_agent;remaining=[429]*4;calls=[]
+        def request(*args,**kwargs):
+            if kwargs['output_contract']=='TaskGraph':
+                calls.append(1)
+                if remaining:
+                    remaining.pop()
+                    return {'status':'FAIL','error':{'code':'rate_limit','http_status':502,'upstream_status':429,
+                        'message':'The Token Plan usage limit has been reached. (2067)'}}
+            return original(*args,**kwargs)
+        self.engine.request_agent=request
+        with patch('worker.pipeline.time.sleep') as sleep:self.execute()
+        self.assertEqual(self.engine.updates[-1]['phase'],'acceptance_verified')
+        self.assertEqual(len(calls),5)
+        self.assertEqual(sleep.call_count,60+120+240+480)
+        self.assertEqual(sum(n=='RequirementsCatalog' for n,_,_ in self.engine.requests),1)
+        progress=pipeline.read_json(self.out,'round-01/pipeline/task-graph/progress.json')
+        self.assertEqual(progress['attempt'],5)
+        self.assertEqual(progress['consecutive_provider_failures'],0)
+        self.assertEqual(progress['feedback']['retry_category'],'rate_limit')
+
+    def test_user_pause_interrupts_quota_wait_without_another_request(self):
+        attempts=[]
+        def request(*a,**k):
+            attempts.append(k)
+            return {'status':'FAIL','error':{'code':'rate_limit','upstream_status':429}}
+        self.engine.request_agent=request
+        with patch('worker.pipeline.time.sleep',side_effect=lambda _:setattr(self.engine,'status','USER_PAUSED')):
+            with self.assertRaises(pipeline.Interrupted):pipeline.Cycle(self.engine,self.job,self.ws,self.out,1).decomposition()
+        self.assertEqual(len(attempts),1)
+        state=pipeline.read_json(self.out,'pipeline/state.json')
+        self.assertEqual(state['operation']['status'],'retrying')
+        self.assertEqual(state['operation']['retry_category'],'rate_limit')
+
+    def test_quota_retry_retains_partial_writer_edits_and_assignment_base(self):
+        original=self.engine.request_agent;first=[True];base=[]
+        def request(*args,**kwargs):
+            context=json.loads(args[3].split('Input JSON:\n',1)[1])
+            if kwargs['role']=='coder' and not first:
+                self.assertTrue((self.ws/'src/gametest/PlantTest.java').is_file())
+                self.assertEqual(context['scope']['source_revision'],acceptance.source_fingerprint(self.ws))
+                self.assertEqual(context['input']['assignment']['scope']['source_revision'],base[0])
+            result=original(*args,**kwargs)
+            if kwargs['role']=='coder' and first:
+                first.pop();base.append(context['input']['assignment']['scope']['source_revision'])
+                return {'status':'FAIL','error':{'code':'rate_limit','upstream_status':429}}
+            return result
+        self.engine.request_agent=request
+        with patch('worker.pipeline.time.sleep'):self.execute()
+        self.assertEqual(self.engine.updates[-1]['phase'],'acceptance_verified')
+        self.assertEqual(sum(n=='CoderReport' for n,_,_ in self.engine.requests),2)
+        self.assertEqual(sum(n=='RequirementsCatalog' for n,_,_ in self.engine.requests),1)
+
+    def test_long_quota_wait_checks_control_each_second_and_budget_periodically(self):
+        cycle=pipeline.Cycle(self.engine,self.job,self.ws,self.out,1)
+        with patch.object(cycle,'poll') as poll,patch.object(cycle,'allowance',return_value={'tokens':10,'calls':1}) as budget, \
+                patch('worker.pipeline.time.sleep'):
+            cycle.retry_wait('coder',61)
+        self.assertEqual(poll.call_count,61)
+        self.assertEqual(budget.call_count,3)
+
+    def test_explicit_budget_exhaustion_is_not_ignored_during_quota_wait(self):
+        cycle=pipeline.Cycle(self.engine,self.job,self.ws,self.out,1)
+        with patch.object(cycle,'allowance',return_value={'tokens':0,'calls':10}),patch('worker.pipeline.time.sleep') as sleep:
+            with self.assertRaises(pipeline.AgentFailure):cycle.retry_wait('coder',900)
+        sleep.assert_not_called()
 
     def test_retry_wait_does_not_apply_one_agent_timeout_to_entire_cycle(self):
         cycle=pipeline.Cycle(self.engine,self.job,self.ws,self.out,1)
