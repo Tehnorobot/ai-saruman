@@ -17,7 +17,8 @@ import xml.etree.ElementTree as ET
 
 from common import acceptance
 from common.history import _open
-from common.pipeline_contracts import validate
+from common.pipeline_contracts import ContractError, validate
+from common.task_graph import fixture_prerequisite_issues
 from worker.sandbox import RunnerCleanupError
 
 
@@ -120,6 +121,10 @@ def _prepare(catalog, manifest, decision, *, full=False):
     validate('RequirementsCatalog', catalog)
     validate('ScenarioManifest', manifest)
     validate('PlannerDecision', decision)
+    fixture_errors = [error for n, scenario in enumerate(manifest['scenarios'])
+                      for error in fixture_prerequisite_issues(scenario, '$.scenarios[' + str(n) + ']')]
+    if fixture_errors:
+        raise ContractError('ScenarioManifest', fixture_errors)
     conditions = {c['id']:c['requirement_id'] for c in catalog['conditions']}
     requirements = {r['id'] for r in catalog['requirements']}
     if len(conditions) != len(catalog['conditions']): raise ValueError('Duplicate catalog condition ID')
@@ -227,6 +232,58 @@ def _media(stage, scenario, item, job_root):
             artifacts.append(_media_ref(job_root, stage, relative, 'image/png'))
         except (OSError, ValueError, TypeError) as exc: errors.append(str(exc))
     return artifacts, errors
+
+
+def _fixture_result(scenario, cases, case_error, suite_failed=False):
+    """Only explicitly declared fresh named cases establish test preconditions.
+
+    A fixture failure says nothing about product correctness. Original test
+    outcomes stay in the result and hashed JUnit reports; no keyword inference
+    or model claim can turn a failed action into a successful fixture.
+    """
+    wanted = scenario['execution'].get('precondition_tests', [])
+    if not wanted:
+        return None
+    checks, affected = [], set()
+    checkpoint_ids = [checkpoint['id'] for checkpoint in scenario['checkpoints']]
+    for test in wanted:
+        rows = cases.get((test['classname'], test['name']), [])
+        if case_error:
+            status, actual, reports = 'ERROR', case_error, []
+        elif not rows:
+            status, actual, reports = 'NOT_EXECUTED', 'Fixture prerequisite is absent from fresh JUnit', []
+        elif len(rows) != 1:
+            status, actual = 'ERROR', 'Fixture prerequisite has ambiguous duplicate JUnit cases'
+            reports = [row['report'] for row in rows]
+        else:
+            status = rows[0]['status']
+            actual = rows[0]['message'] or status
+            reports = [rows[0]['report']]
+        dependent = test.get('checkpoint_ids') or checkpoint_ids
+        checks.append({**test, 'checkpoint_ids':list(dependent),
+                       'status':status, 'actual':actual, 'report_refs':reports})
+        if status != 'PASS':
+            affected.update(dependent)
+            affected.update(b['checkpoint_id'] for b in scenario['execution']['checkpoint_tests']
+                            if b['classname'] == test['classname'] and b['name'] == test['name'])
+    statuses = {check['status'] for check in checks}
+    status = ('ERROR' if 'ERROR' in statuses else 'FAIL' if 'FAIL' in statuses
+              else 'NOT_EXECUTED' if statuses & {'NOT_EXECUTED', 'SKIPPED'} else 'PASS')
+    # A corrupt collection or unrelated suite/global failure cannot leave
+    # unaffected checkpoints certified merely because a fixture was declared.
+    known_failures = {(test['classname'], test['name']) for test in wanted}
+    product_ids = {checkpoint['id'] for checkpoint in scenario['checkpoints'] if checkpoint['condition_ids']}
+    known_failures.update((binding['classname'], binding['name'])
+                         for binding in scenario['execution']['checkpoint_tests']
+                         if binding['checkpoint_id'] in product_ids)
+    failed_cases = {key for key, rows in cases.items() if any(row['status'] == 'FAIL' for row in rows)}
+    if (case_error or failed_cases - known_failures or suite_failed and not failed_cases
+            or any(len(rows) > 1 for rows in cases.values())):
+        affected.update(checkpoint_ids)
+    return {'status':status, 'reason_code':'fixture_valid' if status == 'PASS'
+            else 'invalid_fixture' if status == 'FAIL' else 'fixture_unconfirmed',
+            'checks':checks, 'affected_checkpoint_ids':[cid for cid in checkpoint_ids if cid in affected],
+            'raw_checkpoints':[]}
 
 
 def verify(ws, stage, jid, catalog, manifest, decision, *, sandbox, poll, timeout, eula, full=False):
@@ -345,6 +402,7 @@ def verify(ws, stage, jid, catalog, manifest, decision, *, sandbox, poll, timeou
                                  'start_line':line,'end_line':line,'excerpt':lines[line-1]})
             observations.append({'checkpoint_id':checkpoint['id'],'status':status,'actual':actual,'evidence_refs':evidence})
         media, media_errors = _media(stage, scenario, item, job_root)
+        fixture = _fixture_result(scenario, cases, case_error, suite_failed)
         statuses = [o['status'] for o in observations]
         expected_rows = [cases.get((t['classname'],t['name']),[]) for t in legacy['expected_tests']]
         if case_error or 'ERROR' in statuses or any(len(rows)>1 for rows in expected_rows): status = 'ERROR'
@@ -354,10 +412,37 @@ def verify(ws, stage, jid, catalog, manifest, decision, *, sandbox, poll, timeou
         elif 'SKIPPED' in statuses or any(rows[0]['status']=='SKIPPED' for rows in expected_rows): status = 'SKIPPED'
         elif item.get('test_status') != 'PASS' or item.get('status') != 'TEST_PASSED': status = 'NOT_EXECUTED'
         else: status = 'PASS'
+        if fixture is not None and fixture['status'] != 'PASS':
+            fixture['raw_checkpoints'] = deepcopy(observations)
+            explanation = '; '.join(check['classname'] + '#' + check['name'] + ': ' + check['actual']
+                                    for check in fixture['checks'] if check['status'] != 'PASS')
+            affected = set(fixture['affected_checkpoint_ids'])
+            # An absent later setup may simply mean a prior product assertion
+            # already failed. Lack of a prerequisite result cannot exonerate
+            # that observed failure; it still cannot establish any PASS.
+            preserved_failures = set()
+            for observation in observations:
+                relevant = [check for check in fixture['checks']
+                            if observation['checkpoint_id'] in check['checkpoint_ids']]
+                if (observation['status'] == 'FAIL' and relevant and not case_error
+                        and all(check['status'] in ('PASS', 'NOT_EXECUTED') for check in relevant)
+                        and any(check['status'] == 'NOT_EXECUTED' for check in relevant)):
+                    preserved_failures.add(observation['checkpoint_id'])
+            observations = [{**o, 'status':'NOT_EXECUTED',
+                             'actual':fixture['reason_code'] + ': ' + explanation
+                             + '. Original checkpoint observation: ' + o['actual']}
+                            if o['checkpoint_id'] in affected and o['checkpoint_id'] not in preserved_failures
+                            else o for o in observations]
+            remaining = {o['status'] for o in observations if o['checkpoint_id'] not in affected
+                         or o['checkpoint_id'] in preserved_failures}
+            status = 'ERROR' if 'ERROR' in remaining else 'FAIL' if 'FAIL' in remaining else 'NOT_EXECUTED'
         if case_error:report.setdefault('pipeline_diagnostics',[]).append(scenario['id'] + ': ' + case_error)
         report.setdefault('pipeline_diagnostics',[]).extend(scenario['id'] + ': ' + value for value in media_errors)
-        scenario_results.append({'scenario_id':scenario['id'],'status':status,
-                                 'checkpoints':observations,'media_refs':media})
+        scenario_result = {'scenario_id':scenario['id'],'status':status,
+                           'checkpoints':observations,'media_refs':media}
+        if fixture is not None:
+            scenario_result['fixture_result'] = fixture
+        scenario_results.append(scenario_result)
     raw_reports = list({r['path']:r for r in originals}.values())
     try:
         raw = _read(stage, 'acceptance_results.json', 16 * 1024 * 1024)

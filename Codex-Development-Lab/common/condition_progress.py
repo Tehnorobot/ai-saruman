@@ -26,20 +26,26 @@ def observations(manifest, result):
         actual=by_id.get(scenario['id'])
         if actual is None:continue  # An unselected scenario is not another attempt.
         checkpoints={c['checkpoint_id']:c for c in actual['checkpoints']}
+        fixture=actual.get('fixture_result') or {}
+        raw_checkpoints={c['checkpoint_id']:c for c in fixture.get('raw_checkpoints',[])}
         failed={c['checkpoint_id'] for c in actual['checkpoints'] if c['status']=='FAIL'}
         global_failure=(actual['status']=='FAIL' and (not failed or any(
             c['id'] in failed and not c['condition_ids'] for c in scenario['checkpoints'])))
         for checkpoint in scenario['checkpoints']:
             observed=checkpoints.get(checkpoint['id'],{'status':'NOT_EXECUTED'})
             outcome=observed['status']
-            if outcome=='PASS' and (actual['status'] in ('ERROR','NOT_EXECUTED','SKIPPED') or global_failure):
+            fixture_isolates = (fixture and fixture.get('status')!='PASS' and actual['status']!='ERROR'
+                and 'affected_checkpoint_ids' in fixture
+                and checkpoint['id'] not in fixture['affected_checkpoint_ids'])
+            if outcome=='PASS' and ((actual['status'] in ('ERROR','NOT_EXECUTED','SKIPPED') and not fixture_isolates) or global_failure):
                 outcome='FAIL' if global_failure else 'NOT_EXECUTED'
             if outcome=='PASS' and result['build_status']!='PASS':outcome='NOT_EXECUTED'
             for cid in checkpoint['condition_ids']:
                 rows.append({'condition_id':cid,'scenario_id':scenario['id'],
                     'checkpoint_id':checkpoint['id'],'status':outcome,
-                    'raw_checkpoint_status':observed['status'],
+                    'raw_checkpoint_status':raw_checkpoints.get(checkpoint['id'],observed)['status'],
                     'scenario_status':actual['status'],'build_status':result['build_status'],
+                    **({'fixture_status':fixture['status'] if not fixture_isolates else 'PASS'} if fixture else {}),
                     'test_contract':deepcopy(checkpoint)})
     return rows
 
@@ -136,7 +142,8 @@ def reconstruct(job_root,catalog,scope,manifest_loader,*,last_plan_id=None):
             row['followup_analysis_refs']=analyses.get(row['result_ref']['record_id'],[])
             # Receiving an actual measurement resolves an earlier lack of any
             # observation. It does not make the condition or checkpoint PASS.
-            if row['scenario_id'] is not None and row['raw_checkpoint_status'] in ('PASS','FAIL','ERROR'):
+            if (row['scenario_id'] is not None and row['raw_checkpoint_status'] in ('PASS','FAIL','ERROR')
+                    and row.get('fixture_status','PASS')=='PASS'):
                 gap=groups.get((None,None))
                 if gap:
                     gap.update(unresolved_observations=0,first_unresolved_round=None,

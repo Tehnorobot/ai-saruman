@@ -254,6 +254,36 @@
                 ],
                 "additionalProperties": false
               }
+            },
+            "precondition_tests": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "classname": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "checkpoint_ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "description": "Affected checkpoint IDs. Empty or absent means all checkpoints in this scenario; IDs must be known and distinct."
+                  }
+                },
+                "required": [
+                  "classname",
+                  "name"
+                ],
+                "additionalProperties": false
+              },
+              "description": "Optional scenario-wide fixture prerequisites. Name fresh JUnit setup assertions before addon actions; each must be in expected_tests and must not establish a product condition. Empty means no explicit fixture dependency. Failed or unconfirmed prerequisites leave product checks NOT_EXECUTED; originals remain archived."
             }
           },
           "required": [

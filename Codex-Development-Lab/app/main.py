@@ -120,6 +120,7 @@ def job_pipeline(jid:str):
     value['memory_summary']=pipeline_memory.compact_summary(root)
     state=read_json(root,'pipeline/state.json') or {}
     value['operation']=state.get('operation',value.get('operation'))
+    value['service_operation']=state.get('service_operation')
     value['agent_reports']=state.get('agent_reports',value.get('agent_reports',{}))
     value['supplemental_evidence']=state.get('supplemental_evidence',value.get('supplemental_evidence',[]))
     value['preparation']=state.get('preparation',value.get('preparation'))
@@ -344,7 +345,9 @@ def job_activity(jid: str):
     with db.connect() as con:
         recent=[dict(event) for event in con.execute(
             'SELECT id,created_at,text AS message FROM events WHERE job_id=? ORDER BY id DESC LIMIT 500',(jid,))]
-    return activity_snapshot(row,recent,AGENT_TASKS)
+    from common.memory_archive import read_json
+    pipeline_state=read_json(ARTIFACTS/row['project_id']/jid,'pipeline/state.json') or {}
+    return activity_snapshot(row,recent,AGENT_TASKS,pipeline_state=pipeline_state)
 
 @app.get('/api/jobs/{jid}/events')
 def events(jid:str, after:int=0):

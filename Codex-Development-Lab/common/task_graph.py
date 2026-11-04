@@ -280,6 +280,41 @@ def validate_decision(decision, graph, catalog, task_states=None):
     return decision
 
 
+def fixture_prerequisite_issues(scenario, base):
+    """Shared submission/runner checks; never reinterpret a product assertion."""
+    errors = []
+    execution = scenario['execution']
+    expected = {(t['classname'], t['name']) for t in execution['expected_tests']}
+    checkpoints = {c['id']:c['condition_ids'] for c in scenario['checkpoints']}
+    product_tests = {}
+    for binding in execution['checkpoint_tests']:
+        if checkpoints.get(binding['checkpoint_id']):
+            product_tests.setdefault((binding['classname'], binding['name']), []).append(binding['checkpoint_id'])
+    seen = set()
+    for n, precondition in enumerate(execution.get('precondition_tests', [])):
+        path = base + '.execution.precondition_tests[' + str(n) + ']'
+        pair = (precondition['classname'], precondition['name'])
+        identity = pair[0] + '.' + pair[1]
+        context = 'Scenario ' + scenario['id'] + ', test ' + identity + ': '
+        instruction = ('Correct this scenario declaration. Preserve product checkpoints and their condition links; '
+            'keep required behaviour as ordinary assertions. A setup test must be independent of product assertions '
+            'in this scenario. Do not remove a required assertion or relabel its failure to obtain PASS.')
+        if pair in seen:
+            errors.append(issue(path, 'duplicate_prerequisite', context + 'distinct fixture test identities', instruction))
+        seen.add(pair)
+        if pair not in expected:
+            errors.append(issue(path, 'unknown_prerequisite', context + 'a test listed in execution.expected_tests', instruction))
+        dependent = precondition.get('checkpoint_ids', [])
+        if len(dependent) != len(set(dependent)) or not set(dependent) <= checkpoints.keys():
+            errors.append(issue(path + '.checkpoint_ids', 'invalid_prerequisite_scope',
+                context + 'distinct existing checkpoint IDs, or [] for the whole scenario', instruction))
+        if pair in product_tests:
+            links = ', '.join(cp + ' -> ' + '/'.join(checkpoints[cp]) for cp in product_tests[pair])
+            errors.append(issue(path, 'product_assertion_as_fixture', context +
+                'fixture prerequisite must not replace an assertion of a product condition (' + links + ')', instruction))
+    return errors
+
+
 def validate_scenarios(manifest, catalog, graph):
     """Check traceability and explicit one-case-per-checkpoint JUnit bindings.
 
@@ -330,5 +365,6 @@ def validate_scenarios(manifest, catalog, graph):
         _duplicates(pairs, base + '.execution.checkpoint_tests', errors)
         if any(pair not in expected_pairs for pair in pairs):
             errors.append(issue(base + '.execution.checkpoint_tests', 'unknown_test', 'case identities listed in execution.expected_tests'))
+        errors.extend(fixture_prerequisite_issues(scenario, base))
     _raise('ScenarioManifest', errors)
     return manifest

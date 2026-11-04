@@ -6,11 +6,13 @@ export, never an authoritative checkpoint. No domain-specific mod rules live her
 from __future__ import annotations
 
 from contextlib import nullcontext
+from copy import deepcopy
 import hashlib
 import json
 import mimetypes
 import os
 from pathlib import Path, PurePosixPath
+import sys
 import time
 
 from common import acceptance, pipeline_contracts as contracts, pipeline_memory as memory
@@ -205,7 +207,11 @@ class Cycle:
         self.state['preparation']['soft_limit_seconds']=soft_limit
         self._preparing=False;self._preparation_tick=None
         self._coding_review_tick=None
-        memory.refresh_export(self.output,self.ws)
+        self._memory_poll_at=0;self._service_write_at=0
+        self.memory_progress({'phase':'memory_sync','completed':0,'total':None})
+        try:
+            memory.refresh_export(self.output,self.ws,poll=self.memory_poll,progress=self.memory_progress)
+        finally:self.finish_memory_sync()
         if not (self.ws/'.lab-memory/pipeline/index.json').is_file():
             self.event('spec',{'spec_revision':self.scope['spec_revision'],'source':'User specification retained in project/ТЗ.md'},'controller',tags=['proposed'])
         self.budget_path='pipeline/budget.json'
@@ -245,6 +251,40 @@ class Cycle:
         self.coding_review_tick()
         write_json(self.output,'pipeline/state.json',self.state)
 
+    def memory_poll(self):
+        # Mirror comparison can touch thousands of files. Heartbeat/control
+        # checks stay responsive without issuing one SQLite query per file.
+        now=time.monotonic()
+        if now>=self._memory_poll_at:
+            self.poll();self._memory_poll_at=now+1
+
+    def memory_progress(self,progress):
+        """Publish service work without claiming the model is still running."""
+        now=time.monotonic();finished='export_errors' in progress
+        if not finished and now<self._service_write_at:return
+        previous=self.state.get('service_operation',{})
+        self.state['service_operation']={**progress,'stage':'memory_sync','active':not finished,
+            'round':self.number,'updated_at':time.time(),
+            'started_at':previous.get('started_at',time.time()) if previous.get('active') else time.time()}
+        self._service_write_at=now+1
+        self.save()
+
+    def agent_result_received(self,result):
+        # This happens before archival/format import, not after they finish.
+        self.state.setdefault('operation',{}).update(status='processing_result',
+            executor_status=result.get('status'),result_received_at=time.time())
+        self.save()
+        self.e.job_update(self.job['id'],phase='processing_agent_result')
+
+    def finish_memory_sync(self):
+        service=self.state.get('service_operation') or {}
+        if service.get('active'):
+            self.state['service_operation']={**service,'active':False,'outcome':'interrupted','updated_at':time.time()}
+            # Never replace the cancellation/ownership exception with a status
+            # persistence error; canonical originals remain authoritative.
+            try:self.save()
+            except (OSError,ValueError):pass
+
     def reject_checkpoint(self,label,value,error):
         """Keep rejected originals; only the derived checkpoint is reusable state."""
         self.event('validation',{'summary':'Saved checkpoint rejected; return to its owning stage',
@@ -272,6 +312,27 @@ class Cycle:
             self.reject_checkpoint('session',session,error)
             return None
         return session
+
+    def restore_development(self,ready,catalog,graph,decision):
+        """Recheck historical ready checkpoints against current runner rules."""
+        if not ready:return None
+        try:
+            if ready['source_revision']!=acceptance.source_fingerprint(self.ws):
+                raise ValueError('Saved development source revision changed')
+            manifest,review=ready['manifest'],ready['review']
+            task_graph.validate_scenarios(manifest,catalog,graph)
+            from worker.pipeline_verification import _prepare
+            _prepare(catalog,manifest,decision)
+            if manifest['scope']!={**self.scope,'source_revision':ready['source_revision']}:
+                raise ValueError('Saved development manifest scope changed')
+            contracts.validate('ReviewResult',review)
+            if review['scope']!=manifest['scope']:
+                raise ValueError('Saved development review scope changed')
+            for scenario in manifest['scenarios']:source_bytes(self.ws,scenario['test_file'])
+        except (ValueError,TypeError,KeyError,OSError) as error:
+            self.reject_checkpoint('development-ready',ready,error)
+            return None
+        return manifest,review
 
     def preparation_tick(self):
         if self._preparing and self._preparation_tick is not None:
@@ -322,13 +383,17 @@ class Cycle:
             elif kind=='verification':
                 link('verifies','last_coder_record');link('tests_hypothesis','last_plan_record');link('supersedes','last_verification_record')
             elif kind=='validation':link('responds_to','last_event_record')
-        record=memory.append_event(self.output,self.ws,kind,payload,scope=self.scope,producer=producer,
-            task_ids=task_ids,requirement_ids=requirement_ids,links=links,tags=tags)
-        rid=record['record_id'];self.state['events'].append(rid);self.state['last_event_record']=rid
-        key={'PlannerDecision':'last_plan_record','CoderReport':'last_coder_record','ReviewResult':'last_review_record'}.get(accepted)
-        if key:self.state[key]=rid
-        if kind=='verification':self.state['last_verification_record']=rid
-        self.save()
+        def committed(record):
+            rid=record['record_id'];self.state['events'].append(rid);self.state['last_event_record']=rid
+            key={'PlannerDecision':'last_plan_record','CoderReport':'last_coder_record','ReviewResult':'last_review_record'}.get(accepted)
+            if key:self.state[key]=rid
+            if kind=='verification':self.state['last_verification_record']=rid
+            self.save()
+        try:
+            record=memory.append_event(self.output,self.ws,kind,payload,scope=self.scope,producer=producer,
+                task_ids=task_ids,requirement_ids=requirement_ids,links=links,tags=tags,
+                poll=self.memory_poll,progress=self.memory_progress,on_commit=committed)
+        finally:self.finish_memory_sync()
         return record
 
     def publish(self,stage,*,catalog=None,graph=None,decision=None,review=None,reason=None,ready=False):
@@ -448,14 +513,24 @@ class Cycle:
 
     def correction_records(self,name):
         index=read_json(self.output,'pipeline-memory/index.json') or {}
-        rows=[]
-        for entry in index.get('records',[]):
-            if not entry.get('summary','').startswith('Correction journal: '):continue
+        entries=index.get('records',[])
+        key=(self.scope['project_id'],self.scope['spec_revision'],name)
+        cache=self.__dict__.setdefault('_correction_records_cache',{})
+        last=entries[-1]['sequence'] if entries else 0
+        saved=cache.get(key)
+        anchor=next((e['record_id'] for e in entries if saved is not None and e['sequence']==saved['sequence']),None)
+        if saved is None or last<saved['sequence'] or (saved['sequence'] and anchor!=saved['record_id']):
+            saved={'sequence':0,'rows':[]}
+        rows=list(saved['rows'])
+        for entry in entries:
+            if entry['sequence']<=saved['sequence']:continue
+            if not entry.get('summary','').startswith('Correction journal: '+name+' '):continue
             if any(entry.get('scope',{}).get(k)!=self.scope[k] for k in ('project_id','spec_revision')):continue
             payload=memory.read_payload(self.output,entry['record_id'])
             value=corrections.validate(payload['correction'])
             if value['schema_name']==name:rows.append((entry,payload))
-        return rows
+        cache[key]={'sequence':last,'record_id':entries[-1]['record_id'] if entries else None,'rows':rows}
+        return deepcopy(rows)
 
     def store_correction(self,value,label):
         corrections.validate(value)
@@ -504,6 +579,7 @@ class Cycle:
         original_binding=input_binding(inputs)
         journal_phase=label+'@'+digest({'round':self.number,'input_binding':original_binding})
         complete=read_json(folder,'complete.json')
+        checkpoint_error=None
         if complete and complete.get('input_binding')==original_binding:
             try:
                 value=complete['value'];contracts.validate(name,value)
@@ -513,8 +589,13 @@ class Cycle:
                 if validate_extra:validate_extra(value,complete.get('observed',''))
             except (ValueError,TypeError,KeyError,OSError) as error:
                 self.reject_checkpoint(label,complete,error)
+                checkpoint_error=(complete,error)
                 complete=None
-            else:return value
+            else:
+                self.state.setdefault('operation',{}).update(contract=name,role=role,phase=label,
+                    status='completed',reused_checkpoint=True)
+                self.save()
+                return value
         start_state=read_json(folder,'progress.json') or {'attempt':1,'feedback':None}
         # Inputs are immutable snapshots. A changed decision never reuses an old result.
         if complete is None and (folder/'complete.json').exists():
@@ -523,6 +604,18 @@ class Cycle:
             self.event('validation',{'reason':'Inputs changed; archived result retained','contract_name':name},'controller',tags=['superseded'])
             start_state={'attempt':start_state['attempt']+1,'feedback':None}
         start_state['input_binding']=original_binding
+        if checkpoint_error:
+            rejected,error=checkpoint_error
+            if not isinstance(error,contracts.ContractError):
+                error=contracts.ContractError(name,[{'path':'$','code':'saved_checkpoint',
+                    'expected':str(error),'received_type':'object','example_json':'{}',
+                    'instruction':'Preserve existing source and accepted input. Correct this stale checkpoint issue.'}])
+            feedback=contracts.feedback(error,name,start_state['attempt'])
+            saved=corrections.record(name,rejected['value'],feedback['issues'],layer='controller_validation')
+            self.store_correction(saved,journal_phase)
+            start_state['feedback']=corrections.compact_feedback(feedback,saved['correction_id'])
+            # Checkpoint issues may concern an external file, not report JSON.
+            start_state.pop('repair',None)
         compact_enabled=getattr(self.e,'COMPACT_PROTOCOL',True)
         model_contract=agent_protocol.wire_name(name) if compact_enabled else name
         feedback=start_state.get('feedback') or {}
@@ -685,6 +778,7 @@ class Cycle:
             write_json(folder,'progress.json',start_state)
             self.state['operation']={'contract':name,'role':role,'phase':label,'attempt':attempt,'status':'running'}
             self.save()
+            self.e.job_update(self.job['id'],phase={'coder':'codex_development','reviewer':'reviewing','planner':'planning'}[role])
             inventory={} if compact_enabled and role=='coder' else None
             before=acceptance.source_fingerprint(self.ws,inventory) if inventory is not None else acceptance.source_fingerprint(self.ws)
             if inventory is not None and 'source_inventory' not in start_state:
@@ -693,10 +787,15 @@ class Cycle:
             with lock:
                 try:
                     result=self.e.request_agent(self.job['id'],self.job['project_id'],self.number,prompt,attempt_dir/'codex.jsonl',
-                        role=role,preserve_result=True,output_contract=requested_name,allowance=allowance)
+                        role=role,preserve_result=True,output_contract=requested_name,allowance=allowance,
+                        on_result=self.agent_result_received)
                 finally:
-                    self.import_corrections(attempt_dir/'codex.jsonl',requested_name,journal_phase)
-                    self.save()
+                    original_exception=sys.exc_info()[1]
+                    try:
+                        self.import_corrections(attempt_dir/'codex.jsonl',requested_name,journal_phase)
+                        self.save()
+                    except BaseException:
+                        if original_exception is None:raise
             if result['status'] in ('STOPPED','USER_PAUSED'):raise Interrupted(result['status'])
             if result['status']!='PASS':
                 self.event('validation',{'contract_name':name,'executor_result':result,
@@ -728,9 +827,11 @@ class Cycle:
                 write_json(folder,'progress.json',start_state)
                 self.e.retire_attempt(attempt_dir)
                 self.state['operation'].update(status='retrying' if retryable else 'failed',
-                    retry_category=category,retry_delay_seconds=delay,consecutive_failures=consecutive)
+                    retry_category=category,retry_delay_seconds=delay,consecutive_failures=consecutive,
+                    retry_started_at=time.time(),retry_at=time.time()+delay)
                 self.save()
                 if retryable:
+                    self.e.job_update(self.job['id'],phase='provider_wait' if category=='rate_limit' else 'retrying_provider')
                     self.retry_wait(role,delay)
                     continue
                 raise AgentFailure({**result,'label':role,'role':role})
@@ -918,6 +1019,7 @@ class Cycle:
             return f'''You are the {role}. Return {contract} v1 using the supplied compact schema.
 Only .lab-pipeline/spec.md and explicit user clarifications define product requirements. Read relevant project sections on demand; do not reread all memory. No hidden domain-specific requirements.
 JSON is for selected actions, statuses, IDs, dependency links and executable test definitions. Explain decisions, hypotheses, failures, successes, risks and proposed experiments completely in ordinary visible Markdown before the final machine submission, without mandatory headings. notes_md may be empty when the explanation was already given in visible Markdown. Do not discard useful information to shorten the response.
+Test process: use a single pre-execution test inventory, not duplicated manual method lists or only successful report entries. Optional execution.precondition_tests names genuine setup checks before affected product actions; never relabel a product assertion as setup. An invalid fixture means dependent behaviour is unverified, not PASS. Preserve raw results and previous unresolved work. Group changes by shared cause and a useful independent check; state the hypothesis and distinguishing observation in ordinary Markdown. No fixed number of tasks or retries is introduced.
 The controller supplies scope, hashes, MIME, action/finding IDs and input references. Do not generate or copy those fields. Exact citation formatting and proof of text reads do not gate your answer. Use real evidence to reason, state uncertainty and let the reviewer assess meaning. Only independent execution establishes PASS.
 USER POLICY: Test videos, screenshots and photos are optional supporting artifacts owned by the runner/dashboard, not coder tasks. Do not create capture-only requirements, work items, manual checks, external blockers or user questions about recording format, duration, framing or quality. Missing/corrupt recordings must not delay coding, testing or readiness. Test actual mod behavior with executable assertions. This policy concerns test evidence capture, not a product feature that itself manipulates images/video.
 Technical unknowns and experiment statuses describe missing facts, not permission gates. A work package may research an API and then implement using observed facts, without returning to the planner just to obtain coding permission. If an observation needs Minecraft, prepare a real scenario for the independent runner. If facts remain unavailable, preserve findings and open issues, defer only the affected work, and continue independent assigned tasks. Never invent an API or mark an unresolved observation as verified. Genuine user/external dependencies still constrain dependent work.
@@ -1291,6 +1393,9 @@ Only the independent runner can establish test success. Reviewer agreement is no
                 'and its real effect. Removing assertions, weakening them behind a calibration/skip, testing only '
                 'a decision token or renaming a failing checkpoint does not establish the missing behaviour. '
                 'Explain which previous hypothesis the measurements support or refute, and which remain unknown. '
+                'Inspect execution.precondition_tests when present: they may check only environment/fixture facts '
+                'before product action, never the required action/effect itself. A failed fixture invalidates the '
+                'observation; it does not waive its product conditions. Do not relabel a product failure as a fixture. '
                 'Scheduling advice is not a new product requirement or a reason to demand unrelated work.'}
         if required_conditions is not None:
             context={**context,'required_condition_ids':sorted(required_conditions),'full_review':False,
@@ -1372,6 +1477,11 @@ Only the independent runner can establish test success. Reviewer agreement is no
         decision=self.ask('PlannerDecision','planner',inp,label,
             validate_extra=validate_decision,
             instruction='Choose the most useful adaptive package from ANY available project tasks, not one Markdown group. Combine related work when efficient. No quota of new features. Repair a real regression or falsify a hypothesis when useful. '
+            'Group work by a shared causal change and a meaningful independent verification, not merely by a shared file or heading. '
+            'For each action explain the current hypothesis, proposed change and distinguishing expected observation in goal/expected_observation/notes_md; no new JSON fields or fixed package size. '
+            'Separate addon defects, invalid fixtures, test-inventory mismatches and provider failures in the explanation. '
+            'When fixture_result says invalid_fixture, repair/validate that fixture before inferring product behaviour from dependent checkpoints; continue independent work. '
+            'A bookkeeping/test-registry fix does not implement all features that its shared suite covers; keep unrelated product outcomes open. '
             'For repeated failures read original attempts and existing diagnostics, change the experiment or implementation, or select independent work with an explicit return condition. Do not blindly repeat the same patch. '
             'Read condition_progress_ref first: its per-condition history_ref links every actual checkpoint attempt '
             'to the full hypothesis/plan, coder changes, independent result and subsequent analysis. '
@@ -1441,6 +1551,8 @@ Only the independent runner can establish test success. Reviewer agreement is no
                 'If a fact remains unavailable, preserve the observed findings and open issue, defer only affected work and continue independent assigned tasks. Prepare real scenarios for independent Minecraft execution; never manufacture results.',
                 'Read condition_progress_ref for each assigned unresolved condition: compare previous hypotheses, changes and independent outcomes. Explain supported/refuted/unknown conclusions in notes_md and avoid repeating a failed approach without a discriminating new measurement. Preserve the normative meaning of executable tests; correcting a bad oracle is not permission to remove the required action or its real effect.',
                 'Write ScenarioManifest v1 to .lab-pipeline/scenarios-proposed.json and reference it. Controller JSON is excluded from the source fingerprint to avoid a self-referencing hash. Each checkpoint has a real named JUnit test mapping in execution.checkpoint_tests.',
+                'Use one pre-execution test inventory for Gradle discovery and scenario expected_tests. Derive it from JUnit discovery/class selection before tests run, not from only the successful results. Keep checkpoint-to-condition meaning stable; extra diagnostic cases do not invent new product coverage.',
+                'Declare execution.precondition_tests for independent named JUnit fixture checks where needed: build bounds, world blocks/entities and client synchronization before the addon acts. Include them in expected_tests but do not bind them to product conditions. Product actions and their effects remain ordinary assertions. When setup fails report actual facts and leave dependent behaviour unverified; no skip/calibration to gain PASS.',
                 'Write ReviewResponse files under .lab-pipeline/ as well. After all source/test edits use source_revision to compute the real resulting hash.',
                 'Use the supplied compatibility JARs only when this project actually requires them. No generic product assumptions.',
                 'Return CoderReport v1. base_source_revision is assignment.scope.source_revision; scope.source_revision is the real current fingerprint after edits.'])
@@ -1476,9 +1588,27 @@ Only the independent runner can establish test success. Reviewer agreement is no
                 source_bytes(self.ws,value['plan_ref'])
                 if set(value['action_ids'])!={a['id'] for a in decision['actions']}:raise ValueError('Report every assigned action, including unverified or blocked work')
                 for file in value['changed_files']:source_bytes(self.ws,file)
-                manifest=json.loads(source_bytes(self.ws,value['scenario_manifest_ref']))
+                def reject_manifest(error):
+                    # These fields belong to the external scenario file. A
+                    # JSON-only patch of CoderReport cannot fix that file.
+                    issues=error.issues if isinstance(error,contracts.ContractError) else [
+                        {'path':'$','code':'execution_mapping','expected':str(error),
+                         'received_type':'cross_reference','example_json':'null',
+                         'instruction':'Correct the execution mapping without removing required product assertions.'}]
+                    path=value['scenario_manifest_ref']['path']
+                    raise contracts.ContractError('CoderReport',[{**item,'path':'$',
+                        'code':'scenario_manifest','expected':path+' '+item['path']+': '+item['expected'],
+                        'instruction':'Edit the referenced scenario file, then submit the report again. '+item['instruction']}
+                        for item in issues]) from error
+                try:manifest=json.loads(source_bytes(self.ws,value['scenario_manifest_ref']))
+                except (ValueError,OSError) as error:reject_manifest(error)
                 self.event('coder',{'artifact_type':'ScenarioManifest','value':manifest},'coder',tags=['proposed'])
-                task_graph.validate_scenarios(manifest,catalog,graph)
+                try:
+                    task_graph.validate_scenarios(manifest,catalog,graph)
+                    from worker.pipeline_verification import _prepare
+                    _prepare(catalog,manifest,decision)
+                    for scenario in manifest['scenarios']:source_bytes(self.ws,scenario['test_file'])
+                except (ValueError,OSError) as error:reject_manifest(error)
                 if manifest['scope']!=value['scope']:raise ValueError('ScenarioManifest must describe the same source snapshot as CoderReport')
                 if review:
                     responses=[]
@@ -1645,8 +1775,8 @@ def run(engine,job,workspace,output,previous):
     if completed and not completed.get('pipeline_result',{}).get('infrastructure_errors'):start+=1
     for number in count(start):
         if job['max_rounds'] and number>job['max_rounds']:break
-        cycle=Cycle(engine,job,workspace,output,number)
         try:
+            cycle=Cycle(engine,job,workspace,output,number)
             cycle.poll()
             session=cycle.restore_session(read_json(cycle.stage,'pipeline/session.json'))
             if session and session['scope']['spec_revision']==cycle.scope['spec_revision']:
@@ -1676,15 +1806,26 @@ def run(engine,job,workspace,output,previous):
                     reason='Остались ручные проверки. Инструкции сохранены; автоматический PASS не назначается.')
                 engine.job_update(job['id'],status='USER_PAUSED',phase='acceptance_review_required',last_error=None,worker=None,lease_until=0)
                 engine.snapshot_request(job['id'],'manual_checks_required',output);return
-            ready=read_json(cycle.stage,'pipeline/development-ready.json')
-            if ready and ready['source_revision']==acceptance.source_fingerprint(workspace):
-                manifest,review=ready['manifest'],ready['review']
+            ready=cycle.restore_development(read_json(cycle.stage,'pipeline/development-ready.json'),catalog,graph,decision)
+            if ready:
+                manifest,review=ready
             elif code_actions:
                 coder,manifest,review=cycle.code_and_review(catalog,graph,decision)
             else:
                 manifest=read_json(output,'pipeline/manifest.json')
                 review=cycle.state.get('review')
-                if manifest is None:
+                reusable_manifest=False
+                if manifest is not None:
+                    try:
+                        task_graph.validate_scenarios(manifest,catalog,graph)
+                        from worker.pipeline_verification import _prepare
+                        _prepare(catalog,manifest,decision)
+                        if manifest['scope']['source_revision']!=acceptance.source_fingerprint(workspace):
+                            raise ValueError('Saved scenario manifest source revision changed')
+                    except (ValueError,TypeError,KeyError,OSError) as error:
+                        cycle.reject_checkpoint('scenario-manifest',manifest,error)
+                    else:reusable_manifest=True
+                if not reusable_manifest:
                     # A planner can request the first executable scenario; the
                     # coder still receives an actual assignment rather than a stub.
                     coder,manifest,review=cycle.code_and_review(catalog,graph,decision)

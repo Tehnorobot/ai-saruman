@@ -367,7 +367,7 @@ Compact continuation context (machine verification fields are independent; agent
 '''
 
 
-def request_agent(jid, project_id, n, prompt_text, logfile, *, preserve_result=False, role='coder', planner_limits=None, require_evidence=False, output_contract=None, allowance=None):
+def request_agent(jid, project_id, n, prompt_text, logfile, *, preserve_result=False, role='coder', planner_limits=None, require_evidence=False, output_contract=None, allowance=None, on_result=None):
     """Delegated Codex container sees projects + task mailbox, not verifier DB, artifacts or S3."""
     root = Path(os.getenv('PLANNER_TASKS','/planner-tasks') if role in ('planner','reviewer') or output_contract=='SubmissionPatch' else os.getenv('AGENT_TASKS','/agent-tasks'))
     if role not in ('coder','planner','reviewer'):raise ValueError('Unknown agent role')
@@ -458,7 +458,9 @@ def request_agent(jid, project_id, n, prompt_text, logfile, *, preserve_result=F
         write_json(request,payload)
     else:
         # Recover the actual historical request, never today's regenerated prompt.
-        archive_attempt(archive_stage, root, project_id, jid, taskid)
+        # A completed transport result must become visible before archival.
+        # Active recovery still snapshots the original in-flight request.
+        if not result.exists():archive_attempt(archive_stage, root, project_id, jid, taskid)
         try:
             actual=acceptance.read_json(archive_stage/'agent-history'/taskid,'request.json')
             if actual.get('role','coder')==role and actual.get('provider') in ('codex','dslab','litellm','minimax'):
@@ -496,19 +498,30 @@ def request_agent(jid, project_id, n, prompt_text, logfile, *, preserve_result=F
             next_lease_renewal=time.monotonic()+60
         time.sleep(2)
     payload=json.loads(result.read_text(encoding='utf-8'))
-    logfile.parent.mkdir(parents=True,exist_ok=True)
-    if source_log.exists():shutil.copy2(source_log,logfile)
-    else:logfile.write_text(payload.get('error') or 'No executor log',encoding='utf-8')
-    tail=logfile.read_text(encoding='utf-8',errors='replace')[-16000:]
     if payload.get('id') != taskid:
         raise ValueError('Agent result belongs to another attempt')
-    status = interrupted or payload.get('status','FAIL')
-    if status == 'CANCELLED':
-        # A recovered attempt may have been cancelled before controller restart.
-        status = poll_job(jid) or 'RETRY'
-    archive_attempt(archive_stage, root, project_id, jid, taskid,
-                    result=payload, status=status)
-    revoke_provider_task(taskid, jid)
+    callback_error=None
+    if on_result is not None:
+        try:on_result(payload)
+        except BaseException as exc:callback_error=exc
+    preservation_error=None
+    try:
+        logfile.parent.mkdir(parents=True,exist_ok=True)
+        if source_log.exists():shutil.copy2(source_log,logfile)
+        else:logfile.write_text(payload.get('error') or 'No executor log',encoding='utf-8')
+        tail=logfile.read_text(encoding='utf-8',errors='replace')[-16000:]
+        status = interrupted or payload.get('status','FAIL')
+        if status == 'CANCELLED':
+            # A recovered attempt may have been cancelled before controller restart.
+            status = poll_job(jid) or 'RETRY'
+        archive_attempt(archive_stage, root, project_id, jid, taskid,
+                        result=payload, status=status)
+    except BaseException as exc:preservation_error=exc
+    try:revoke_provider_task(taskid, jid)
+    except BaseException as exc:
+        if preservation_error is None:preservation_error=exc
+    if callback_error is not None:raise callback_error from preservation_error
+    if preservation_error is not None:raise preservation_error
     # Consume completed task before the next attempt (especially quota retry).
     # The complete evidence was copied into the independent artifacts folder.
     if not preserve_result and status not in ('PASS', 'TIMEOUT'):

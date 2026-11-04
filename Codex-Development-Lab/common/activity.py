@@ -11,6 +11,10 @@ import time
 from common.history import _open
 
 LABELS = {
+    'memory_sync': ('Синхронизирует память', 'Обработчик проверяет архивные копии; модель в этот момент не пишет код.'),
+    'processing_agent_result': ('Сохраняет результат агента', 'Запрос к модели завершён; обработчик сохраняет журнал и проверяет ответ.'),
+    'provider_wait': ('Ожидает восстановления квоты', 'Повторные попытки включены; код и текущая фаза сохранены.'),
+    'retrying_provider': ('Ожидает повторного запроса', 'Ответ провайдера прерван; обработчик продолжит сохранённую фазу.'),
     'decomposing': ('Выделяет требования и задачи', 'Планировщик читает ТЗ и строит смысловой граф зависимостей.'),
     'reviewing': ('Проверяет код и сценарии', 'Независимый ревьюер читает исходники; вердикт тестов ещё не установлен.'),
     'reflecting': ('Пересматривает подход', 'Планировщик сравнивает ошибки, гипотезы и эксперименты, затем выбирает полезную работу.'),
@@ -108,7 +112,7 @@ def _agent_stage(job, mailbox, number, now):
     return None,False
 
 
-def snapshot(job, events=(), mailbox=None, now=None):
+def snapshot(job, events=(), mailbox=None, now=None, pipeline_state=None):
     now=time.time() if now is None else now
     status=job.get('status'); phase=job.get('phase','')
     number=job.get('round',0)+(1 if status=='RUNNING' and phase in ('codex_development','planning') else 0)
@@ -124,9 +128,18 @@ def snapshot(job, events=(), mailbox=None, now=None):
         elif phase=='verifying':stage='verifying'
         elif phase=='planning':stage='planning'
         elif phase in ('decomposing','reviewing','reflecting','pipeline_waiting'):stage=phase
+        elif phase in ('processing_agent_result','provider_wait','retrying_provider'):stage=phase
         elif phase=='codex_development':
             stage='developing'; operation,stale=_agent_stage(job,mailbox,number,now)
             if operation:stage=operation;source='agent_cli'
+        if not job.get('pause_requested') and not job.get('cancel_requested') and stage!='recovering' and isinstance(pipeline_state,dict):
+            service=pipeline_state.get('service_operation') or {}
+            operation=pipeline_state.get('operation') or {}
+            if service.get('active') and service.get('stage')=='memory_sync':
+                stage='memory_sync';source='controller';number=service.get('round',number)
+            elif phase!='verifying' and operation.get('status')=='processing_result':stage='processing_agent_result'
+            elif phase!='verifying' and operation.get('status')=='retrying':
+                stage='provider_wait' if operation.get('retry_category')=='rate_limit' else 'retrying_provider'
     started=None
     for event in sorted(events,key=lambda e:e.get('id',0),reverse=True):
         message=event.get('message','')
@@ -136,6 +149,13 @@ def snapshot(job, events=(), mailbox=None, now=None):
                 or (phase=='verifying' and message.startswith('Независимые тесты:'))):
             started=event.get('created_at');break
     title,detail=LABELS[stage]
+    service=(pipeline_state or {}).get('service_operation') or {}
+    if stage=='memory_sync' and type(service.get('total')) is int:
+        detail=f"Проверено записей: {service.get('completed',0)} из {service['total']}. Полная история сохраняется."
+    observed_stage=(pipeline_state or {}).get('operation') or {}
+    service_started=service.get('started_at') if stage=='memory_sync' else observed_stage.get('result_received_at') if stage=='processing_agent_result' else observed_stage.get('retry_started_at') if stage in ('provider_wait','retrying_provider') else None
+    if type(service_started) in (int,float):
+        started=datetime.fromtimestamp(service_started,timezone.utc).isoformat()
     return {'job_id':job['id'],'status':status,'phase':phase,'stage':stage,'title':title,'detail':detail,
         'current_round':number,'max_rounds':job.get('max_rounds'), 'started_at':started,
         'observed_at':datetime.fromtimestamp(now,timezone.utc).isoformat(),

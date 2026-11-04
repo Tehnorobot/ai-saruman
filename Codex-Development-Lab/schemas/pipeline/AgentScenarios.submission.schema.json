@@ -1,5 +1,6 @@
 {
   "type": "object",
+  "description": "Кодер → ревьюер → исполнитель. Исполняемые тесты плюс явные утверждения.",
   "required": [
     "contract",
     "version",
@@ -7,7 +8,6 @@
     "notes_md"
   ],
   "additionalProperties": false,
-  "description": "Кодер → ревьюер → исполнитель. Исполняемые тесты плюс явные утверждения.",
   "properties": {
     "contract": {
       "type": "string",
@@ -70,6 +70,7 @@
         },
         "comparator": {
           "type": "string",
+          "description": "Операция сравнения: eq равно, ne не равно; lt/le/gt/ge; contains; event.",
           "enum": [
             "eq",
             "ne",
@@ -79,8 +80,7 @@
             "ge",
             "contains",
             "event"
-          ],
-          "description": "Операция сравнения: eq равно, ne не равно; lt/le/gt/ge; contains; event."
+          ]
         },
         "expected": {
           "type": [
@@ -150,8 +150,8 @@
           }
         },
         "test_file": {
-          "$ref": "#/$defs/ArtifactRef",
-          "description": "Исполняемый тест. Текстовый сценарий сам не запускается."
+          "description": "Исполняемый тест. Текстовый сценарий сам не запускается.",
+          "$ref": "#/$defs/ArtifactRef"
         },
         "runner_profile": {
           "type": "string",
@@ -159,14 +159,15 @@
         },
         "execution": {
           "type": "object",
+          "description": "Safe Gradle/JUnit binding; checkpoint status comes from these independently executed test cases.",
           "required": [
             "kind",
             "gradle_task",
             "expected_tests",
-            "checkpoint_tests"
+            "checkpoint_tests",
+            "precondition_tests"
           ],
           "additionalProperties": false,
-          "description": "Safe Gradle/JUnit binding; checkpoint status comes from these independently executed test cases.",
           "properties": {
             "kind": {
               "type": "string",
@@ -217,6 +218,34 @@
                   },
                   "name": {
                     "type": "string"
+                  }
+                }
+              }
+            },
+            "precondition_tests": {
+              "type": "array",
+              "description": "Optional scenario-wide fixture prerequisites. Name fresh JUnit setup assertions before addon actions; each must be in expected_tests and must not establish a product condition. Empty means no explicit fixture dependency. Failed or unconfirmed prerequisites leave product checks NOT_EXECUTED; originals remain archived.",
+              "items": {
+                "type": "object",
+                "required": [
+                  "classname",
+                  "name",
+                  "checkpoint_ids"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "classname": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "checkpoint_ids": {
+                    "type": "array",
+                    "description": "Affected checkpoint IDs. Empty or absent means all checkpoints in this scenario; IDs must be known and distinct.",
+                    "items": {
+                      "type": "string"
+                    }
                   }
                 }
               }

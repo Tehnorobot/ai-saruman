@@ -7,7 +7,7 @@ private protocol fields are omitted before persistence.
 """
 from __future__ import annotations
 
-from contextlib import contextmanager
+from contextlib import contextmanager, ExitStack
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -15,6 +15,7 @@ import os
 from pathlib import Path
 import re
 import stat
+import time
 import uuid
 
 from common.history import _open, PRIVATE_FIELDS
@@ -138,7 +139,7 @@ def _directory(root, parts):
 
 
 @contextmanager
-def _lock(job_root):
+def _lock(job_root, *, poll=None):
     """Use a separate memory lock; callers may already hold the project lock."""
     with _directory(job_root, (NAME,)) as destination:
         if isinstance(destination, int):
@@ -156,11 +157,11 @@ def _lock(job_root):
         try:
             if os.name == 'nt':
                 import msvcrt
-                import time
                 if info.st_size == 0:
                     os.write(descriptor, b'\0')
                 os.lseek(descriptor, 0, os.SEEK_SET)
                 while True:
+                    if poll is not None:poll()
                     try:
                         msvcrt.locking(descriptor, msvcrt.LK_NBLCK, 1)
                         break
@@ -175,7 +176,16 @@ def _lock(job_root):
                     msvcrt.locking(descriptor, msvcrt.LK_UNLCK, 1)
             else:
                 import fcntl
-                fcntl.flock(descriptor, fcntl.LOCK_EX)
+                if poll is None:
+                    fcntl.flock(descriptor, fcntl.LOCK_EX)
+                else:
+                    while True:
+                        poll()
+                        try:
+                            fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                            break
+                        except BlockingIOError:
+                            time.sleep(0.05)
                 try:
                     yield
                 finally:
@@ -336,29 +346,152 @@ def _restore_committed_tail(job_root, index):
     return _recover_index(job_root) if count != index['record_count'] else index
 
 
-def _export_event(job_root, workspace, record_id, page_ref, index):
-    """Mirror canonical bytes only. Atomic replacement never mutates hardlinks."""
+class _BatchFiles:
+    """Pin a few plain directories, not a new root traversal for each leaf."""
+    def __init__(self):
+        self.stack=ExitStack();self.directories={}
+
+    def close(self):self.stack.close()
+
+    def parent(self,root,relative):
+        parts=tuple(relative.split('/'))
+        key=(str(Path(root).absolute()),parts[:-1])
+        if key not in self.directories:
+            fd=self.stack.enter_context(_directory(root,parts[:-1]))
+            self.directories[key]=fd
+        return self.directories[key],parts[-1]
+
+    def read(self,root,relative):
+        parent,name=self.parent(root,relative)
+        fd=os.open(name,os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK,dir_fd=parent)
+        with os.fdopen(fd,'rb') as source:
+            info=os.fstat(source.fileno())
+            if not stat.S_ISREG(info.st_mode) or info.st_nlink!=1:
+                raise ValueError('Memory file must be a private regular file')
+            return source.read()
+
+    def validate(self):
+        # A pinned directory could have been renamed while agents held a
+        # writable workspace. Never publish an index into a detached mirror.
+        for (root,parts),fd in self.directories.items():
+            with _directory(Path(root),parts) as current:
+                before,now=os.fstat(fd),os.fstat(current)
+                if (before.st_dev,before.st_ino)!=(now.st_dev,now.st_ino):
+                    raise ValueError('Memory directory changed during synchronization')
+
+
+def _matches(root, relative, data, batch=None):
+    """Compare a mirror safely, including its size; do not trust timestamps.
+
+    A linked or malformed destination is never accepted as a healthy copy.
+    The anchored atomic writer can replace an unsafe leaf without touching its
+    target, while unsafe parent directories continue to fail closed.
+    """
+    try:
+        if batch is not None:return batch.read(root,relative)==data
+        with _open(root, tuple(relative.split('/'))) as source:
+            info = os.fstat(source.fileno())
+            if info.st_nlink != 1 or info.st_size != len(data):return False
+            for offset in range(0, len(data), 1024 * 1024):
+                if source.read(min(1024 * 1024, len(data) - offset)) != data[offset:offset + 1024 * 1024]:
+                    return False
+            return source.read(1) == b''
+    except (OSError, ValueError):
+        return False
+
+
+def _mirror_file(workspace, relative, data, batch=None):
+    if _matches(workspace, relative, data,batch):return False
+    if batch is not None:batch.validate()
+    _write(workspace, relative, data)
+    return True
+
+
+def _export_event(job_root, workspace, record_id, page_ref, index, *, poll=None, stats=None, record=None,batch=None,record_raw=None):
+    """Mirror one event incrementally; the caller publishes the index once."""
     page_name = page_ref['path'].rsplit('/', 1)[1]
     relative_paths = (f'payloads/{record_id}.json', f'pages/{page_name}', f'records/{record_id}.json')
     errors = []
-    try:
-        for relative in relative_paths:
-            _write(workspace, EXPORT + '/' + relative,
-                   _read_bytes(job_root, NAME + '/' + relative))
-        _write(workspace, EXPORT + '/index.json', _bytes(index))
-    except (OSError, ValueError) as exc:
-        errors.append(type(exc).__name__ + ': pipeline memory workspace export unavailable')
+    for relative in relative_paths:
+        # Callbacks are outside the I/O error handler. A pause/cancel exception
+        # must propagate, never become a swallowed workspace export warning.
+        if poll is not None:poll()
+        try:
+            raw = (record_raw if record_raw is not None and relative.startswith('records/')
+                else batch.read(job_root,NAME+'/'+relative) if batch is not None
+                else _read_bytes(job_root, NAME + '/' + relative))
+            if record is not None and relative.startswith('payloads/'):
+                if _ref(relative, raw) != record['entry']['payload_ref']:
+                    raise ValueError('Canonical memory payload digest mismatch')
+            if relative.startswith('pages/') and _ref(relative, raw) != page_ref:
+                raise ValueError('Canonical memory page digest mismatch')
+            written = _mirror_file(workspace, EXPORT + '/' + relative, raw,batch)
+            if stats is not None:
+                stats['files_written'] += int(written)
+                stats['files_unchanged'] += int(not written)
+        except (OSError, ValueError) as exc:
+            errors.append(type(exc).__name__ + ': pipeline memory workspace export unavailable')
+            break
     return errors
 
 
+def _export_batch(job_root, workspace, index, pending, *, poll=None, progress=None):
+    batch=_BatchFiles() if os.name=='posix' and hasattr(os,'O_NOFOLLOW') else None
+    try:return _export_batch_files(job_root,workspace,index,pending,poll=poll,progress=progress,batch=batch)
+    finally:
+        if batch is not None:batch.close()
+
+
+def _export_batch_files(job_root, workspace, index, pending, *, poll=None, progress=None,batch=None):
+    """Publish all selected originals before a single navigation-index update.
+
+    Progress callbacks must not recursively acquire this archive's memory lock.
+    They may publish an independent activity file or poll user control.
+    """
+    stats = {'completed': 0, 'total': len(pending), 'files_written': 0, 'files_unchanged': 0}
+    errors = []
+    for item in pending:
+        if poll is not None:poll()
+        record_raw=batch.read(job_root,NAME+'/records/'+item['record_id']+'.json') if batch is not None else None
+        record = _validate_record(json.loads(record_raw.decode('utf-8')),item['record_id']) if record_raw is not None else load_record(job_root, item['record_id'])
+        errors = _export_event(job_root, workspace, item['record_id'], record['index_ref'], index,
+                               poll=poll, stats=stats, record=record,batch=batch,record_raw=record_raw)
+        if errors:break
+        stats['completed'] += 1
+        if progress is not None:progress({'phase': 'memory_sync', **stats})
+    # Never mutate the canonical index for an unchanged healthy refresh. The
+    # error field is operational state, not a reason to rewrite the archive.
+    if index.get('export_errors') != errors:
+        index['export_errors'] = errors
+        _write(job_root, NAME + '/index.json', _bytes(index))
+    if not errors:
+        if poll is not None:poll()
+        try:
+            if batch is not None:batch.validate()
+            written = _mirror_file(workspace, EXPORT + '/index.json', _bytes(index),batch)
+            stats['files_written'] += int(written)
+            stats['files_unchanged'] += int(not written)
+        except (OSError, ValueError) as exc:
+            errors = [type(exc).__name__ + ': pipeline memory workspace export unavailable']
+            index['export_errors'] = errors
+            _write(job_root, NAME + '/index.json', _bytes(index))
+    if progress is not None:progress({'phase': 'memory_sync', **stats, 'export_errors': errors})
+    return {'record_count': index['record_count'], 'export_errors': errors, **stats}
+
+
 def append_event(job_root, workspace, kind, payload, *, scope, producer,
-                 task_ids=None, requirement_ids=None, links=None, tags=None):
+                 task_ids=None, requirement_ids=None, links=None, tags=None,
+                 poll=None, progress=None, on_commit=None):
     """Durably append one complete public event and return its MemoryRecord.
 
     A separate immutable payload keeps the record compatible with the wire
     contract. ``scope`` and trust labels are supplied by the controller, not
     inferred from the payload. A failed disposable workspace export is recorded
     in the canonical index without undoing the original event.
+
+    ``on_commit(record)`` runs after the canonical record and index are durable,
+    before mirror work can be interrupted. It may update independent controller
+    state, but must not recursively acquire the same memory lock.
     """
     if kind not in KINDS or producer not in PRODUCERS:
         raise ValueError('Invalid pipeline memory kind or producer')
@@ -371,7 +504,7 @@ def append_event(job_root, workspace, kind, payload, *, scope, producer,
     links = _links(links)
     public = _public(payload)
     payload_data = _bytes(public)
-    with _lock(job_root):
+    with _lock(job_root, poll=poll):
         index = _restore_committed_tail(job_root, _read_index(job_root))
         retry_export = bool(index.get('export_errors'))
         sequence = index['records'][-1]['sequence'] + 1 if index['records'] else 1
@@ -398,17 +531,21 @@ def append_event(job_root, workspace, kind, payload, *, scope, producer,
         index = _index(index['records'] + [_metadata(record, public)])
         index['export_errors'] = []
         _write(job_root, NAME + '/index.json', _bytes(index))
-        if workspace is not None:
-            # A previous export failure must not disappear merely because the
-            # latest file became writable. Restore the missing older originals.
-            pending = index['records'] if retry_export else [index['records'][-1]]
-            for item in pending:
-                exported_record = record if item['record_id'] == record_id else load_record(job_root, item['record_id'])
-                index['export_errors'] = _export_event(job_root, workspace, item['record_id'], exported_record['index_ref'], index)
-                if index['export_errors']:
-                    break
-            if index['export_errors']:
-                _write(job_root, NAME + '/index.json', _bytes(index))
+        try:
+            if on_commit is not None:on_commit(record)
+            if workspace is not None:
+                # A previous export failure must not disappear merely because
+                # the latest file became writable. Restore older originals.
+                pending = index['records'] if retry_export else [index['records'][-1]]
+                _export_batch(job_root, workspace, index, pending, poll=poll, progress=progress)
+        except BaseException:
+            # The commit preceded callbacks/mirror I/O. Preserve the original
+            # exception and a durable request to retry export on the next append,
+            # even if no full refresh occurs first.
+            index['export_errors'] = ['Workspace export interrupted; canonical originals remain committed']
+            try:_write(job_root, NAME + '/index.json', _bytes(index))
+            except (OSError, ValueError):pass
+            raise
         return record
 
 
@@ -472,23 +609,13 @@ def index_entries(job_root):
         return list(_restore_committed_tail(job_root, _read_index(job_root))['records'])
 
 
-def refresh_export(job_root, workspace):
-    """Rebuild a tampered or previously unavailable mirror from canonical data."""
-    with _lock(job_root):
+def refresh_export(job_root, workspace, *, poll=None, progress=None):
+    """Repair only missing/changed mirror bytes; preserve the complete archive.
+
+    ``poll()`` runs while waiting for the lock and between files. ``progress``
+    receives a navigation-only counter snapshot. Callback exceptions propagate;
+    already committed originals and atomic copies remain available for resume.
+    """
+    with _lock(job_root, poll=poll):
         index = _restore_committed_tail(job_root, _read_index(job_root))
-        errors = []
-        for item in index['records']:
-            record = load_record(job_root, item['record_id'])
-            errors.extend(_export_event(job_root, workspace, item['record_id'], record['index_ref'], index))
-            if errors:
-                break
-        index['export_errors'] = errors
-        _write(job_root, NAME + '/index.json', _bytes(index))
-        if not errors:
-            try:
-                _write(workspace, EXPORT + '/index.json', _bytes(index))
-            except (OSError, ValueError) as exc:
-                errors = [type(exc).__name__ + ': pipeline memory workspace export unavailable']
-                index['export_errors'] = errors
-                _write(job_root, NAME + '/index.json', _bytes(index))
-        return {'record_count': index['record_count'], 'export_errors': errors}
+        return _export_batch(job_root, workspace, index, index['records'], poll=poll, progress=progress)

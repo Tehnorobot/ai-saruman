@@ -202,7 +202,8 @@
             "kind",
             "gradle_task",
             "expected_tests",
-            "checkpoint_tests"
+            "checkpoint_tests",
+            "precondition_tests"
           ],
           "additionalProperties": false,
           "properties": {
@@ -255,6 +256,34 @@
                   },
                   "name": {
                     "type": "string"
+                  }
+                }
+              }
+            },
+            "precondition_tests": {
+              "type": "array",
+              "description": "Optional scenario-wide fixture prerequisites. Name fresh JUnit setup assertions before addon actions; each must be in expected_tests and must not establish a product condition. Empty means no explicit fixture dependency. Failed or unconfirmed prerequisites leave product checks NOT_EXECUTED; originals remain archived.",
+              "items": {
+                "type": "object",
+                "required": [
+                  "classname",
+                  "name",
+                  "checkpoint_ids"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "classname": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "checkpoint_ids": {
+                    "type": "array",
+                    "description": "Affected checkpoint IDs. Empty or absent means all checkpoints in this scenario; IDs must be known and distinct.",
+                    "items": {
+                      "type": "string"
+                    }
                   }
                 }
               }

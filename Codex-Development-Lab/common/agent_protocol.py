@@ -94,6 +94,18 @@ def _expand(value,node,root,artifact,read):
 def hydrate(value,*,scope,inputs,artifact,read,write,changed_files=(),archive=None):
     from common import pipeline_contracts as contracts
     name=value.get('contract');target=TARGETS[name]
+    if name=='AgentScenarios':
+        # Stored proposals predate optional fixture metadata. Provider strict
+        # schemas require explicit empty arrays, while runtime contracts keep
+        # these additions backward compatible. Normalize only these defaults;
+        # never repair identities, conditions or test evidence here.
+        value=deepcopy(value)
+        for scenario in value.get('scenarios',[]):
+            execution=scenario.get('execution',{})
+            prerequisites=execution.setdefault('precondition_tests',[])
+            if isinstance(prerequisites,list):
+                for prerequisite in prerequisites:
+                    if isinstance(prerequisite,dict):prerequisite.setdefault('checkpoint_ids',[])
     contracts.validate_submission(name,value)
     head={'contract':target,'version':'v1','scope':deepcopy(scope)}
     notes=value.get('notes_md','')

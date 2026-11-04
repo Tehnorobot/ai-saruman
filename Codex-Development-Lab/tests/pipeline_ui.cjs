@@ -23,7 +23,7 @@ const get=id=>document.getElementById(id),tab=name=>all(body).find(x=>x.dataset.
 const requests=[],intervals=[],events=new Map();
 const JOB='a'.repeat(14),OTHER='b'.repeat(14),OLD='c'.repeat(14);
 let deferred=null;
-let draftView=false,softHandoffView=false,verificationView=false,verificationRevision=0,quotaView=false;
+let draftView=false,softHandoffView=false,verificationView=false,verificationRevision=0,quotaView=false,memorySyncView=false,resultView=false;
 const overview=job=>({enabled:job!==OLD,version:'v1',scope:{round:3},status:{stage:'review',active_task_ids:['T1'],ready:false,readiness_reasons:['C1 is not verified'],coverage:[{condition_id:'C1',status:'failed'}]},catalog:{conditions:[{id:'C1',expected:'A sapling is placed'}]},graph:{tasks:[{id:'T1',title:'Plant <script>unsafe()</script>',outcome:'Sapling in world',requirement_ids:['R1'],condition_ids:['C1'],depends_on:[]},{id:'T2',title:'Grow',outcome:'Tree in world',requirement_ids:['R2'],condition_ids:[],depends_on:['T1']}]},decision:{scope:{round:3},strategy:'repair',rationale:'New useful experiment',actions:[{id:'A1',kind:'repair',task_ids:['T1'],condition_ids:['C1'],goal:'Make planting happen',expected_observation:'sapling=true',depends_on_action_ids:[]}]},review:{disposition:'changes_requested',findings:[{id:'F1',kind:'requirement_violation',severity:'high',requirement_ids:['R1'],observation:'No planting call',consequence:'C1 fails',suggested_check:'Observe the world block',code_refs:[{artifact:{path:'src/Plant.java'},start_line:5,end_line:6,excerpt:'<img src=x onerror=alert(1)>'}]}],unknowns:['Runtime not checked']},reflection:{rationale:'Change experiment',hypotheses:[{id:'H1',statement:'Action missing',experiment:'Record action event',prediction:'No action event'}]},memory_summary:{record_count:2}});
 const fetch=async url=>{
  requests.push(url);
@@ -34,6 +34,8 @@ const fetch=async url=>{
  else {data=overview(url.includes(OTHER)?OTHER:url.includes(OLD)?OLD:JOB);
   data.agent_reports={planner:{phase:'plan',notes_md:'## Full Markdown\n\n<script>report_is_data()</script>\n\n'+'Keep every detail. '.repeat(2000)}};
   if(quotaView)data.operation={role:'coder',contract:'AgentReport',attempt:5,status:'retrying',retry_category:'rate_limit',retry_delay_seconds:900};
+  if(memorySyncView){data.job_status='RUNNING';data.service_operation={active:true,stage:'memory_sync',completed:13,total:20};}
+  if(resultView)data.operation={role:'coder',contract:'AgentReport',attempt:5,status:'processing_result',executor_status:'FAIL'};
   if(verificationView){data.status.coverage=[{condition_id:'C1',status:'untested'}];
    data.operation={role:'coder',contract:'AgentReport',attempt:++verificationRevision,status:'running'};
    data.verification_display={conditions:{C1:{state:'needs_retest'}},tasks:{T1:{state:'needs_retest',has_history:true,
@@ -81,6 +83,11 @@ const flush=async()=>{for(let i=0;i<7;i++)await new Promise(setImmediate);};
  assert.ok(get('pipelineStage').textContent.includes('повторные попытки включены'));
  assert.ok(get('pipelineStage').textContent.includes('900 с'));
  quotaView=false;await window.LabPipeline.refresh();await flush();
+ memorySyncView=true;await window.LabPipeline.refresh();await flush();
+ assert.ok(get('pipelineStage').textContent.includes('Синхронизирую память · 13 / 20'));
+ memorySyncView=false;resultView=true;await window.LabPipeline.refresh();await flush();
+ assert.ok(get('pipelineStage').textContent.includes('запрос завершён, сохраняю результат'));
+ resultView=false;await window.LabPipeline.refresh();await flush();
  tab('review').onclick();
  assert.ok(get('pipelineContent').textContent.includes('<img src=x onerror=alert(1)>'));
  assert.ok(get('pipelineContent').textContent.includes('Гипотеза')||get('pipelineContent').textContent.includes('гипотеза'));

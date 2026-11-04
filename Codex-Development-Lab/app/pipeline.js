@@ -142,9 +142,13 @@
   identity.textContent='Задание: '+job+' · версия пайплайна: '+(overview.version||'—')+' · раунд '+(overview.scope?.round??overview.status?.scope?.round??'—');
   if(overview.enabled===false){stage.textContent='Для этого задания новый пайплайн ещё не активирован.';content.hidden=false;content.replaceChildren(make('p','muted','История старого задания остаётся в «Памяти по раундам».'));memory.hidden=true;return;}
   const current=overview.status||{};stage.textContent=stages[current.stage]||current.stage||'Этап ещё не записан';
-  if(overview.operation){const operation=overview.operation;const label={running:'выполняется',completed:'завершено',retrying:operation.retry_category==='rate_limit'?'ожидаю доступную квоту провайдера':'восстанавливаю соединение',failed:'ошибка',correcting_format:'исправляю формат'}[operation.status]||'последний этап';
+  if(overview.operation){const operation=overview.operation;const label={running:'выполняется',processing_result:'запрос завершён, сохраняю результат',completed:'завершено',retrying:operation.retry_category==='rate_limit'?'ожидаю доступную квоту провайдера':'восстанавливаю соединение',failed:'ошибка',correcting_format:'исправляю формат'}[operation.status]||'последний этап';
    stage.textContent+=' · '+label+': '+operation.role+' / '+operation.contract+' · попытка '+operation.attempt;
    if(operation.status==='retrying')stage.textContent+=' · '+({provider_unavailable:'API временно недоступен',provider_generation_error:'API завершил генерацию с ошибкой',stream_interrupted:'обрыв потока',rate_limit:'повторные попытки включены'}[operation.retry_category]||'восстановление')+' · интервал '+operation.retry_delay_seconds+' с';}
+  if(overview.service_operation?.active&&overview.service_operation.stage==='memory_sync'&&overview.job_status==='RUNNING'){
+   const service=overview.service_operation;
+   stage.textContent='Синхронизирую память'+(Number.isInteger(service.total)?' · '+service.completed+' / '+service.total:'');
+  }
   if(overview.decomposition?.semantic_review==='pending')stage.textContent+=' · разбор ТЗ ещё не одобрен';
   if(overview.decomposition?.semantic_review==='deferred_to_work')stage.textContent+=' · подготовка передана в работу, итоговое ревью впереди';
   if(current.ready===true)stage.textContent+=' · готовность подтверждена';

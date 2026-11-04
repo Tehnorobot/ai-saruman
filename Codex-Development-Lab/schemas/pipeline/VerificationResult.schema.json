@@ -174,6 +174,105 @@
             "$ref": "#/$defs/ArtifactRef"
           },
           "description": "Файлы видео и изображений; не замена измерениям."
+        },
+        "fixture_result": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": [
+                "PASS",
+                "FAIL",
+                "ERROR",
+                "NOT_EXECUTED"
+              ]
+            },
+            "reason_code": {
+              "type": "string",
+              "enum": [
+                "fixture_valid",
+                "invalid_fixture",
+                "fixture_unconfirmed"
+              ]
+            },
+            "checks": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "classname": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "PASS",
+                      "FAIL",
+                      "NOT_EXECUTED",
+                      "SKIPPED",
+                      "ERROR"
+                    ],
+                    "description": "Наблюдаемый статус; допустимые значения заданы enum."
+                  },
+                  "actual": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "report_refs": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/$defs/ArtifactRef"
+                    }
+                  },
+                  "checkpoint_ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "description": "Affected checkpoint IDs. Empty or absent means all checkpoints in this scenario; IDs must be known and distinct."
+                  }
+                },
+                "required": [
+                  "classname",
+                  "name",
+                  "status",
+                  "actual",
+                  "report_refs",
+                  "checkpoint_ids"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "raw_checkpoints": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/Observation"
+              },
+              "description": "Unmodified observations before an invalid or unconfirmed fixture prevented product conclusions."
+            },
+            "affected_checkpoint_ids": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "description": "Resolved IDs whose product observations are NOT_EXECUTED because a declared fixture prerequisite failed or remained unconfirmed."
+            }
+          },
+          "required": [
+            "status",
+            "reason_code",
+            "checks",
+            "raw_checkpoints",
+            "affected_checkpoint_ids"
+          ],
+          "additionalProperties": false
         }
       },
       "required": [

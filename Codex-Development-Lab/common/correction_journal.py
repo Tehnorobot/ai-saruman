@@ -43,12 +43,17 @@ def compact_feedback(full,record_id=None):
             groups[key].update(pattern=pattern,paths=[],count=0)
             if issue.get('code')=='json_syntax':groups[key]['example_json']=None
         groups[key]['paths'].append(issue.get('path','$'));groups[key]['count']+=1
+    instruction=('Correct only the listed fields; keep intended decisions and existing edits. '
+        'Use read_correction for exact issues, rejected field values and accepted examples. '
+        'Full trusted format is available through read_output_format. Do not reread the project to fix JSON types.')
+    if any(i.get('code')=='scenario_manifest' for i in full.get('issues',[])):
+        instruction=('Correct the external scenario file named in each issue, then resubmit the report with its current reference. '
+            'These locations describe that file, not report fields. Preserve product assertions, condition links and existing source. '
+            'Read only the relevant tests and diagnostics. Use read_correction for all exact issues; do not restart the project.')
     return {'contract':'ContractFeedback','version':'v1','schema_name':full.get('schema_name'),
         'attempt':full.get('attempt'),'correction_id':record_id,'issues':list(groups.values()),
         'issue_count':len(full.get('issues',[])),
-        'instruction':'Correct only the listed fields; keep intended decisions and existing edits. '
-            'Use read_correction for exact issues, rejected field values and accepted examples. '
-            'Full trusted format is available through read_output_format. Do not reread the project to fix JSON types.',
+        'instruction':instruction,
         'schema_path':full.get('schema_path'),'example_path':full.get('example_path')}
 
 

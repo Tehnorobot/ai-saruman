@@ -51,6 +51,26 @@ class ActivityHttpTests(unittest.TestCase):
     def test_unknown_job_returns_404(self):
         self.assertEqual(self.client.get('/api/jobs/' + 'f' * 14 + '/activity').status_code, 404)
 
+    def test_memory_and_completed_request_override_stale_coder_label(self):
+        self.running()
+        root=self.root/'artifacts'/self.pid/self.jid/'pipeline'
+        root.mkdir(parents=True)
+        state={'operation':{'status':'running'},'service_operation':{
+            'stage':'memory_sync','active':True,'round':3,'completed':17,'total':20}}
+        (root/'state.json').write_text(json.dumps(state))
+        result=self.get()
+        self.assertEqual(result['stage'],'memory_sync')
+        self.assertIn('17 из 20',result['detail'])
+        state['service_operation']['active']=False
+        state['operation']={'status':'processing_result','executor_status':'FAIL'}
+        (root/'state.json').write_text(json.dumps(state))
+        self.assertEqual(self.get()['stage'],'processing_agent_result')
+        state['operation']={'status':'retrying','retry_category':'rate_limit'}
+        (root/'state.json').write_text(json.dumps(state))
+        self.assertEqual(self.get()['stage'],'provider_wait')
+        db.update(self.jid,status='USER_PAUSED',phase='interrupted')
+        self.assertEqual(self.get()['stage'],'paused')
+
     def test_activity_read_is_readonly_and_has_observation_contract(self):
         before = db.job_row(self.jid)
         first = self.get()

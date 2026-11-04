@@ -97,7 +97,8 @@
             "classname": "dev.example.PlantTests",
             "name": "treeGrown"
           }
-        ]
+        ],
+        "precondition_tests": []
       }
     }
   ]

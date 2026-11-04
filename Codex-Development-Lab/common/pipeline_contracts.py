@@ -145,9 +145,14 @@ def format_guide(name):
         elif node.get('type') == 'array':
             result['item'] = describe(node.get('items', {}))
         return result
-    return {'shape': describe(schema), 'example': load_example(name),
-            'instruction': 'Example values are fictional. Arrays stay arrays even for one item; empty arrays are []. '
-                           'Use integer round/line numbers. Preserve your decisions while correcting types; no project reread for format repair.'}
+    instruction=('Example values are fictional. Arrays stay arrays even for one item; empty arrays are []. '
+                 'Use integer round/line numbers. Preserve your decisions while correcting types; no project reread for format repair.')
+    if name in ('AgentScenarios','ScenarioManifest'):
+        instruction+=(' execution.precondition_tests is optional. Use [] when no independent setup assertion is needed. '
+            'A prerequisite must be listed in expected_tests and must not also be bound to a checkpoint with condition_ids '
+            'in the same scenario. Keep product assertions and condition links; use a distinct genuine setup test when needed. '
+            'A JAR metadata unit test does not prove that a game action or world observation occurred.')
+    return {'shape': describe(schema), 'example': load_example(name), 'instruction':instruction}
 
 
 def _typename(value):
