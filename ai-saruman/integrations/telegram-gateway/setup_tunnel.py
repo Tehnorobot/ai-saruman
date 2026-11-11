@@ -37,6 +37,14 @@ def update_config(path, values):
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
+def install_public_key(server, port, public_key):
+    # Text-mode stdin translates LF into CRLF on Windows. Unix sh interprets the
+    # extra CR in `set -eu\r` as an option character. Send literal UTF-8 bytes.
+    script = remote_script(public_key).encode("utf-8")
+    subprocess.run(["ssh", "-p", str(port), "-o", "StrictHostKeyChecking=yes",
+                    f"root@{server}", "sh", "-s"], input=script, check=True)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--server", required=True)
@@ -56,10 +64,12 @@ def main():
     public = Path(str(key) + ".pub")
     if not public.is_file():
         parser.error("Public key file missing; do not overwrite your existing private key")
-    script = remote_script(public.read_text(encoding="utf-8").strip())
     print("Connecting once as root to install the RESTRICTED public key. Enter the VPS password if prompted.")
-    subprocess.run(["ssh", "-p", str(args.port), "-o", "StrictHostKeyChecking=yes",
-                    f"root@{args.server}", "sh", "-s"], input=script, text=True, check=True)
+    try:
+        install_public_key(args.server, args.port, public.read_text(encoding="utf-8").strip())
+    except subprocess.CalledProcessError as error:
+        parser.exit(1, f"SSH setup failed (exit {error.returncode}). Client configuration was not changed. "
+                    "Check the SSH error above and rerun; the existing key will be reused.\n")
     update_config(args.env_file, {"GATEWAY_SSH_HOST": args.server, "GATEWAY_SSH_PORT": args.port,
                                  "GATEWAY_SSH_USER": "telegram-tunnel", "GATEWAY_SSH_IDENTITY_FILE": key})
     print("SSH configuration saved. Keep your existing GATEWAY_API_KEY. The UI can now manage the tunnel.")

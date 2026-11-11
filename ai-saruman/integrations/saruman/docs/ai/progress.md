@@ -1,5 +1,23 @@
 # Progress
 
+## 2026-11-11: Preserve LF when provisioning the Telegram SSH tunnel from Windows
+
+### Investigate
+- The owner reached the VPS but sh failed on the first `set -eu` line. Python
+  text-mode subprocess stdin translates LF to CRLF on Windows; this is independent
+  of the source file encoding and Git checkout settings.
+
+### Plan
+- Send the remote script as UTF-8 bytes; preserve the existing key/config on retry.
+
+### Implement
+- Extracted install_public_key and removed text-mode stdin conversion. Failed SSH
+  now reports its exit code without a Python traceback; client config stays unchanged.
+- Added regression tests exercising real child-process stdin on Windows and the
+  existing-key/config-preservation paths. Tests do not contact SSH or read real keys.
+- Validation: reproduced old CRLF versus fixed LF at a real Windows child-process
+  stdin; all 52 gateway/automation/provisioning tests passed. Owner rerun on VPS pending.
+
 ## 2026-11-11: Autonomous Telegram integration
 
 Implemented game facts → existing persona model → durable outbox → VPS gateway,

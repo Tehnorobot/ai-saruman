@@ -198,7 +198,7 @@ uv run --no-project --python 3.12 python client.py status smoke-001
 ## 6. Автотесты без Telegram
 
 ```powershell
-uv run --no-project --python 3.12 python -m unittest -v test_gateway.py test_automation.py
+uv run --no-project --python 3.12 python -m unittest -v test_gateway.py test_automation.py test_setup_tunnel.py
 ```
 
 Тесты поднимают настоящий HTTP-сервер на localhost и подменяют Telegram.
