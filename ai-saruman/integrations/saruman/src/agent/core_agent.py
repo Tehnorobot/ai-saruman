@@ -59,7 +59,7 @@ class CoreAgent(BaseAgent):
             self.ctx_handler = ctx_handler
 
         # Initialize LLM
-        self.llm = get_llm_chain()
+        self.llm = get_llm_chain(role="legacy_core")
         try:
             self.rag_model = None if os.getenv("EMBEDDINGS_MODEL") == "NONE" else RagModel()
         except Exception as e:

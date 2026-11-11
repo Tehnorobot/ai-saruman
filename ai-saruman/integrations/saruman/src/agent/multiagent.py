@@ -69,7 +69,7 @@ class MultiAgent(BaseAgent):
             self.current_plan = None
             print("[MULTI-AGENT] PersonaAgent + ActionAgent; native mod execution")
             return
-        self.llm = get_llm_chain()
+        self.llm = get_llm_chain(role="legacy_core")
 
         tool_bank = tools_config.init_tools_module(
             ctx_swarm, self.ctx_handler, new_llm=self.llm

@@ -24,7 +24,7 @@ class BrowserAgent:
 
     def __init__(self, ctx: Optional[Dict[str, Any]] = None):
         self.ctx = ctx or {}
-        self.llm = get_llm_chain()
+        self.llm = get_llm_chain(role="legacy_browser")
         self.vision_processor = VisionProcessor()
         self.running = False
         self.last_screenshot = None

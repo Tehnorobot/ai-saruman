@@ -8,3 +8,17 @@
 @media(max-width:640px){.nav{scrollbar-width:none}.chat-panel{height:calc(100dvh - 320px)}}
 #tg-text{width:100%;min-height:120px;resize:vertical;padding:12px;border:1px solid var(--line);border-radius:10px;font:inherit;background:var(--paper);color:var(--ink)}
 #telegram-settings input[type=number]{width:110px;margin-left:8px;padding:7px;border:1px solid var(--line);border-radius:8px;background:var(--paper);color:var(--ink)}
+/* Provider/model controls stay readable at narrow desktop and mobile widths. */
+.role-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px;margin:20px 0}
+.role-grid .panel{min-width:0;margin:0}
+.role-selectors,.role-limits{display:grid;gap:14px;margin:18px 0}
+.role-selectors label,.role-limits label{display:grid;gap:8px;font-size:13px}
+.role-selectors select,.role-limits input{width:100%;min-width:0;padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--paper);color:var(--ink);font:inherit;font-size:14px}
+.role-selectors select:focus-visible,.role-limits input:focus-visible{outline:2px solid var(--green);outline-offset:2px}
+.role-limits{grid-template-columns:repeat(2,minmax(0,1fr))}
+.role-form details{margin:16px 0}
+.role-revision{margin-left:12px}
+#optional-roles{margin:24px 0}
+#optional-roles>summary{cursor:pointer;padding:16px 0}
+@media(max-width:950px){.role-grid{grid-template-columns:1fr}}
+@media(prefers-reduced-motion:reduce){.role-grid *{transition:none!important}}

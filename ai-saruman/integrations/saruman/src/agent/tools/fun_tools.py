@@ -17,7 +17,6 @@ from agent.tools.control_tools import (
     _add_tool_result_log,
     _add_tool_run_log,
 )
-from config_schema.general import get_secret
 from utils.prompt_helper import PromptHelper
 
 # llm for micro-tasks, maybe should add separate for env
@@ -37,8 +36,7 @@ def analyze_nickname(nickname: str) -> Dict[str, Any]:
         return {"status":"rejected", "reason":"Conversational analysis belongs to PersonaAgent in role mode"}
     global simple_llm
     if simple_llm is None:
-        name = get_secret("SIMPLE_LLM_MODEL_NAME")
-        simple_llm = get_llm_chain(name if name and name != "NONE" else None)
+        simple_llm = get_llm_chain(role="tool_nickname")
     tool_name = "analyze_nickname"
     call_id = _add_tool_run_log(tool_name, {"prompt": nickname})
 

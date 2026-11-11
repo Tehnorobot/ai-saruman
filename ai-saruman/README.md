@@ -30,11 +30,37 @@ cd C:\Repos\ai-saruman\integrations\saruman
 Подготовлен [текстовый шлюз и инструкция для VPS](integrations/telegram-gateway/README_RU.md).
 Реальная отправка с компьютера через VPS и защита от дублей проверены пользователем.
 [Автономные публикации персонажа и окно Telegram](integrations/telegram-gateway/AUTONOMOUS_RU.md)
-подключают игровые события, модель PersonaAgent, очередь, историю и SSH-туннель.
+подключают игровые события, отдельную модель Telegram, очередь, историю и SSH-туннель.
 Окно: `http://127.0.0.1:8765/#telegram`. Включение и автопубликация задаются отдельно;
 по умолчанию они выключены. Для новых API требуется обновить gateway.py на VPS.
 
-## Выбор LLM игрового персонажа
+## Выбор LLM по задачам
+
+Открой **Настройки**: http://127.0.0.1:8765/#settings.
+У чата Lab, персонажа, игровых действий и Telegram независимые провайдер,
+модель и reasoning. Старые агенты и дополнительные инструменты находятся
+в свёрнутом разделе. Выбор не включает эти инструменты автоматически.
+
+Поддерживаются Codex / ChatGPT, MiniMax M Plan, LiteLLM и DSLab / Claude.
+Настройки общие для Lab и игрового runtime: `integrations/saruman/data/role-models.sqlite`.
+Они применяются со следующего запроса; текущий запрос защищён от смены модели.
+Ключи укажи в `integrations/saruman/.env.saruman`. Для MiniMax:
+
+```dotenv
+MINIMAX_API_KEY=ваш_Subscription_Key
+MINIMAX_BASE_URL=https://api.minimax.io/anthropic
+```
+
+Для M Plan Explore нужен **Subscription Key** из Plan Details, не обычный
+pay-as-you-go ключ. Модель: `MiniMax-M3.1-Flash`; reasoning:
+`default`, `low`, `medium`, `high`, `xhigh`, `max`. `default` означает `max`.
+[Подробности, роли и проверка](docs/MODEL_SETTINGS_RU.md).
+
+При первом обновлении останови старые Python-процессы Lab и игры, затем
+запусти их заново. Minecraft перезапускать не требуется. После изменения ключей
+тоже перезапусти оба Python-процесса. Браузер не получает ключи.
+
+Начальные настройки Codex берутся из шаблона:
 
 В `integrations/saruman/.env.saruman.example` задано:
 
@@ -49,7 +75,7 @@ CORE_LLM_MODEL_NAME=codex/auto
 После клонирования создай локальный `integrations/saruman/.env.saruman` из
 шаблона и заполни настройки. Для закрепления модели замени `auto` точным ID
 из каталога. Локальный `.env.saruman` исключён из Git и не переносится при clone.
-Выбор модели в интерфейсе лаборатории не меняет настройку игрового runtime.
+После сохранения роли в Lab приоритет имеет её профиль в общей базе.
 
 Подробности и пример: [LLM Сарумана](integrations/saruman/README.md#llm-сарумана).
 

@@ -23,7 +23,7 @@ from utils.format_helper import get_user_mentions
 queue_send = tools_config.queue_send
 db = tools_config.db
 history = tools_config.inner_dialogue_history
-llm = tools_config.llm_model
+llm = None  # Lazily constructed only when this legacy tool is used.
 
 
 def like(user: str) -> bool:
@@ -129,6 +129,10 @@ def dialogue_step(user: str, message: str) -> str:
 
     try:
         # Process the message
+        from agent.llm_clients.lc_clients import get_llm_chain
+        global llm
+        if llm is None:
+            llm = get_llm_chain(role="tool_dialogue")
         response = llm.invoke(dialogue)
         # Save the message
         # db.add_diags(user_id, message, response)

@@ -15,7 +15,6 @@ from agent.tools.control_tools import (
     _add_tool_result_log,
     _add_tool_run_log,
 )
-from config_schema.general import get_secret
 from utils.prompt_helper import PromptHelper
 from utils.vision_helper import get_actual_frame
 
@@ -32,11 +31,6 @@ def screenshot(prompt: str = None) -> Dict[str, Any]:
     call_id = _add_tool_run_log(tool_name, {"prompt": prompt})
 
     try:
-        vlm_name = get_secret("VISION_LLM_MODEL_NAME")
-        if not vlm_name or vlm_name == "NONE":
-            raise ValueError(
-                "VISION_LLM_MODEL_NAME is not set in environment, screenshot tool must be disabled. Why it is running?"
-            )
         # Get frame using vision helper
         frame_data = get_actual_frame()
 
@@ -64,7 +58,7 @@ def screenshot(prompt: str = None) -> Dict[str, Any]:
         ]
 
         # Invoke LLM
-        llm = get_llm_chain(vlm_name)
+        llm = get_llm_chain(role="tool_vision")
         response = llm.invoke(messages)
         if hasattr(response, "content"):
             description = response.content

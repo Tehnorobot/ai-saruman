@@ -24,6 +24,8 @@ from saruman.role_panel import (
 from saruman.role_prompts import PERSONA_SCHEMA
 from saruman.role_settings import (
     RoleStore,
+    ROLES,
+    ROLE_INFO,
     catalogue,
     default_profile,
     read_profiles,
@@ -120,7 +122,7 @@ class SettingsTests(Fixtures):
 
     def test_doctor_can_read_defaults_without_creating_a_database(self):
         absent = Path(self.temp.name) / "absent.sqlite"
-        self.assertEqual(set(read_profiles(absent)), {"action", "persona"})
+        self.assertEqual(set(read_profiles(absent)), set(ROLES))
         self.assertFalse(absent.exists())
 
     def test_recovery_does_not_mark_another_live_runtime_unknown(self):
@@ -192,7 +194,7 @@ class SettingsTests(Fixtures):
                 panel = add_role_panel(lambda: ({}, False), self.store)
             panel.status()
             self.assertIn(
-                "Настроить PersonaAgent",
+                "Настроить " + ROLE_INFO["persona"][0],
                 str([getattr(b, "label", "") for b in app.blocks.values()]),
             )
             self.assertEqual(
@@ -921,7 +923,7 @@ class HybridTests(Fixtures):
         callbacks = [
             (i, f) for i, f in app.fns.items() if f.fn and f.fn.__name__ == "save_role"
         ]
-        self.assertEqual(len(callbacks), 2)
+        self.assertEqual(len(callbacks), len(ROLES))
         values = [
             "litellm",
             next(iter(catalogue()["litellm"])),

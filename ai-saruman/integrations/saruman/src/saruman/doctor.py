@@ -129,25 +129,24 @@ def check(live=False, no_stt=False, no_filter=False, no_redis=False) -> bool:
     model = os.getenv("CORE_LLM_MODEL_NAME", "")
     hybrid = os.getenv("SARUMAN_AUTOMATION_MODE", "mods").lower() == "mods"
     requires_codex = model.startswith("codex/")
-    if hybrid:
-        from saruman.role_settings import read_profiles
-        try:
-            profiles = read_profiles()
-            requires_codex = any(p["provider"] == "codex" for p in profiles.values())
-            for role, profile in profiles.items():
-                report(f"Модель роли {role}", True, f"{profile['provider']} / {profile['model']} / {profile['reasoning']}")
-                if profile["provider"] != "codex":
-                    prefix = "LITELLM" if profile["provider"] == "litellm" else "DSLAB"
-                    from saruman.role_client import endpoint
-                    try:
-                        endpoint(profile["provider"])
-                        report(f"Настройки {role}: {prefix}", bool(os.getenv(prefix+"_API_KEY")), "Ключ проверяется только на наличие; запросы API не отправляются")
-                    except ValueError:
-                        report(f"Настройки {role}: {prefix}", False, "Проверьте адрес провайдера в .env.saruman")
-        except (ValueError, OSError):
-            report("Модели ролей", False, "Проверьте сохранённые настройки ролей")
-    else:
-        report("Модель задана", bool(model))
+    from saruman.role_settings import read_profiles
+    try:
+        saved = read_profiles()
+        active = ("persona", "action") if hybrid else ("legacy_core", "legacy_planner", "legacy_reaction", "legacy_chat")
+        profiles = {role: saved[role] for role in active}
+        requires_codex = any(p["provider"] == "codex" for p in profiles.values())
+        for role, profile in profiles.items():
+            report(f"Модель роли {role}", True, f"{profile['provider']} / {profile['model']} / {profile['reasoning']}")
+            if profile["provider"] != "codex":
+                prefix = profile["provider"].upper()
+                from saruman.role_client import endpoint
+                try:
+                    endpoint(profile["provider"])
+                    report(f"Настройки {role}: {prefix}", bool(os.getenv(prefix+"_API_KEY")), "Ключ проверяется только на наличие; запросы API не отправляются")
+                except ValueError:
+                    report(f"Настройки {role}: {prefix}", False, "Проверьте адрес провайдера в .env.saruman")
+    except (ValueError, OSError):
+        report("Модели ролей", False, "Проверьте сохранённые настройки ролей")
     if hybrid:
         compiler = os.getenv("SARUMAN_JAVAC") or shutil.which("javac")
         report("Модовый адаптер: javac JDK 21+", bool(compiler and Path(compiler).is_file()), "SARUMAN_JAVAC или javac в PATH")

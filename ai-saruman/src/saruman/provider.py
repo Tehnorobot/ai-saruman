@@ -125,7 +125,8 @@ class CodexProvider:
             while True:
                 page = rpc.request("model/list", {"limit": 100, "includeHidden": False, "cursor": cursor})
                 models += [{"id": item["model"], "name": item["displayName"],
-                            "is_default": item.get("isDefault", False)}
+                            "is_default": item.get("isDefault", False),
+                            "reasoning": [x["reasoningEffort"] for x in item.get("supportedReasoningEfforts", [])]}
                            for item in page.get("data", []) if not item.get("hidden")]
                 cursor = page.get("nextCursor")
                 if not cursor:
@@ -139,11 +140,17 @@ class CodexProvider:
                     "limits": limits, "limit_error": limit_error,
                     "note": "Каталог моделей не гарантирует доступ; его подтверждает успешный ответ."}
 
-    def complete(self, instructions, prompt, model, trace):
+    def complete(self, instructions, prompt, model, trace, *, reasoning="default", timeout=180):
         start = time.monotonic()
         try:
             with Rpc() as rpc, tempfile.TemporaryDirectory(prefix="saruman-chat-") as directory:
                 require_subscription(rpc.request("account/read", {"refreshToken": False}).get("account"))
+                if model == "auto":
+                    page = rpc.request("model/list", {"limit": 100, "includeHidden": False})
+                    available = [m for m in page.get("data", []) if not m.get("hidden")]
+                    if not available:
+                        raise RuntimeError("Codex не вернул каталог моделей.")
+                    model = next((m["model"] for m in available if m.get("isDefault")), available[0]["model"])
                 thread = rpc.request("thread/start", {
                     "model": model, "cwd": directory, "approvalPolicy": "never",
                     "sandbox": "read-only", "ephemeral": True, "environments": [],
@@ -153,11 +160,12 @@ class CodexProvider:
                 trace["model"] = thread.get("model", model)
                 thread_id = thread["thread"]["id"]
                 rpc.request("turn/start", {"threadId": thread_id, "model": model,
+                    **({"effort": reasoning} if reasoning != "default" else {}),
                     "input": [{"type": "text", "text": prompt}],
                     "outputSchema": OUTPUT_SCHEMA, "environments": [],
                     "serviceTierForTurn": "default"})
                 completed_text, deltas = {}, {}
-                deadline = time.monotonic() + 180
+                deadline = time.monotonic() + timeout
                 while time.monotonic() < deadline:
                     event = rpc.notification(deadline - time.monotonic())
                     params = event.get("params", {})
@@ -191,6 +199,6 @@ class CodexProvider:
                         if not isinstance(result.get("reply"), str) or not isinstance(result.get("memories"), list):
                             raise RuntimeError("В ответе Codex отсутствуют reply или memories.")
                         return result
-                raise RuntimeError("Превышено время ответа Codex (180 секунд). Повтор не выполнялся.")
+                raise RuntimeError(f"Превышено время ответа Codex ({timeout} секунд). Повтор не выполнялся.")
         finally:
             trace["latency_ms"] = round((time.monotonic() - start) * 1000)

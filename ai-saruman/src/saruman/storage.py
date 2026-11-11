@@ -6,7 +6,7 @@ import uuid
 from pathlib import Path
 
 TABLES = ("sessions", "messages", "runs")
-USAGE_FIELDS = ("input_tokens", "cached_input_tokens", "output_tokens", "reasoning_tokens", "total_tokens")
+USAGE_FIELDS = ("input_tokens", "cached_input_tokens", "cache_write_tokens", "output_tokens", "reasoning_tokens", "total_tokens")
 
 
 def now():
@@ -33,6 +33,10 @@ class Store:
                     history_input_est INTEGER, message_input_est INTEGER, memory_output_est INTEGER,
                     persona_sha256 TEXT, remembered INTEGER DEFAULT 0, error TEXT);
             """)
+            existing = {row["name"] for row in db.execute("PRAGMA table_info(runs)")}
+            for name, kind in (("provider", "TEXT"), ("role", "TEXT"), ("reasoning", "TEXT"), ("cache_write_tokens", "INTEGER")):
+                if name not in existing:
+                    db.execute(f"ALTER TABLE runs ADD COLUMN {name} {kind}")
 
     @contextmanager
     def db(self):
@@ -94,6 +98,8 @@ class Store:
                  usage.get("reasoningOutputTokens"), usage.get("totalTokens"),
                  trace.get("context_window"), trace.get("latency_ms"), remembered,
                  memory_output_est, error, run_id))
+            db.execute("UPDATE runs SET provider=?,role=?,reasoning=?,cache_write_tokens=? WHERE id=?",
+                       (trace.get("provider", "codex"), "lab_chat", trace.get("reasoning", "default"), usage.get("cacheWriteTokens"), run_id))
             if reply is not None:
                 db.execute("INSERT INTO messages (session_id, role, content, created_at, run_id) VALUES (?, 'assistant', ?, ?, ?)",
                            (session_id, reply, now(), run_id))

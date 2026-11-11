@@ -81,7 +81,7 @@ def init_tools_module(
         # from agent.llm_clients.lc_chatopenai_patch import ChatOpenAI
         from agent.llm_clients.lc_clients import get_llm_chain
 
-        llm_model = get_llm_chain()
+        llm_model = get_llm_chain(role="legacy_core")
     else:
         llm_model = new_llm
     # ctx_swarm.clear()

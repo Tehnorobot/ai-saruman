@@ -175,7 +175,7 @@ class ChatAgent(BaseAgent):
         else:
             self.ctx_handler = ctx_handler
 
-        self.llm = get_llm_chain()
+        self.llm = get_llm_chain(role="legacy_chat")
         self.self_name = get_name()
         # Preserve new directives while paused, without replaying previous sessions.
         self._last_directive_ts = time.time_ns()
@@ -921,7 +921,7 @@ class ChatAgent(BaseAgent):
         except Exception as e:
             print(f"\n[CHAT AGENT] Stream error: {e}")
             traceback.print_exc()
-            if getattr(self.llm, "_llm_type", "") == "saruman-codex":
+            if getattr(self.llm, "_llm_type", "") in {"saruman-codex", "saruman-role"}:
                 # A second generation can spend the subscription allowance twice.
                 return "", [], AIMessage(content=""), False
             # Try non-streaming invoke as last resort

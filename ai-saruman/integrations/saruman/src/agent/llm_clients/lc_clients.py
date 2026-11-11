@@ -18,7 +18,7 @@ class ChatLiteLLMCreds(TypedDict, total=False):
     max_tokens: int
 
 
-def get_llm_chain(model_name: str = None) -> BaseChatModel:
+def get_llm_chain(model_name: str = None, *, role: str = None) -> BaseChatModel:
     """Get ChatLiteLLM instance with credentials from .env or defaults.
     Args:
         model_name:
@@ -26,6 +26,10 @@ def get_llm_chain(model_name: str = None) -> BaseChatModel:
     Returns:
         ChatLiteLLM instance.
     """
+
+    if role is not None:
+        from saruman.chat_model import RoleChatModel
+        return RoleChatModel(role=role)
 
     if model_name is None:
         model_name = get_secret("CORE_LLM_MODEL_NAME")

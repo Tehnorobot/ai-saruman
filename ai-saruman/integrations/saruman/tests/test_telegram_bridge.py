@@ -1,4 +1,4 @@
-"""Telegram shares the selected persona profile, not its failure state or tool access."""
+"""Telegram has its own selected profile and no game-tool access."""
 import tempfile
 import unittest
 from pathlib import Path
@@ -9,7 +9,7 @@ from _saruman_telegram.automation import Store
 
 
 class BridgeTests(unittest.TestCase):
-    def test_post_generation_uses_separate_client_and_existing_persona_role(self):
+    def test_post_generation_uses_separate_telegram_role(self):
         with tempfile.TemporaryDirectory() as directory:
             store = Store(Path(directory) / "events.sqlite3")
             role_store = Mock()
@@ -18,7 +18,7 @@ class BridgeTests(unittest.TestCase):
                 client.complete.return_value = {"text": "Дерево выросло.", "event_ids": ["one"]}
                 director = make_director(role_store, "game-session", "Character personality", store)
                 result = director.draft({"events": [{"id": "one"}]})
-                factory.assert_called_once_with(role_store, "persona", "game-session:telegram")
+                factory.assert_called_once_with(role_store, "telegram", "game-session:telegram")
                 client.resume.assert_called_once()
                 args = client.complete.call_args.args
                 self.assertIn("Character personality", args[0])

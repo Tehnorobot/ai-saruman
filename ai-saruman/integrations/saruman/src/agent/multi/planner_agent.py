@@ -52,7 +52,7 @@ class PlannerAgent(BaseAgent):
             self.ctx_handler = ctx_handler
 
         # Lightweight LLM for planning
-        self.llm = get_llm_chain()
+        self.llm = get_llm_chain(role="legacy_planner")
         self.self_name = get_name()
 
         if tool_bank is not None:

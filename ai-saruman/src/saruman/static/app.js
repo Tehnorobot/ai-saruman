@@ -27,10 +27,12 @@ const scenarios = [
   {name:"Проверка памяти", icon:"memory", text:"Что ты помнишь обо мне из нашего диалога? Отдели известные тебе факты от предположений."},
   {name:"Неизвестные сведения", icon:"chat", text:"Сколько у меня сейчас алмазов в инвентаре? Если не знаешь, не выдумывай."}
 ];
-const views = {chat:"Тестирование", memory:"Память", history:"Диалоги", analytics:"Аналитика", telegram:"Telegram", settings:"Подключение"};
+const views = {chat:"Тестирование", memory:"Память", history:"Диалоги", analytics:"Аналитика", telegram:"Telegram", settings:"Настройки"};
 const state = {data:null, view:location.hash.slice(1) || "chat", session:null, messages:[], draft:"",
   remember:false, busy:false, connecting:false, memoryView:"graph", entity:null, file:null,
   database:"sessions", databaseData:null, model:"", error:null};
+state.roleDrafts = {};
+state.showOptional = false;
 let toastTimer;
 state.telegram = null;
 state.telegramPage = 0;
@@ -82,11 +84,11 @@ function sidebar() {
       icon(id) + '<span>' + title + '</span>' + (id === "memory" ? '<span class="count">' + state.data.memory.entities.length + '</span>' : '') + '</button>').join("") +
     '</nav><div class="sidebar-bottom"><div class="side-note"><strong>Характер рождается в диалоге.</strong>Наблюдайте, проверяйте,<br>сохраняйте важное.</div><div class="side-status"><i class="dot ' +
     (state.data.provider.connected ? 'online' : '') + '"></i>' +
-    (state.data.provider.connected ? 'Codex подключён' : 'Codex не подключён') +
+    e(providerNames[chatProfile().provider]) +
     '</div><div class="version">LOCAL WORKSPACE / v0.1</div></div></aside>';
 }
 function heading() {
-  const subtitles = {chat:"Проверьте голос, решения и последовательность характера.",memory:"Воспоминания, сущности и связи — без скрытых слоёв.",history:"Каждый эксперимент сохраняется в последовательном диалоге.",analytics:"Измеренный расход и прозрачная оценка контекста.",settings:"Локальный harness, модели и подписка ChatGPT."};
+  const subtitles = {chat:"Проверьте голос, решения и последовательность характера.",memory:"Воспоминания, сущности и связи — без скрытых слоёв.",history:"Каждый эксперимент сохраняется в последовательном диалоге.",analytics:"Измеренный расход и прозрачная оценка контекста.",settings:"Провайдер, модель и reasoning для каждой задачи персонажа."};
   subtitles.telegram='Подтверждённые события, черновики и публикации в канале.';
   return '<div class="page-heading"><div><div class="eyebrow">САРУМАН / CHARACTER EXPERIMENTS</div><h1>' + views[state.view] +
     '</h1><p class="subtitle">' + subtitles[state.view] + '</p></div>' +
@@ -95,7 +97,7 @@ function heading() {
 function chatView() {
   const memory = state.data.memory, run = selectedRun();
   const messages = state.messages.length ? state.messages.map(messageHTML).join("") :
-    '<div class="empty-chat"><div class="sigil">' + tower + '</div><h2>Поговорим, смертный?</h2><p>Начните диалог или выберите сценарий справа.<br>Ответы придут от выбранной модели через Codex.</p><span class="pill">' +
+    '<div class="empty-chat"><div class="sigil">' + tower + '</div><h2>Поговорим, смертный?</h2><p>Начните диалог или выберите сценарий справа.<br>Ответы придут от модели, выбранной для чата Lab.</p><span class="pill">' +
     icon("shield") + 'Тестовая среда · без действий в игре</span></div>';
   const error = state.error ? '<div class="alert error">' + e(state.error) + '</div>' : '';
   const options = state.data.sessions.map((session) => '<option value="' + session.id + '"' +
@@ -106,7 +108,7 @@ function chatView() {
     '</div><form id="chat-form" class="composer"><textarea id="message-input" aria-label="Сообщение персонажу" placeholder="Что вы хотите спросить у Сарумана?" maxlength="12000"' +
     (state.busy ? ' disabled' : '') + '>' + e(state.draft) + '</textarea><div class="composer-bottom"><label class="check-label"><input id="remember" type="checkbox"' +
     (state.remember ? ' checked' : '') + '>Запоминать факты</label><div class="composer-actions"><span class="keyboard-hint">Enter ↵ · Shift + Enter — строка</span><button type="submit" class="button primary"' +
-    (state.busy || !state.model || !state.data.provider.connected ? ' disabled' : '') + '>Отправить ' + icon("arrow") +
+    (state.busy || !chatReady() ? ' disabled' : '') + '>Отправить ' + icon("arrow") +
     '</button></div></div></form><div class="context-note">' + icon("shield") +
     'Память записывается только при включённом переключателе. Сценарии не создают игровых событий.</div></section>';
   const character = '<div class="panel character-card"><div class="eyebrow">АКТИВНЫЙ ПЕРСОНАЖ</div><div class="character-name">Саруман</div><p>Верховный маг. Холодная логика,<br>древняя мудрость и своя воля.</p><div class="tag-row"><span class="tag">Высокомерный</span><span class="tag">Хитрый</span><span class="tag">Нейтральный</span></div></div>';
@@ -251,7 +253,7 @@ function analyticsView() {
     stat('Денежные затраты','—','Цена запроса по подписке не предоставляется')+'</div>';
   const chart=panel('Использование по дням · UTC','<div class="panel-body">'+usageChart()+
     '<div class="usage-legend"><span><i class="legend-dot"></i>Вход</span><span><i class="legend-dot violet"></i>Выход</span></div></div>');
-  const limits=panel(icon("shield")+'Лимиты подписки','<div class="panel-body">'+limitsHTML()+
+  const limits=panel(icon("shield")+'Лимиты Codex / ChatGPT','<div class="panel-body">'+limitsHTML()+
     '<p class="tiny">Окна относятся к аккаунту и могут включать расход других приложений. Обновляйте подключение для свежих данных.</p><a class="button small" href="https://chatgpt.com/settings/usage" target="_blank" rel="noopener noreferrer">Управление в ChatGPT ↗</a></div>');
   let split;
   if (latest) {
@@ -272,22 +274,7 @@ function analyticsView() {
     panel('Запросы и вклад памяти',rows?'<div class="table-scroll"><table><thead><tr><th>Время</th><th>Модель</th><th>Статус</th><th>Вход</th><th>Кэш</th><th>Выход</th><th>Память, оценка</th><th>Фактов</th><th>Задержка</th><th>Ошибка / примечание</th></tr></thead><tbody>'+
       rows+'</tbody></table></div>':'<div class="empty">Запросов ещё нет.</div>');
 }
-function settingsView() {
-  const p=state.data.provider;
-  const connection=panel('Codex × ChatGPT','<div class="panel-body"><div class="info-table"><div class="info-row"><span>Статус</span><strong>'+
-    (p.connected?'Подключён':'Не подключён')+'</strong></div><div class="info-row"><span>План</span><strong>'+e(p.plan||'Нет данных')+
-    '</strong></div><div class="info-row"><span>Модель</span><strong>'+e(state.model||'Не выбрана')+
-    '</strong></div><div class="info-row"><span>Оплата</span><strong>Лимиты подписки</strong></div><div class="info-row"><span>Локальная история</span><strong>SQLite</strong></div></div><p class="tiny">'+
-    e(p.error||p.note||'Авторизация хранится в Codex, а не в браузере.')+'</p>'+button(state.connecting?'Проверяем…':'Проверить подключение','connect','primary','refresh')+
-    '<p class="tiny">Подключение запрашивает аккаунт, каталог моделей и лимиты. Ответы модели запускаются только кнопкой «Отправить».</p></div>');
-  const steps=panel('Как начать','<div class="panel-body"><ol class="steps"><li><strong>Авторизуйтесь в Codex</strong>В терминале выполните <code>codex login</code> и войдите через ChatGPT.</li>'+
-    '<li><strong>Подключите лабораторию</strong>Нажмите «Подключить Codex» и выберите модель из полученного каталога.</li><li><strong>Проверьте характер</strong>Отправьте реплику или выберите сценарий. Новые диалоги изолируют историю, но читают общую память.</li>'+
-    '<li><strong>Проверьте память</strong>Включите запись фактов. Откройте граф, заметки и расход контекста после ответа.</li></ol></div>');
-  const persona=panel('Личность · PERSONA.md','<div class="panel-body"><details><summary>Прочитать текущую личность</summary><pre class="note-preview">'+e(state.data.persona)+
-    '</pre></details><p class="tiny">Редактируйте файл в проекте. Следующий запрос прочитает актуальное содержимое. Отпечаток версии сохраняется в таблице runs.</p></div>');
-  return '<div class="settings-layout">'+connection+steps+'</div><div style="margin-top:20px">'+persona+
-    '</div><div class="alert" style="margin-top:18px">В этой версии Codex app-server предоставляет готовый агентный runtime, а лаборатория управляет контекстом, историей и памятью. Если понадобится полностью собственный цикл обращений к модели, следующая интеграция — Sign in with ChatGPT + Responses API. Minecraft пока не подключён.</div>';
-}
+function settingsView(){return modelSettingsView();}
 function telegramView() {
   const d=state.telegram;
   if(!d)return panel('Telegram','<div class="empty">Загрузка…</div>');
@@ -307,7 +294,7 @@ function telegramView() {
     '<label>Интервал подготовки постов, секунд <input id="tg-interval" type="number" min="1" value="'+e(form.interval_seconds)+'"></label><br><br>'+
     '<label>Событий в одном запросе модели <input id="tg-batch" type="number" min="1" value="'+e(form.batch_size)+'"></label><br><br>'+
     '<button class="button lime" type="submit">Сохранить</button> '+button('Проверить связь','tg-check','','refresh')+
-    '<p class="tiny">Без автопубликации тексты остаются на просмотре. Их готовит выбранная в игре модель PersonaAgent. Запросы учитываются в её истории сессии :telegram. Настройки модели в шапке лаборатории к этому не относятся.</p>'+
+    '<p class="tiny">Без автопубликации тексты остаются на просмотре. Их готовит отдельная модель роли Telegram. Выберите её в разделе «Настройки». Доставка постов не использует LLM.</p>'+
     '<p class="tiny">Модель постов: '+e(postModel?postModel.provider+' / '+postModel.model+' · '+postModel.reasoning:'появится после запуска игрового runtime')+'.</p>'+
     '<p class="tiny">Ключи: integrations/telegram-gateway/.env.client. SSH: '+e(tunnelNames[d.tunnel.status]||d.tunnel.status||'не проверялся')+'. При отключении Telegram очередь сохраняется.</p>'+
     (d.tunnel.detail?'<p class="tiny">'+e(d.tunnel.detail)+'</p>':'')+
@@ -334,19 +321,15 @@ function render() {
   if (!state.data) return;
   if (!views[state.view]) state.view="chat";
   const provider=state.data.provider;
-  const modelOptions=provider.models && provider.models.length ? provider.models.map((model)=>'<option value="'+e(model.id)+'"'+
-    (model.id===state.model?' selected':'')+'>'+e(model.name)+'</option>').join(""):'<option value="">Модель не подключена</option>';
   const bodies={chat:chatView,memory:memoryView,history:historyView,analytics:analyticsView,telegram:telegramView,settings:settingsView};
   $("#app").innerHTML='<div class="shell">'+sidebar()+'<main class="main"><header class="topbar"><div class="breadcrumb"><span>Рабочее пространство</span><span>/</span><strong>Саруман</strong></div><div class="top-actions"><span class="pill"><span class="dot '+
-    (state.view!=='telegram'&&provider.connected?'online':'')+'"></span>'+(state.view==='telegram'?'Посты · PersonaAgent':provider.connected?'ChatGPT · '+e(provider.plan||'подписка'):'Локальная лаборатория')+
-    '</span>'+(state.view==='telegram'?'':'<select id="model-select" class="model-select" aria-label="Модель"'+(state.busy?' disabled':'')+'>'+modelOptions+'</select>'+
-    button(state.connecting?'Подключение…':provider.connected?'Обновить Codex':'Подключить Codex','connect',provider.connected?'':'lime','refresh'))+
-    '</div></header>'+heading()+bodies[state.view]()+'<footer class="page-foot"><span>ISENGARD LAB · Реальные файлы, наблюдаемые данные</span><span>Память: Markdown · История: SQLite · Runtime: Codex</span></footer></main></div>';
+    (chatReady()?'online':'')+'"></span>'+e(providerNames[chatProfile().provider])+' / '+e(chatProfile().model)+
+    '</span>'+(state.view==='settings'?'':button(views.settings,'models-settings'))+
+    '</div></header>'+heading()+bodies[state.view]()+'<footer class="page-foot"><span>ISENGARD LAB · Реальные файлы, наблюдаемые данные</span><span>Память: Markdown · История: SQLite · Модели: по задачам</span></footer></main></div>';
 }
 async function refresh() {
   state.data=await api("/api/overview");
-  const models=state.data.provider.models||[];
-  if (models.length && !models.some((model)=>model.id===state.model)) state.model=(models.find((model)=>model.is_default)||models[0]).id;
+  state.model=chatProfile().model;
 }
 async function loadSession(id) {
   state.session=id||null; state.error=null;
@@ -363,7 +346,7 @@ async function database() {
 }
 async function sendMessage() {
   if(state.busy||!state.draft.trim()) return;
-  if(!state.data.provider.connected||!state.model){toast("Сначала подключите Codex и выберите модель.");return;}
+  if(!chatReady()){toast("Проверьте подключение выбранного провайдера в настройках.");return;}
   const text=state.draft.trim();
   state.busy=true;state.error=null;
   try {
@@ -391,6 +374,11 @@ async function sendMessage() {
   }
 }
 document.addEventListener("input",(event)=>{
+  if(event.target.dataset.role && event.target.type==='number') {
+    const role=event.target.dataset.role;
+    const p=state.roleDrafts[role] ||= {...state.data.models.profiles[role]};
+    p[event.target.dataset.field]=Number(event.target.value);
+  }
   if(event.target.id==="message-input") state.draft=event.target.value;
   if(event.target.id==="tg-text") state.telegramDraft=event.target.value;
   if(event.target.closest('#telegram-settings')) state.telegramForm={
@@ -399,6 +387,18 @@ document.addEventListener("input",(event)=>{
 });
 document.addEventListener("change",async(event)=>{
   try {
+    if(event.target.dataset.role && event.target.tagName==='SELECT') {
+      const role=event.target.dataset.role, field=event.target.dataset.field;
+      const p=state.roleDrafts[role] ||= {...state.data.models.profiles[role]};
+      state.showOptional=!!$('#optional-roles')?.open;
+      p[field]=event.target.value;
+      if(field==='provider'){
+        p.model=Object.keys(state.data.models.catalogue[p.provider])[0];
+        if(p.provider==='minimax')p.max_output=Math.max(p.max_output,32768);
+      }
+      if(field==='provider'||field==='model')p.reasoning='default';
+      render();return;
+    }
     if(event.target.id==="remember") state.remember=event.target.checked;
     if(event.target.id==="model-select") state.model=event.target.value;
     if(event.target.id==="session-select") {
@@ -409,6 +409,17 @@ document.addEventListener("change",async(event)=>{
   } catch(error){toast(error.message);}
 });
 document.addEventListener("submit",(event)=>{
+  if(event.target.dataset.roleForm){
+    event.preventDefault();
+    const role=event.target.dataset.roleForm;
+    const {revision,...profile}=state.roleDrafts[role]||state.data.models.profiles[role];
+    state.showOptional=!!$('#optional-roles')?.open;
+    state.savingRole=role;render();
+    api('/api/models',{role,profile,revision}).then(data=>{
+      state.data.models=data;delete state.roleDrafts[role];state.model=chatProfile().model;
+      toast('Настройки сохранены. Применятся со следующего запроса.');
+    }).catch(error=>toast(error.message)).finally(()=>{state.savingRole=null;render();});
+  }
   if(event.target.id==="chat-form"){event.preventDefault();sendMessage();}
   if(event.target.id==='telegram-settings'){
     event.preventDefault();
@@ -445,6 +456,7 @@ document.addEventListener("click",async(event)=>{
       $("#message-input").focus();return;
     }
     const action=target.dataset.action;
+    if(action==='models-settings'){location.hash="settings";return;}
     if(action==='tg-check'){const r=await api('/api/telegram/check',{});await refreshTelegram();render();toast(r.can_post?'Бот имеет право публикации.':r.error||'Проверьте подключение и права.');return;}
     if(action==='tg-prev'||action==='tg-next'){state.telegramPage=Math.max(0,state.telegramPage+(action==='tg-next'?1:-1));await refreshTelegram();render();return;}
     if(action==="new-session"){if(state.busy)return;await loadSession(null);state.draft="";render();}

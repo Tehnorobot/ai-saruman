@@ -1,5 +1,15 @@
 # Progress
 
+## 2026-11-11: Per-role providers/models in Saruman Lab
+
+Implemented shared Lab/game model settings for chat, persona, actions, Telegram
+and optional legacy/helper LLM calls. Added MiniMax M Plan Explore integration,
+native reasoning, shared accounting and independent Telegram selection. Preserved
+existing profiles and guarded running requests/stale edits. 183 relevant checks
+passed; one Windows symlink skip. A broader legacy suite has one pre-existing
+message-text assertion failure. Live MiniMax access awaits the owner's key.
+[Investigation, plan, implementation and validation](archive/11-11-2026-per-role-models.md).
+
 ## 2026-11-11: Preserve LF when provisioning the Telegram SSH tunnel from Windows
 
 ### Investigate

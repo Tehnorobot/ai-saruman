@@ -48,7 +48,7 @@ class ChatAgent:
         self.ctx_handler = ctx_handler or CtxHandler(ctx_swarm)
 
         # LLM and helpers
-        self.llm = get_llm_chain()
+        self.llm = get_llm_chain(role="legacy_chat")
         self.rag_model = RagModel()
 
         # Tools init (shared global tool bank)

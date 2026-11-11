@@ -11,7 +11,7 @@ from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage, SystemMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
 from langchain_core.utils.function_calling import convert_to_openai_tool
-from pydantic import Field
+from pydantic import Field, PrivateAttr
 
 from saruman import codex_rpc
 
@@ -38,6 +38,10 @@ class CodexChatModel(BaseChatModel):
     def bind_tools(self, tools, *, tool_choice=None, **kwargs):
         converted = [convert_to_openai_tool(tool) for tool in tools]
         return self.bind(tools=converted, tool_choice=tool_choice, **kwargs)
+
+    def _infer(self, instructions, inputs, schema):
+        return codex_rpc.complete(instructions, inputs, schema, self.model, self.timeout,
+                                  reasoning_effort=self.reasoning_effort)
 
     def _generate(self, messages, stop=None, run_manager=None, **kwargs):
         tools = kwargs.get("tools", [])
@@ -118,14 +122,7 @@ class CodexChatModel(BaseChatModel):
                 "text": json.dumps({"history": history}, ensure_ascii=False),
             }
         ] + images
-        result, trace = codex_rpc.complete(
-            instructions,
-            inputs,
-            schema,
-            self.model,
-            self.timeout,
-            reasoning_effort=self.reasoning_effort,
-        )
+        result, trace = self._infer(instructions, inputs, schema)
         jsonschema.validate(result, schema)
         calls = []
         for call in result["tool_calls"]:
@@ -164,6 +161,41 @@ class CodexChatModel(BaseChatModel):
             content=content,
             tool_calls=calls,
             usage_metadata=usage_metadata,
-            response_metadata={"provider": "codex-chatgpt", **trace},
+            response_metadata={"provider": "codex", **trace},
         )
         return ChatResult(generations=[ChatGeneration(message=message)])
+
+
+class RoleChatModel(CodexChatModel):
+    """Legacy LangChain callers use the same saved roles as Lab and hybrid mode."""
+
+    role: str
+    _client: Any = PrivateAttr(default=None)
+
+    @property
+    def _llm_type(self):
+        return "saruman-role"
+
+    @property
+    def _identifying_params(self):
+        return {"role": self.role}
+
+    def _infer(self, instructions, inputs, schema):
+        from saruman.role_client import RoleClient
+        from saruman.role_settings import RoleStore
+
+        if self._client is None:
+            store = RoleStore()
+            store.recover()
+            self._client = RoleClient(store, self.role, "legacy:" + uuid.uuid4().hex)
+        self._client.resume()  # A new explicit invocation can retry after operator changes.
+        payload = json.loads(inputs[0]["text"])
+        images = [item for item in inputs if item["type"] == "image"]
+        value = self._client.complete(instructions, payload, schema, images=images)
+        row = self._client.last_trace
+        usage = row["usage"]
+        trace = {"provider": row["provider"], "model": row["model"], "role": self.role,
+                 "usage": {target: usage[source] for source, target in (
+                     ("input_tokens", "inputTokens"), ("output_tokens", "outputTokens"),
+                     ("total_tokens", "totalTokens"), ("cached_input_tokens", "cachedInputTokens")) if source in usage}}
+        return value, trace

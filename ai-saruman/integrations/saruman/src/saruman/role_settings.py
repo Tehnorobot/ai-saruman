@@ -6,16 +6,31 @@ import sqlite3
 import sys
 import time
 import uuid
-from contextlib import contextmanager
+from contextlib import contextmanager, closing
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-ROLES = ("persona", "action")
+ROLE_INFO = {
+    "lab_chat": ("Чат Lab и память", "Ответы в лаборатории; извлечение фактов идёт в том же запросе.", False),
+    "persona": ("Персонаж · речь и решения", "Общение, голосовые реплики и инициатива. Нужны текст и соблюдение схемы.", False),
+    "action": ("Игровые действия", "Выбор инструментов и аргументов. Нужны точные решения и структурированный ответ.", False),
+    "telegram": ("Telegram · тексты постов", "Посты из подтверждённых событий. Нужны хороший русский и точность фактов.", False),
+    "legacy_core": ("Старый режим · основной агент", "Только legacy; общий агент и вспомогательный контекст инструментов.", True),
+    "legacy_planner": ("Старый режим · планировщик", "Только legacy; планирование игровых задач.", True),
+    "legacy_reaction": ("Старый режим · реакции", "Только legacy; реакции на события.", True),
+    "legacy_chat": ("Старый режим · чат", "Только legacy; обработка диалогов.", True),
+    "legacy_browser": ("Старый режим · браузер", "Только при вызове браузерного агента.", True),
+    "tool_dialogue": ("Инструмент · оценка диалога", "Вспомогательный вызов старого режима; не запускается сам по себе.", True),
+    "tool_nickname": ("Инструмент · анализ имени", "Вспомогательный вызов старого режима; короткая текстовая задача.", True),
+    "tool_vision": ("Инструмент · анализ изображения", "Только при вызове screenshot. Модель обязательно должна принимать изображения.", True),
+}
+ROLES = ("persona", "action", "telegram", "lab_chat") + tuple(k for k, v in ROLE_INFO.items() if v[2])
 # Initial catalogue copied from the owner's Lab snapshot, 2026-10-24.
 # Account availability is checked by the provider on actual use, never by opening UI.
 CODEX = (
     "auto",
     "gpt-6.1-sol",
+    "gpt-6.1-terra",
     "gpt-6-astra",
     "gpt-6-sol",
     "gpt-6-luna",
@@ -33,14 +48,21 @@ LITELLM = (
 DSLAB = ("claude-sonnet-5-5", "claude-opus-5-5")
 
 
-def catalogue():
+def catalogue(path=None):
+    path = path or os.getenv("SARUMAN_ROLE_DB", ROOT / "data/role-models.sqlite")
     codex = {
         model: ["default", "low", "medium", "high", "xhigh", "max"]
         + ([] if model.endswith("luna") or model == "auto" else ["ultra"])
         for model in CODEX
     }
+    if path and Path(path).exists():
+        with closing(sqlite3.connect(Path(path).resolve().as_uri() + "?mode=ro", uri=True)) as db:
+            if db.execute("SELECT 1 FROM sqlite_master WHERE name='model_catalogue'").fetchone():
+                for model, efforts in db.execute("SELECT model,efforts FROM model_catalogue"):
+                    codex[model] = json.loads(efforts)
     return {
         "codex": codex,
+        "minimax": {"MiniMax-M3.1-Flash": ["default", "low", "medium", "high", "xhigh", "max"]},
         "litellm": {m: ["default"] for m in LITELLM},
         "dslab": {
             m: ["default", "low", "medium", "high", "xhigh", "max"] for m in DSLAB
@@ -59,7 +81,7 @@ def default_profile():
     effort = os.getenv("CODEX_REASONING_EFFORT") or "default"
     if effort not in catalogue()["codex"][model]:
         effort = "default"
-    # Both initially inherit existing subscription: never enable paid API implicitly.
+    # New roles inherit the existing subscription; never enable paid API implicitly.
     return {
         "provider": "codex",
         "model": model,
@@ -71,14 +93,14 @@ def default_profile():
     }
 
 
-def validate_profile(value):
+def validate_profile(value, options=None):
     fields = set(default_profile())
     if not isinstance(value, dict) or set(value) != fields:
         raise ValueError("Неверные поля профиля роли")
     provider, model, effort = (
         value[name] for name in ("provider", "model", "reasoning")
     )
-    options = catalogue()
+    options = options or catalogue()
     if (
         not all(isinstance(v, str) for v in (provider, model, effort))
         or provider not in options
@@ -88,12 +110,12 @@ def validate_profile(value):
     if effort not in options[provider][model]:
         raise ValueError("Этот reasoning не поддерживается выбранной моделью")
     for name, lower, upper in (
-        ("timeout", 5, 600),
-        ("max_output", 256, 16384),
-        ("max_calls", 1, 10000),
-        ("token_budget", 1000, 100000000),
+        ("timeout", 5, None),
+        ("max_output", 256, None),
+        ("max_calls", 1, None),
+        ("token_budget", 1000, None),
     ):
-        if type(value[name]) is not int or not lower <= value[name] <= upper:
+        if type(value[name]) is not int or value[name] < lower or (upper and value[name] > upper):
             raise ValueError(f"Недопустимый лимит {name}")
     return dict(value)
 
@@ -104,13 +126,14 @@ def read_profiles(path=None):
     result = {role: {**default_profile(), "revision": 0} for role in ROLES}
     if not path.exists():
         return result
-    with sqlite3.connect(path.resolve().as_uri() + "?mode=ro", uri=True) as db:
+    options = catalogue(path)
+    with closing(sqlite3.connect(path.resolve().as_uri() + "?mode=ro", uri=True)) as db:
         for role, revision, body in db.execute(
             "SELECT role,revision,body FROM profiles"
         ):
             if role not in ROLES:
                 raise ValueError("Неизвестная сохранённая роль")
-            result[role] = {**validate_profile(json.loads(body)), "revision": revision}
+            result[role] = {**validate_profile(json.loads(body), options), "revision": revision}
     return result
 
 
@@ -167,26 +190,30 @@ class RoleStore:
             db.execute(
                 "CREATE TABLE IF NOT EXISTS sessions (id TEXT PRIMARY KEY, pid INTEGER)"
             )
+            db.execute("CREATE TABLE IF NOT EXISTS model_catalogue (model TEXT PRIMARY KEY, efforts TEXT)")
+            # Preserve the old Telegram choice once; future persona edits are independent.
+            db.execute("INSERT OR IGNORE INTO profiles SELECT 'telegram',revision,body FROM profiles WHERE role='persona'")
+            db.execute("INSERT OR IGNORE INTO profiles VALUES ('telegram',0,?)", (json.dumps(default_profile()),))
 
     @contextmanager
     def connect(self):
-        with sqlite3.connect(self.path, timeout=5) as db:
+        with closing(sqlite3.connect(self.path, timeout=5)) as db, db:
             db.row_factory = sqlite3.Row
             yield db
 
     def profiles(self):
         return read_profiles(self.path)
 
-    def save(self, role, profile, *, paused):
+    def save(self, role, profile, *, paused, expected_revision=None):
         if role not in ROLES or not paused:
             raise ValueError(
                 "Для изменения модели нажмите Stop и дождитесь завершения запросов"
             )
-        profile = validate_profile(profile)
+        profile = validate_profile(profile, catalogue(self.path))
         with self.connect() as db:
             db.execute("BEGIN IMMEDIATE")
             if db.execute(
-                "SELECT 1 FROM requests WHERE state='running' LIMIT 1"
+                "SELECT 1 FROM requests WHERE state='running' AND role=? LIMIT 1", (role,)
             ).fetchone():
                 raise ValueError(
                     "Ещё выполняется запрос модели; дождитесь его завершения"
@@ -194,6 +221,8 @@ class RoleStore:
             old = db.execute(
                 "SELECT revision FROM profiles WHERE role=?", (role,)
             ).fetchone()
+            if expected_revision is not None and expected_revision != (old[0] if old else 0):
+                raise ValueError("Настройки уже изменены в другом окне. Обновите страницу.")
             revision = (old[0] if old else 0) + 1
             db.execute(
                 "INSERT OR REPLACE INTO profiles VALUES (?,?,?)",
@@ -201,10 +230,20 @@ class RoleStore:
             )
         return revision
 
+    def update_catalogue(self, models):
+        with self.connect() as db:
+            for item in models:
+                efforts = item.get("reasoning", ["default"])
+                db.execute("INSERT OR REPLACE INTO model_catalogue VALUES (?,?)",
+                           (item["id"], json.dumps(list(dict.fromkeys(["default", *efforts])))))
+
     def begin(self, role, session, profile, estimate):
         identifier = uuid.uuid4().hex
         with self.connect() as db:
             db.execute("BEGIN IMMEDIATE")
+            current = db.execute("SELECT revision FROM profiles WHERE role=?", (role,)).fetchone()
+            if profile["revision"] != (current[0] if current else 0):
+                raise RuntimeError("Настройки роли изменились до начала запроса. Повторите действие.")
             db.execute(
                 "INSERT OR IGNORE INTO sessions VALUES (?,?)", (session, os.getpid())
             )
@@ -241,15 +280,16 @@ class RoleStore:
             )
         return identifier
 
-    def finish(self, identifier, usage=None, reason=None):
+    def finish(self, identifier, usage=None, reason=None, model=None):
         with self.connect() as db:
             db.execute(
-                "UPDATE requests SET state=?,ended=?,usage=?,reason=? WHERE id=?",
+                "UPDATE requests SET state=?,ended=?,usage=?,reason=?,model=COALESCE(?,model) WHERE id=?",
                 (
                     "error" if reason else "completed",
                     time.time(),
                     json.dumps(usage or {}),
                     reason,
+                    model,
                     identifier,
                 ),
             )

@@ -3,12 +3,9 @@
 import json
 
 from saruman.role_client import validate_provider_configuration
-from saruman.role_settings import ROLES, RoleStore, catalogue
+from saruman.role_settings import ROLES, ROLE_INFO, RoleStore, catalogue
 
-LABELS = {
-    "persona": "PersonaAgent · речь и чат",
-    "action": "ActionAgent · решения и команды",
-}
+LABELS = {role: info[0] for role, info in ROLE_INFO.items()}
 
 
 class RolePanel:
@@ -135,6 +132,7 @@ def add_role_panel(context, store=None):
                     provider = gr.Dropdown(
                         choices=[
                             ("Codex / ChatGPT", "codex"),
+                            ("MiniMax / M Plan", "minimax"),
                             ("LiteLLM API", "litellm"),
                             ("DSLab / Claude API", "dslab"),
                         ],
@@ -142,12 +140,12 @@ def add_role_panel(context, store=None):
                         label="Провайдер",
                     )
                     model = gr.Dropdown(
-                        choices=list(catalogue()[initial[0]]),
+                        choices=list(catalogue(panel.store.path)[initial[0]]),
                         value=initial[1],
                         label="Модель",
                     )
                     reasoning = gr.Dropdown(
-                        choices=catalogue()[initial[0]][initial[1]],
+                        choices=catalogue(panel.store.path)[initial[0]][initial[1]],
                         value=initial[2],
                         label="Reasoning",
                     )
@@ -155,28 +153,24 @@ def add_role_panel(context, store=None):
                     output = gr.Number(
                         value=initial[3],
                         minimum=256,
-                        maximum=16384,
                         precision=0,
                         label="Лимит ответа API / резерв для Codex",
                     )
                     timeout = gr.Number(
                         value=initial[4],
                         minimum=5,
-                        maximum=600,
                         precision=0,
                         label="Тайм-аут запроса, с",
                     )
                     calls = gr.Number(
                         value=initial[5],
                         minimum=1,
-                        maximum=10000,
                         precision=0,
                         label="Запросов роли за запуск",
                     )
                     budget = gr.Number(
                         value=initial[6],
                         minimum=1000,
-                        maximum=100000000,
                         precision=0,
                         label="Бюджет токенов роли за запуск",
                     )
@@ -195,10 +189,10 @@ def add_role_panel(context, store=None):
                     return (
                         gr.Dropdown(value=saved[0]),
                         gr.Dropdown(
-                            choices=list(catalogue()[saved[0]]), value=saved[1]
+                            choices=list(catalogue(panel.store.path)[saved[0]]), value=saved[1]
                         ),
                         gr.Dropdown(
-                            choices=catalogue()[saved[0]][saved[1]], value=saved[2]
+                            choices=catalogue(panel.store.path)[saved[0]][saved[1]], value=saved[2]
                         ),
                         *saved[3:],
                     )
@@ -237,6 +231,6 @@ def add_role_panel(context, store=None):
             interactive=False,
             label="История запросов по ролям",
         )
-        details = gr.Textbox(label="Состояние двух агентов", interactive=False, lines=6)
+        details = gr.Textbox(label="Состояние игровых агентов", interactive=False, lines=6)
         gr.Timer(2).tick(panel.status, outputs=[summary, history, details], queue=False)
     return panel

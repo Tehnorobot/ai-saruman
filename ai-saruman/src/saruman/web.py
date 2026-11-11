@@ -13,6 +13,7 @@ from urllib.parse import parse_qs, urlparse
 
 from .memory import Workplace, estimate_tokens
 from .provider import CodexProvider
+from .roles import ModelSettings, LabRoleProvider
 from .storage import Store
 from .telegram import Control, Store as TelegramStore
 
@@ -23,7 +24,10 @@ class Application:
     def __init__(self, project, data_dir=None, provider=None):
         self.workplace = Workplace(project)
         self.store = Store((data_dir or project / ".saruman") / "lab.sqlite3")
-        self.provider = provider or CodexProvider()
+        self.models = ModelSettings(project, data_dir)
+        self.codex = provider or CodexProvider()
+        self.provider = provider or LabRoleProvider(self.models, self.codex)
+        self.custom_provider = provider is not None
         self.provider_status = {"connected": False, "models": [], "limits": None,
                                 "note": "Нажми «Подключить Codex», чтобы проверить аккаунт и лимиты."}
         self.token = secrets.token_urlsafe(32)
@@ -33,11 +37,14 @@ class Application:
     def overview(self):
         return {"csrf_token": self.token, "memory": self.workplace.snapshot(),
                 "sessions": self.store.sessions(), "analytics": self.store.analytics(),
-                "provider": self.provider_status, "persona": self.workplace.read("PERSONA.md")}
+                "provider": self.provider_status, "models": self.models.snapshot(),
+                "persona": self.workplace.read("PERSONA.md")}
 
     def refresh_provider(self):
         try:
-            self.provider_status = self.provider.status()
+            self.provider_status = self.codex.status()
+            if not self.custom_provider:
+                self.models.store.update_catalogue(self.provider_status.get("models", []))
         except (RuntimeError, OSError) as error:
             self.provider_status = {"connected": False, "models": [], "limits": None, "error": str(error)}
         return self.provider_status
@@ -46,6 +53,8 @@ class Application:
         text = payload.get("text")
         session_id, model = payload.get("session_id"), payload.get("model")
         remember = payload.get("remember", False)
+        if not self.custom_provider:
+            model = self.models.store.profiles()["lab_chat"]["model"]
         if not isinstance(text, str) or not text.strip() or len(text) > 12000:
             raise ValueError("Сообщение должно содержать от 1 до 12 000 символов.")
         if not isinstance(model, str) or not model or len(model) > 160:
@@ -59,7 +68,7 @@ class Application:
             history = [{"role": row["role"], "content": row["content"]} for row in messages]
             instructions, prompt, metrics = self.workplace.context(history, text.strip(), remember)
             run_id = self.store.begin(session_id, text.strip(), model, metrics)
-            trace = {"model": model}
+            trace = {"model": model, "session_id": session_id}
             try:
                 result = self.provider.complete(instructions, prompt, model, trace)
                 facts = result["memories"] if remember else []
@@ -130,6 +139,7 @@ class Handler(BaseHTTPRequestHandler):
                                      "runs": [row for row in self.app.store.runs() if row["session_id"] == session_id]})
             assets = {"/": ("index.html", "text/html; charset=utf-8"),
                       "/app.js": ("app.js", "text/javascript; charset=utf-8"),
+                      "/roles.js": ("roles.js", "text/javascript; charset=utf-8"),
                       "/styles.css": ("styles.css", "text/css; charset=utf-8")}
             if parsed.path not in assets:
                 return self.respond({"error": "Не найдено."}, 404)
@@ -155,6 +165,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.respond(self.app.store.create_session(), 201)
             if self.path == "/api/provider":
                 return self.respond(self.app.refresh_provider())
+            if self.path == "/api/models":
+                return self.respond(self.app.models.save(payload))
             if self.path == "/api/chat":
                 return self.respond(self.app.chat(payload))
             if self.path == "/api/telegram/settings":

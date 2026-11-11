@@ -17,13 +17,12 @@ from _saruman_telegram.automation import Director, POST_PROMPT, POST_SCHEMA, rec
 def make_director(role_store, session, character_prompt, telegram_store=None):
     from saruman.role_client import RoleClient
 
-    # Same selected model/profile/accounting role, separate failure state from public speech.
-    client = RoleClient(role_store, "persona", session + ":telegram")
+    client = RoleClient(role_store, "telegram", session + ":telegram")
 
     def draft(payload):
         client.resume()
         return client.complete(character_prompt + POST_PROMPT, payload, POST_SCHEMA)
 
     director = Director(draft, telegram_store)
-    director.profile = lambda: role_store.profiles()["persona"]
+    director.profile = lambda: role_store.profiles()["telegram"]
     return director

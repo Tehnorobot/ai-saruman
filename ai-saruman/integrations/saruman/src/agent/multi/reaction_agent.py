@@ -48,7 +48,7 @@ class ReactionAgent(BaseAgent):
             self.ctx_handler = ctx_handler
 
         # Lightweight LLM
-        self.llm = get_llm_chain()
+        self.llm = get_llm_chain(role="legacy_reaction")
         self.self_name = get_name()
 
         # Initialize tools for minecraft chat
