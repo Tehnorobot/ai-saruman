@@ -1,0 +1,29 @@
+[Unit]
+Description=Single-channel Telegram publishing gateway
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=telegram-gateway
+Group=telegram-gateway
+WorkingDirectory=/opt/saruman-telegram
+ExecStart=/usr/bin/python3 -B -u /opt/saruman-telegram/gateway.py --env-file /opt/saruman-telegram/.env
+Restart=on-failure
+RestartSec=5
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/saruman-telegram/data
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+CapabilityBoundingSet=
+
+[Install]
+WantedBy=multi-user.target

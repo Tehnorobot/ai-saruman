@@ -4,6 +4,7 @@
 ai-saruman/
 ├── src/saruman/                 # лаборатория, Python 3.14+
 ├── agent-workplace/             # основа автономного персонажа и Markdown-память
+├── integrations/telegram-gateway/ # отдельный текстовый Telegram-шлюз, Python 3.10+
 ├── integrations/saruman/        # игровой runtime, Python 3.10.x
 │   ├── src/saruman/             # launcher, doctor, Codex-адаптер
 │   ├── src/agent/               # агентный цикл и игровые инструменты
@@ -46,7 +47,11 @@ ai-saruman/
 отдельно. Не используй `down -v` для перезапуска с сохранением данных.
 
 Память Markdown, SQLite лаборатории и PostgreSQL игры пока не объединены.
-Полная МАС, оркестрация, ИТ-агенты и Telegram остаются отдельными будущими задачами.
+Telegram-шлюз находится в `integrations/telegram-gateway`. Общий локальный журнал
+`.saruman/telegram.sqlite3` связывает окно и игровой runtime: события, черновики,
+очередь, входящие посты и результаты. Никакие игровые/LLM-зависимости между двумя
+окружениями не импортируются. [Подключение](../integrations/telegram-gateway/AUTONOMOUS_RU.md).
+Полная МАС, запуск Minecraft из лаборатории и ИТ-агенты остаются будущими задачами.
 
 ## Git
 

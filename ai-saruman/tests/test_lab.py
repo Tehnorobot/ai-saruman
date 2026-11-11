@@ -71,7 +71,12 @@ class MemoryTests(Fixture):
         outside = self.root / "outside.md"
         outside.write_text("untouched")
         target = self.workplace.home / "memory/entities/alex.md"
-        target.symlink_to(outside)
+        try:
+            target.symlink_to(outside)
+        except OSError as error:
+            if getattr(error, "winerror", None) == 1314:
+                self.skipTest("Windows account cannot create symlinks; requires Developer Mode or privilege")
+            raise
         with self.assertRaises(ValueError):
             self.workplace.remember([self.fact()], "s", "r")
         self.assertEqual(outside.read_text(), "untouched")

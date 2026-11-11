@@ -19,6 +19,7 @@ class AutomationRuntime:
         server_send=None,
         supply=None,
         announce=None,
+        event_sink=None,
     ):
         self.adapter, self.store, self.clock = adapter, store or GoalStore(), clock
         self.notify = notify or (lambda goal: None)
@@ -26,6 +27,8 @@ class AutomationRuntime:
         self.supply = supply
         self.announce = announce or (lambda text, emotion: None)
         self.speech = ActionSpeech()
+        self.event_sink = event_sink
+        self.event_error = None
         self.speech_catalogue_loaded = False
         self.last_plant = None
         self.next_tick = 0
@@ -36,6 +39,12 @@ class AutomationRuntime:
 
     def change(self, goal, **changes):
         result = self.store.update(goal, **changes)
+        if self.event_sink:
+            try:
+                self.event_sink(goal, result)
+                self.event_error = None
+            except Exception as error:  # telemetry failure must not stop a game action
+                self.event_error = type(error).__name__
         if (
             result["state"] in {"completed", "failed", "uncertain"}
             and goal["source"] != "planner"

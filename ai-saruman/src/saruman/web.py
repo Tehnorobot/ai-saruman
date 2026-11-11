@@ -14,6 +14,7 @@ from urllib.parse import parse_qs, urlparse
 from .memory import Workplace, estimate_tokens
 from .provider import CodexProvider
 from .storage import Store
+from .telegram import Control, Store as TelegramStore
 
 MAX_BODY = 64 * 1024
 
@@ -27,6 +28,7 @@ class Application:
                                 "note": "Нажми «Подключить Codex», чтобы проверить аккаунт и лимиты."}
         self.token = secrets.token_urlsafe(32)
         self.turn_lock = threading.Lock()
+        self.telegram = Control(TelegramStore((data_dir or project / ".saruman") / "telegram.sqlite3"))
 
     def overview(self):
         return {"csrf_token": self.token, "memory": self.workplace.snapshot(),
@@ -115,6 +117,8 @@ class Handler(BaseHTTPRequestHandler):
             params = parse_qs(parsed.query)
             if parsed.path == "/api/overview":
                 return self.respond(self.app.overview())
+            if parsed.path == "/api/telegram":
+                return self.respond(self.app.telegram.store.snapshot(int(params.get("page", ["0"])[0])))
             if parsed.path == "/api/messages":
                 return self.respond(self.app.store.messages(params.get("session_id", [""])[0]))
             if parsed.path == "/api/database":
@@ -153,6 +157,15 @@ class Handler(BaseHTTPRequestHandler):
                 return self.respond(self.app.refresh_provider())
             if self.path == "/api/chat":
                 return self.respond(self.app.chat(payload))
+            if self.path == "/api/telegram/settings":
+                return self.respond(self.app.telegram.store.configure(payload))
+            if self.path == "/api/telegram/check":
+                return self.respond(self.app.telegram.check())
+            if self.path == "/api/telegram/draft":
+                return self.respond({"id": self.app.telegram.store.manual(payload.get("text"))}, 201)
+            if self.path == "/api/telegram/action":
+                self.app.telegram.store.action(payload.get("id"), payload.get("action"))
+                return self.respond({"ok": True})
             self.respond({"error": "Не найдено."}, 404)
         except BlockingIOError as error:
             self.respond({"error": str(error)}, 409)
@@ -186,9 +199,11 @@ def main():
         parser.exit(1, str(error) + "\n")
     print(f"Saruman Lab → http://127.0.0.1:{server.server_port}", flush=True)
     print("Локальная БД: " + str(app.store.path), flush=True)
+    app.telegram.start()
     try:
         server.serve_forever()
     except KeyboardInterrupt:
         pass
     finally:
+        app.telegram.close()
         server.server_close()

@@ -836,7 +836,8 @@ def mine_bridge_handler(ctx_swarm: CtxSwarmType, debug: bool = False):
                     def native_speech(text, emotion):
                         if len(ctx_swarm["tts_queue"]) < 3:
                             ctx_swarm["tts_queue"].append({"text": text, "emotion": emotion})
-                    mod_runtime = AutomationRuntime(NativeMods(java_gateway), notify=native_goal_event, server_send=mc.ChatMessage, announce=native_speech)
+                    from saruman.telegram_bridge import record_goal
+                    mod_runtime = AutomationRuntime(NativeMods(java_gateway), notify=native_goal_event, server_send=mc.ChatMessage, announce=native_speech, event_sink=record_goal)
                     mod_runtime.supply = ModSupply(java_gateway, mod_runtime.store)
                 except Exception as error:
                     ctx_game["mod_runtime"] = {"status": "unavailable", "error": str(error)}

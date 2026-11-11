@@ -298,6 +298,22 @@ class HybridAgent:
         self.workers = []
         self.next_remark = self.clock() + 180
         self.last_player_message = 0
+        self.telegram = None
+        # Tests/standalone runtime copies can omit the optional sibling integration.
+        if not clients:
+            try:
+                from saruman.telegram_bridge import make_director
+
+                self.telegram = make_director(self.store, self.session, persona_prompt)
+            except Exception as error:  # optional publishing must not prevent character startup
+                self.ctx_swarm["game"]["telegram_error"] = type(error).__name__
+
+    def telegram_inactive(self):
+        if self.telegram:
+            try:
+                self.telegram.store.set_meta("runtime", {"active": False, "updated": self.clock()})
+            except Exception as error:
+                self.ctx_swarm["game"]["telegram_error"] = type(error).__name__
 
     def world(self):
         game = self.ctx_swarm.get("game", {})
@@ -731,6 +747,12 @@ class HybridAgent:
         self.ctx_swarm["game"]["mod_player_pending_until"] = (
             self.clock() + 10 if has_player_work else 0
         )
+        if self.telegram:
+            try:
+                self.telegram.observe(self.world(), active=(self.running and not has_player_work
+                                       and self.ctx_swarm["env"].get("agent_enabled", False)))
+            except Exception as error:  # optional integration must never stop gameplay
+                self.ctx_swarm["game"]["telegram_error"] = type(error).__name__
         self.ctx_swarm["game"]["role_agents"] = {
             "mode": "hybrid",
             "requests": [
@@ -811,6 +833,7 @@ class HybridAgent:
                 time.sleep(0.1)
         finally:
             self.running = False
+            self.telegram_inactive()
             self.loop_lock.release()
 
     def _prepare_run(self):
@@ -850,10 +873,16 @@ class HybridAgent:
                 )
             self.requests[saved["id"]] = saved
         self.start_workers()
+        if self.telegram:
+            try:
+                self.telegram.start()
+            except Exception as error:
+                self.ctx_swarm["game"]["telegram_error"] = type(error).__name__
 
     def stop(self):
         self.running = False
         self.generation += 1
+        self.telegram_inactive()
         with self.lock:
             self._cancel_requests()
 
@@ -876,6 +905,11 @@ class HybridAgent:
 
     def cleanup(self):
         self.stop()
+        if self.telegram:
+            try:
+                self.telegram.close()
+            except Exception as error:
+                self.ctx_swarm["game"]["telegram_error"] = type(error).__name__
         self.shutdown.set()
         for worker in self.workers:
             worker.join(timeout=0.5)

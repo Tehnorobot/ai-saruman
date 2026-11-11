@@ -481,6 +481,13 @@ class ProviderTests(Fixtures):
 
 
 class HybridTests(Fixtures):
+    def test_telegram_storage_error_does_not_prevent_stop(self):
+        self.agent.telegram = Mock()
+        self.agent.telegram.store.set_meta.side_effect = OSError("test disk unavailable")
+        self.agent.stop()
+        self.assertFalse(self.agent.running)
+        self.assertEqual(self.ctx["game"]["telegram_error"], "OSError")
+
     def setUp(self):
         super().setUp()
         self.now = time.time()

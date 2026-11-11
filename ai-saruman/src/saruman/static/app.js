@@ -27,11 +27,14 @@ const scenarios = [
   {name:"Проверка памяти", icon:"memory", text:"Что ты помнишь обо мне из нашего диалога? Отдели известные тебе факты от предположений."},
   {name:"Неизвестные сведения", icon:"chat", text:"Сколько у меня сейчас алмазов в инвентаре? Если не знаешь, не выдумывай."}
 ];
-const views = {chat:"Тестирование", memory:"Память", history:"Диалоги", analytics:"Аналитика", settings:"Подключение"};
+const views = {chat:"Тестирование", memory:"Память", history:"Диалоги", analytics:"Аналитика", telegram:"Telegram", settings:"Подключение"};
 const state = {data:null, view:location.hash.slice(1) || "chat", session:null, messages:[], draft:"",
   remember:false, busy:false, connecting:false, memoryView:"graph", entity:null, file:null,
   database:"sessions", databaseData:null, model:"", error:null};
 let toastTimer;
+state.telegram = null;
+state.telegramPage = 0;
+state.telegramDraft = "";
 function toast(text) {
   $("#toast").textContent = text;
   $("#toast").hidden = false;
@@ -84,6 +87,7 @@ function sidebar() {
 }
 function heading() {
   const subtitles = {chat:"Проверьте голос, решения и последовательность характера.",memory:"Воспоминания, сущности и связи — без скрытых слоёв.",history:"Каждый эксперимент сохраняется в последовательном диалоге.",analytics:"Измеренный расход и прозрачная оценка контекста.",settings:"Локальный harness, модели и подписка ChatGPT."};
+  subtitles.telegram='Подтверждённые события, черновики и публикации в канале.';
   return '<div class="page-heading"><div><div class="eyebrow">САРУМАН / CHARACTER EXPERIMENTS</div><h1>' + views[state.view] +
     '</h1><p class="subtitle">' + subtitles[state.view] + '</p></div>' +
     (state.view === "chat" ? button("Новый диалог","new-session","","plus") : button("Обновить","refresh","refresh","refresh")) + '</div>';
@@ -284,17 +288,59 @@ function settingsView() {
   return '<div class="settings-layout">'+connection+steps+'</div><div style="margin-top:20px">'+persona+
     '</div><div class="alert" style="margin-top:18px">В этой версии Codex app-server предоставляет готовый агентный runtime, а лаборатория управляет контекстом, историей и памятью. Если понадобится полностью собственный цикл обращений к модели, следующая интеграция — Sign in with ChatGPT + Responses API. Minecraft пока не подключён.</div>';
 }
+function telegramView() {
+  const d=state.telegram;
+  if(!d)return panel('Telegram','<div class="empty">Загрузка…</div>');
+  const names={draft:'На просмотре',preparing:'Готовится',queued:'В очереди',sending:'Отправляется',sent:'Опубликовано',failed:'Ошибка',unknown:'Доставка неизвестна',cancelled:'Отменено'};
+  const fresh=d.runtime.updated && Date.now()/1000-d.runtime.updated<20;
+  const online=d.connection.checked_at && Date.now()/1000-d.connection.checked_at<90 && d.connection.can_post;
+  const form=state.telegramForm||d.settings;
+  const tunnelNames={running:'подключён',external:'внешний туннель или HTTPS',connecting:'подключение',retrying:'повтор подключения',not_configured:'требуется настройка',stopped:'отключён'};
+  const updateNames={not_checked:'ещё не проверено',receiving:'подключено'};
+  const postModel=d.runtime.model;
+  const stats='<div class="stats-grid">'+stat('Шлюз',online?'Доступен':'Нет подтверждения',d.connection.channel_title||d.connection.error||'Нажмите «Проверить связь»',online)+
+    stat('Персонаж',fresh&&d.runtime.active?'В работе':'Нет активного сигнала',fresh&&d.runtime.world_ready?'Игровые наблюдения поступают':'Запустите игровой runtime')+
+    stat('Опубликовано',number(d.counts.sent||0),'В локальном журнале')+stat('События',number(d.pending_events),'Ещё не включены в пост')+'</div>';
+  const controls=panel('Публикации','<form id="telegram-settings" class="panel-body">'+
+    '<label><input id="tg-enabled" type="checkbox" '+(form.enabled?'checked':'')+'> Включить Telegram</label><br><br>'+
+    '<label><input id="tg-auto" type="checkbox" '+(form.auto_post?'checked':'')+'> Публиковать подготовленные посты автоматически</label><br><br>'+
+    '<label>Интервал подготовки постов, секунд <input id="tg-interval" type="number" min="1" value="'+e(form.interval_seconds)+'"></label><br><br>'+
+    '<label>Событий в одном запросе модели <input id="tg-batch" type="number" min="1" value="'+e(form.batch_size)+'"></label><br><br>'+
+    '<button class="button lime" type="submit">Сохранить</button> '+button('Проверить связь','tg-check','','refresh')+
+    '<p class="tiny">Без автопубликации тексты остаются на просмотре. Их готовит выбранная в игре модель PersonaAgent. Запросы учитываются в её истории сессии :telegram. Настройки модели в шапке лаборатории к этому не относятся.</p>'+
+    '<p class="tiny">Модель постов: '+e(postModel?postModel.provider+' / '+postModel.model+' · '+postModel.reasoning:'появится после запуска игрового runtime')+'.</p>'+
+    '<p class="tiny">Ключи: integrations/telegram-gateway/.env.client. SSH: '+e(tunnelNames[d.tunnel.status]||d.tunnel.status||'не проверялся')+'. При отключении Telegram очередь сохраняется.</p>'+
+    (d.tunnel.detail?'<p class="tiny">'+e(d.tunnel.detail)+'</p>':'')+
+    (d.draft_status.error?'<p class="tiny">Подготовка: '+e(d.draft_status.error)+'</p>':'')+
+    (d.updates_status==='receiving'?'':'<p class="tiny">Чтение канала: '+e(updateNames[d.updates_status]||d.updates_status)+'</p>')+'</form>');
+  const manual=panel('Свой черновик','<form id="telegram-draft" class="panel-body"><textarea id="tg-text" rows="4" placeholder="Текст для канала" aria-label="Текст поста">'+e(state.telegramDraft)+
+    '</textarea><br><button class="button" type="submit">Сохранить черновик</button><p class="tiny">Эта кнопка сохраняет текст. Для отправки нажмите «В очередь» у поста и включите Telegram.</p></form>');
+  const posts=d.posts.map(p=>'<article class="panel-body"><strong>'+e(names[p.status]||p.status)+'</strong> · '+e(new Date(p.created*1000).toLocaleString('ru-RU'))+
+    '<p style="white-space:pre-wrap">'+e(p.text||'Подготовка текста…')+'</p><div class="tiny">ID: '+e(p.id)+' · попыток: '+number(p.attempts)+(p.message_id?' · Telegram #'+e(p.message_id):'')+'</div>'+
+    (p.error?'<p class="tiny">'+e(p.error)+(p.status==='unknown'?' — проверьте канал; автоматической повторной отправки нет.':'')+'</p>':'')+
+    (['draft','failed'].includes(p.status)?'<button class="button" data-tg-id="'+e(p.id)+'" data-tg-action="queue">В очередь</button> ':'')+
+    (['draft','queued','failed'].includes(p.status)?'<button class="button" data-tg-id="'+e(p.id)+'" data-tg-action="cancel">Отменить</button>':'')+
+    '<details><summary>Источники событий</summary><pre class="note-preview">'+e(JSON.stringify(p.event_ids,null,2))+'</pre></details></article>').join('');
+  const records=(rows,label)=>rows.map(r=>'<details class="panel-body"><summary>'+e(r.kind||r.stage||('Telegram update '+r.update_id))+'</summary><pre class="note-preview">'+e(JSON.stringify(r,null,2))+'</pre></details>').join('')||'<div class="empty">'+label+'</div>';
+  return stats+'<div class="settings-layout">'+controls+manual+'</div>'+panel('История постов',posts||'<div class="empty">Постов пока нет. Подтверждённые игровые события появятся после запуска персонажа.</div>')+
+    '<details>'+ '<summary>Память событий и диагностика</summary>'+panel('Игровые события',records(d.events,'Игровых событий пока нет'))+
+    panel('Входящие посты канала',records(d.inbox,'Полученных обновлений пока нет'))+panel('Попытки подготовки и отправки',records(d.attempts,'Попыток пока нет'))+'</details>'+
+    '<div class="panel-body">'+button('← Назад','tg-prev')+' <span>Страница '+(state.telegramPage+1)+'</span> '+button('Далее →','tg-next')+'</div>';
+}
+async function refreshTelegram() {
+  state.telegram=await api('/api/telegram?page='+state.telegramPage);
+}
 function render() {
   if (!state.data) return;
   if (!views[state.view]) state.view="chat";
   const provider=state.data.provider;
   const modelOptions=provider.models && provider.models.length ? provider.models.map((model)=>'<option value="'+e(model.id)+'"'+
     (model.id===state.model?' selected':'')+'>'+e(model.name)+'</option>').join(""):'<option value="">Модель не подключена</option>';
-  const bodies={chat:chatView,memory:memoryView,history:historyView,analytics:analyticsView,settings:settingsView};
+  const bodies={chat:chatView,memory:memoryView,history:historyView,analytics:analyticsView,telegram:telegramView,settings:settingsView};
   $("#app").innerHTML='<div class="shell">'+sidebar()+'<main class="main"><header class="topbar"><div class="breadcrumb"><span>Рабочее пространство</span><span>/</span><strong>Саруман</strong></div><div class="top-actions"><span class="pill"><span class="dot '+
-    (provider.connected?'online':'')+'"></span>'+(provider.connected?'ChatGPT · '+e(provider.plan||'подписка'):'Локальная лаборатория')+
-    '</span><select id="model-select" class="model-select" aria-label="Модель"'+(state.busy?' disabled':'')+'>'+modelOptions+'</select>'+
-    button(state.connecting?'Подключение…':provider.connected?'Обновить Codex':'Подключить Codex','connect',provider.connected?'':'lime','refresh')+
+    (state.view!=='telegram'&&provider.connected?'online':'')+'"></span>'+(state.view==='telegram'?'Посты · PersonaAgent':provider.connected?'ChatGPT · '+e(provider.plan||'подписка'):'Локальная лаборатория')+
+    '</span>'+(state.view==='telegram'?'':'<select id="model-select" class="model-select" aria-label="Модель"'+(state.busy?' disabled':'')+'>'+modelOptions+'</select>'+
+    button(state.connecting?'Подключение…':provider.connected?'Обновить Codex':'Подключить Codex','connect',provider.connected?'':'lime','refresh'))+
     '</div></header>'+heading()+bodies[state.view]()+'<footer class="page-foot"><span>ISENGARD LAB · Реальные файлы, наблюдаемые данные</span><span>Память: Markdown · История: SQLite · Runtime: Codex</span></footer></main></div>';
 }
 async function refresh() {
@@ -346,6 +392,10 @@ async function sendMessage() {
 }
 document.addEventListener("input",(event)=>{
   if(event.target.id==="message-input") state.draft=event.target.value;
+  if(event.target.id==="tg-text") state.telegramDraft=event.target.value;
+  if(event.target.closest('#telegram-settings')) state.telegramForm={
+    enabled:$('#tg-enabled').checked,auto_post:$('#tg-auto').checked,
+    interval_seconds:Number($('#tg-interval').value),batch_size:Number($('#tg-batch').value)};
 });
 document.addEventListener("change",async(event)=>{
   try {
@@ -360,6 +410,15 @@ document.addEventListener("change",async(event)=>{
 });
 document.addEventListener("submit",(event)=>{
   if(event.target.id==="chat-form"){event.preventDefault();sendMessage();}
+  if(event.target.id==='telegram-settings'){
+    event.preventDefault();
+    const values={enabled:$('#tg-enabled').checked,auto_post:$('#tg-auto').checked,
+      interval_seconds:Number($('#tg-interval').value),batch_size:Number($('#tg-batch').value)};
+    api('/api/telegram/settings',values).then(async()=>{state.telegramForm=null;await refreshTelegram();render();toast('Настройки Telegram сохранены.');}).catch(error=>toast(error.message));
+  }
+  if(event.target.id==='telegram-draft'){
+    event.preventDefault();api('/api/telegram/draft',{text:state.telegramDraft}).then(async()=>{state.telegramDraft='';await refreshTelegram();render();}).catch(error=>toast(error.message));
+  }
 });
 document.addEventListener("keydown",(event)=>{
   if(event.target.id==="message-input"&&event.key==="Enter"&&!event.shiftKey&&!event.isComposing){
@@ -373,6 +432,7 @@ document.addEventListener("click",async(event)=>{
   const target=event.target.closest("button,[data-node]");
   if(!target)return;
   try {
+    if(target.dataset.tgAction){await api('/api/telegram/action',{id:target.dataset.tgId,action:target.dataset.tgAction});await refreshTelegram();render();return;}
     if(target.dataset.view){location.hash=target.dataset.view;return;}
     if(target.dataset.memoryView){state.memoryView=target.dataset.memoryView;render();if(state.memoryView==="database")await database();return;}
     if(target.dataset.node){state.entity=target.dataset.node;render();return;}
@@ -385,6 +445,8 @@ document.addEventListener("click",async(event)=>{
       $("#message-input").focus();return;
     }
     const action=target.dataset.action;
+    if(action==='tg-check'){const r=await api('/api/telegram/check',{});await refreshTelegram();render();toast(r.can_post?'Бот имеет право публикации.':r.error||'Проверьте подключение и права.');return;}
+    if(action==='tg-prev'||action==='tg-next'){state.telegramPage=Math.max(0,state.telegramPage+(action==='tg-next'?1:-1));await refreshTelegram();render();return;}
     if(action==="new-session"){if(state.busy)return;await loadSession(null);state.draft="";render();}
     if(action==="refresh"){await refresh();render();if(state.memoryView==="database"&&state.view==="memory")await database();toast("Данные обновлены.");}
     if(action==="connect"){
@@ -405,8 +467,13 @@ document.addEventListener("click",async(event)=>{
     }
   } catch(error){toast(error.message);}
 });
-window.addEventListener("hashchange",()=>{state.view=location.hash.slice(1);render();});
+window.addEventListener("hashchange",async()=>{state.view=location.hash.slice(1);render();if(state.view==='telegram'){try{await refreshTelegram();render();}catch(error){toast(error.message);}}});
 (async()=>{
-  try{await refresh();if(state.data.sessions.length)await loadSession(state.data.sessions[0].id);render();}
+  try{await refresh();if(state.data.sessions.length)await loadSession(state.data.sessions[0].id);if(state.view==='telegram')await refreshTelegram();render();}
   catch(error){$("#app").innerHTML='<div class="boot"><strong>Лаборатория недоступна</strong><p>'+e(error.message)+'</p><p>Запустите сервер и обновите страницу.</p></div>';}
 })();
+setInterval(async()=>{
+  if(state.view!=='telegram'||!state.data)return;
+  try{await refreshTelegram();if(!document.activeElement.closest('form')&&!document.querySelector('details[open]')&&!String(window.getSelection()).trim())render();}
+  catch(error){toast(error.message);}
+},5000);

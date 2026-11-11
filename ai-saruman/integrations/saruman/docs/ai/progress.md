@@ -1,5 +1,12 @@
 # Progress
 
+## 2026-11-11: Autonomous Telegram integration
+
+Implemented game facts → existing persona model → durable outbox → VPS gateway,
+with review/autopublish controls, history, inbox and SSH recovery in Character Lab.
+165 tests passed; 1 Windows symlink privilege skip. Live installation awaits owner
+SSH authentication. [Investigation, plan and implementation](archive/11-11-2026-telegram-autonomy.md).
+
 Previous work: [mod implementation guides and document organization](archive/24-10-2026-before-mod-runtime-review.md).
 
 ## 2026-11-07: Simplify Mage Home requirements after the Lab pipeline review
