@@ -10,6 +10,7 @@ import argparse
 import datetime as dt
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -21,7 +22,7 @@ import time
 DEFAULT_RUNS = Path(os.getenv("STORAGE_RUNS", "/runs"))
 DEFAULT_STATE = Path(os.getenv("STORAGE_STATE", "/state"))
 RE_VIDEO = re.compile(r"[^A-Za-z0-9._/-]+")
-PROCESSING_VERSION = 1
+PROCESSING_VERSION = 2
 
 
 def utc_now() -> str:
@@ -36,9 +37,6 @@ def config() -> dict:
     endpoint = os.getenv("YC_S3_ENDPOINT", "https://storage.yandexcloud.net")
     if not endpoint.startswith("https://"):
         raise ValueError("S3 endpoint must use HTTPS")
-    max_seconds = float(os.getenv("YC_VIDEO_MAX_SECONDS", "60"))
-    if not 0 < max_seconds <= 60:
-        raise ValueError("YC_VIDEO_MAX_SECONDS must be <= 60")
     presign = int(os.getenv("YC_S3_PRESIGN_SECONDS", "900"))
     if not 60 <= presign <= 3600:
         raise ValueError("YC_S3_PRESIGN_SECONDS must be 60..3600")
@@ -50,7 +48,10 @@ def config() -> dict:
         "region": os.getenv("YC_S3_REGION", "ru-central1"),
         "bucket": os.environ["YC_S3_BUCKET"],
         "prefix": prefix,
-        "seconds": max_seconds,
+        # Recording duration belongs to the operator's lab setting. Uploads
+        # preserve completed recordings, including older recordings made with
+        # a different setting. Legacy YC_VIDEO_MAX_SECONDS has no effect.
+        "seconds": None,
         "presign": presign,
     }
 
@@ -82,7 +83,7 @@ def probe(path: Path) -> tuple[float, str]:
     )
     obj = json.loads(p.stdout)
     duration = float(obj["format"]["duration"])
-    if not 0 < duration < 86400:
+    if not math.isfinite(duration) or duration <= 0:
         raise ValueError("Invalid video duration")
     video_codecs = [s["codec_name"] for s in obj.get("streams", []) if s.get("codec_type") == "video"]
     if not video_codecs:
@@ -90,24 +91,31 @@ def probe(path: Path) -> tuple[float, str]:
     return duration, video_codecs[0]
 
 
-def prepare_video(src: Path, duration: float, codec: str, max_secs: float, temp: Path) -> tuple[Path, float, bool]:
+def prepare_video(src: Path, duration: float, codec: str, max_secs: float | None, temp: Path) -> tuple[Path, float, bool]:
     # Do not trust a segment time or ffmpeg -t alone. Verify final duration separately.
-    if duration <= max_secs and codec == "h264":
+    if not math.isfinite(duration) or duration <= 0:
+        raise ValueError("Invalid video duration")
+    if max_secs is not None and (not math.isfinite(max_secs) or max_secs <= 0):
+        raise ValueError("Invalid explicit video limit")
+    trim = max_secs is not None and duration > max_secs
+    if not trim and codec == "h264":
         return src, duration, False
     out = temp / "verified-clip.mp4"
-    # Always use a sub-60-second target to absorb encoder/container rounding.
-    bound = min(max_secs - 1, 58.0)
-    if bound <= 0:
-        raise ValueError("Video limit too small for safe clip")
-    cmd = ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-i", str(src),
-           "-t", f"{bound:.3f}", "-map", "0:v:0", "-map", "0:a:0?", "-c:v", "libx264",
+    cmd = ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-i", str(src)]
+    target_duration = duration
+    if trim:
+        # Preserve compatibility for explicit caller limits without restoring
+        # the removed one-minute cap. Leave a small container-rounding margin.
+        target_duration = max_secs - min(1.0, max_secs * 0.05)
+        cmd += ["-t", f"{target_duration:.6f}"]
+    cmd += ["-map", "0:v:0", "-map", "0:a:0?", "-c:v", "libx264",
            "-preset", "veryfast", "-pix_fmt", "yuv420p", "-crf", "26", "-c:a", "aac",
            "-movflags", "+faststart", str(out)]
-    subprocess.run(cmd, timeout=240, check=True, capture_output=True)
+    subprocess.run(cmd, timeout=max(240.0, target_duration * 4 + 60), check=True, capture_output=True)
     final_duration, final_codec = probe(out)
-    if final_duration > max_secs or final_codec != "h264":
+    if (max_secs is not None and final_duration > max_secs) or final_codec != "h264":
         raise ValueError("Produced clip violates max duration or codec")
-    return out, final_duration, True
+    return out, final_duration, trim
 
 
 def state_load(path: Path) -> dict:
@@ -179,8 +187,9 @@ def upload_one(src: Path, root: Path, state_dir: Path, conf: dict, client) -> di
     duration, codec = probe(src)
     with tempfile.TemporaryDirectory(prefix="ycs3-") as d:
         upload_path, delivered_duration, clipped = prepare_video(src, duration, codec, conf["seconds"], Path(d))
-        if delivered_duration > 60:
-            raise ValueError("Duration exceeds 60s")
+        if (not math.isfinite(delivered_duration) or delivered_duration <= 0 or
+                (conf["seconds"] is not None and delivered_duration > conf["seconds"])):
+            raise ValueError("Invalid delivered duration or explicit duration limit exceeded")
         final_sha = sha256(upload_path)
         # A duration-policy change must not overwrite the earlier confirmed clip.
         key = f"{conf['prefix']}/{rel_safe[:-4]}-{original_sha[:12]}-{policy_sha[:12]}.mp4"
@@ -221,7 +230,7 @@ def sync_once(root: Path, state_dir: Path, conf: dict, client, minimum_age=15) -
 
 
 def main(argv=None) -> int:
-    parser = argparse.ArgumentParser(description="Private Yandex S3 upload of verified <=60s test videos")
+    parser = argparse.ArgumentParser(description="Private Yandex S3 upload preserving completed test recordings")
     sub = parser.add_subparsers(dest="action", required=True)
     sub.add_parser("validate-config")
     p = sub.add_parser("sync")

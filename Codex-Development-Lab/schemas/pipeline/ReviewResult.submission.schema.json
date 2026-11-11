@@ -1,6 +1,5 @@
 {
   "type": "object",
-  "description": "Ревьюер → контроллер и кодер. Вердикт о ревью, не о прохождении игры.",
   "required": [
     "contract",
     "version",
@@ -10,9 +9,11 @@
     "findings",
     "unknowns",
     "reviewed_condition_ids",
-    "evidence_refs"
+    "evidence_refs",
+    "resolved_finding_ids"
   ],
   "additionalProperties": false,
+  "description": "Ревьюер → контроллер и кодер. Вердикт о ревью, не о прохождении игры.",
   "properties": {
     "contract": {
       "description": "Имя типа сообщения; выбирает схему.",
@@ -29,21 +30,21 @@
       "type": "string"
     },
     "scope": {
-      "description": "Проект, версия ТЗ, версия кода и раунд.",
-      "$ref": "#/$defs/Scope"
+      "$ref": "#/$defs/Scope",
+      "description": "Проект, версия ТЗ, версия кода и раунд."
     },
     "request_ref": {
-      "description": "Исходный запрос этого результата.",
-      "$ref": "#/$defs/ArtifactRef"
+      "$ref": "#/$defs/ArtifactRef",
+      "description": "Исходный запрос этого результата."
     },
     "disposition": {
       "type": "string",
-      "description": "Вердикт ревью или ответ кодера; не статус теста.",
       "enum": [
         "changes_requested",
         "ready_for_verification",
         "needs_experiment"
-      ]
+      ],
+      "description": "Вердикт ревью или ответ кодера; не статус теста."
     },
     "findings": {
       "type": "array",
@@ -72,6 +73,13 @@
       "items": {
         "$ref": "#/$defs/SourceRef"
       }
+    },
+    "resolved_finding_ids": {
+      "type": "array",
+      "description": "Existing findings explicitly resolved by this review; review judgement is not independent PASS.",
+      "items": {
+        "type": "string"
+      }
     }
   },
   "$defs": {
@@ -89,8 +97,8 @@
           "description": "Для ArtifactRef: путь относительно корня проекта; для Issue: путь поля в JSON."
         },
         "sha256": {
-          "description": "Хеш точного содержимого файла; проверяется при чтении.",
-          "$ref": "#/$defs/Hash"
+          "$ref": "#/$defs/Hash",
+          "description": "Хеш точного содержимого файла; проверяется при чтении."
         },
         "media_type": {
           "type": "string",
@@ -118,21 +126,21 @@
         },
         "kind": {
           "type": "string",
-          "description": "В Action: вид работы; в Finding: класс замечания; в памяти: тип записи.",
           "enum": [
             "requirement_violation",
             "technical_risk",
             "suggestion"
-          ]
+          ],
+          "description": "В Action: вид работы; в Finding: класс замечания; в памяти: тип записи."
         },
         "severity": {
           "type": "string",
-          "description": "Риск замечания, не новое требование продукта.",
           "enum": [
             "high",
             "medium",
             "low"
-          ]
+          ],
+          "description": "Риск замечания, не новое требование продукта."
         },
         "requirement_ids": {
           "type": "array",
@@ -168,7 +176,6 @@
     },
     "ReviewResult": {
       "type": "object",
-      "description": "Ревьюер → контроллер и кодер. Вердикт о ревью, не о прохождении игры.",
       "required": [
         "contract",
         "version",
@@ -181,6 +188,7 @@
         "evidence_refs"
       ],
       "additionalProperties": false,
+      "description": "Ревьюер → контроллер и кодер. Вердикт о ревью, не о прохождении игры.",
       "properties": {
         "contract": {
           "description": "Имя типа сообщения; выбирает схему.",
@@ -197,21 +205,21 @@
           "type": "string"
         },
         "scope": {
-          "description": "Проект, версия ТЗ, версия кода и раунд.",
-          "$ref": "#/$defs/Scope"
+          "$ref": "#/$defs/Scope",
+          "description": "Проект, версия ТЗ, версия кода и раунд."
         },
         "request_ref": {
-          "description": "Исходный запрос этого результата.",
-          "$ref": "#/$defs/ArtifactRef"
+          "$ref": "#/$defs/ArtifactRef",
+          "description": "Исходный запрос этого результата."
         },
         "disposition": {
           "type": "string",
-          "description": "Вердикт ревью или ответ кодера; не статус теста.",
           "enum": [
             "changes_requested",
             "ready_for_verification",
             "needs_experiment"
-          ]
+          ],
+          "description": "Вердикт ревью или ответ кодера; не статус теста."
         },
         "findings": {
           "type": "array",
@@ -258,12 +266,12 @@
           "description": "Устойчивый ID проекта."
         },
         "spec_revision": {
-          "description": "SHA-256 канонического манифеста ТЗ и явных уточнений.",
-          "$ref": "#/$defs/Hash"
+          "$ref": "#/$defs/Hash",
+          "description": "SHA-256 канонического манифеста ТЗ и явных уточнений."
         },
         "source_revision": {
-          "description": "SHA-256 канонического манифеста исходников снимка.",
-          "$ref": "#/$defs/Hash"
+          "$ref": "#/$defs/Hash",
+          "description": "SHA-256 канонического манифеста исходников снимка."
         },
         "round": {
           "type": "integer",
@@ -282,8 +290,8 @@
       "additionalProperties": false,
       "properties": {
         "artifact": {
-          "description": "Файл, из которого взята цитата.",
-          "$ref": "#/$defs/ArtifactRef"
+          "$ref": "#/$defs/ArtifactRef",
+          "description": "Файл, из которого взята цитата."
         },
         "start_line": {
           "type": "integer",

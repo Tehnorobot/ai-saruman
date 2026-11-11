@@ -41,4 +41,6 @@ body.lab-shell{max-width:none;margin:0;padding:0;min-width:0;font-size:14px;line
 @media(prefers-reduced-motion:reduce){.lab-shell *,.lab-shell *::before,.lab-shell *::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
 :root .workflow-step.current.workflow-paused{border-color:#b98b42;background:#30271c;color:#ffe0a6;animation:none}
 
+.lab-shell .recording-settings:focus{outline:2px solid var(--accent);outline-offset:3px}.lab-shell .recording-settings h3{margin:0 0 8px}.lab-shell .recording-settings .row{align-items:flex-end}.lab-shell .recording-settings label.field{flex:0 1 360px;min-width:220px}.lab-shell #recordingMaxSeconds{width:180px;max-width:100%;font-variant-numeric:tabular-nums}.lab-shell #recordingMaxSeconds[aria-invalid=true]{border-color:var(--red)}.lab-shell #recordingSettingsStatus{margin-bottom:0;min-height:1.55em}
+
 .lab-shell #usageDetails table{table-layout:auto;min-width:1050px}.lab-shell #usageDetails td,.lab-shell #usageDetails th{word-break:normal}.lab-shell #usageDetails td:nth-child(9){font-family:Consolas,monospace;font-size:11px;overflow-wrap:anywhere;min-width:150px}.lab-shell #usageDetails td details{max-width:360px}.lab-shell #usageDetails td pre{max-height:260px;overflow:auto}.lab-shell #usageDetails>button{margin-top:14px}

@@ -73,7 +73,12 @@
         "checks": [],
         "raw_checkpoints": [],
         "affected_checkpoint_ids": []
-      }
+      },
+      "attempted": true,
+      "stopped_by": [],
+      "execution_stage": "scenario",
+      "execution_id": "example-physical-run",
+      "measurement_reused": false
     }
   ],
   "infrastructure_errors": [],
@@ -88,5 +93,6 @@
       "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
       "media_type": "text/plain"
     }
-  ]
+  ],
+  "execution_diagnostics": []
 }

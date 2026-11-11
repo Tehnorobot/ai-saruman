@@ -55,6 +55,14 @@
           },
           "expected_observation": {
             "type": "string"
+          },
+          "depends_on_action_indexes": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "uniqueItems": true
           }
         },
         "required": [

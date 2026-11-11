@@ -37,7 +37,9 @@ def metrics(row):
     incoming=sum(row.get(k,0) or 0 for k in ('input_tokens','cache_creation_input_tokens','cache_read_input_tokens'))
     cached=row.get('cache_read_input_tokens',0) or 0
     row.update(input_tokens_total=incoming,total_tokens=incoming+(row.get('output_tokens',0) or 0),
-               saved_input_tokens=cached,cache_hit_percent=round(100*cached/incoming,2) if incoming else 0)
+               saved_input_tokens=cached,reused_input_tokens=cached,
+               cache_savings_money=None,cache_savings_meaning='Cache reads are reused input, not free tokens. Monetary savings require provider tariffs.',
+               cache_hit_percent=round(100*cached/incoming,2) if incoming else 0)
     return row
 
 

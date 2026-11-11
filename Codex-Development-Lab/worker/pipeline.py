@@ -12,6 +12,7 @@ import json
 import mimetypes
 import os
 from pathlib import Path, PurePosixPath
+import re
 import sys
 import time
 
@@ -20,6 +21,7 @@ from common import task_graph, catalog_patch, preparation, correction_journal as
 from common import agent_protocol
 from common import evidence_policy
 from common import condition_progress
+from common import role_context
 from common.execution_limits import role_timeout
 from common.history import _open
 from common.memory_archive import read_json, write_json, _directory
@@ -197,6 +199,11 @@ class Cycle:
             # results or manual deferrals from a different specification.
             self.state={'version':'v1','attempts':[],'events':[], 'previous_spec_revision':self.state['spec_revision']}
         self.state['spec_revision']=self.scope['spec_revision']
+        if 'finding_ledger' not in self.state:
+            self.state['finding_ledger']={f['id']:{'id':f['id'],'finding':f,'status':'open',
+                'first_scope':self.state.get('review',{}).get('scope',dict(self.scope)),
+                'last_scope':self.state.get('review',{}).get('scope',dict(self.scope))}
+                for f in (self.state.get('review') or {}).get('findings',[])}
         soft_limit=max(1,int(os.getenv('PREPARATION_SOFT_LIMIT_SECONDS','3600')))
         if 'preparation' not in self.state:
             # Upgrade a cycle already stopped by the retired aggregate timeout.
@@ -449,12 +456,105 @@ class Cycle:
 
     def task_states(self,catalog,graph):
         conditions={c['condition_id']:c for c in self.coverage(catalog)}
+        available=role_context.availability(read_json(self.output,'pipeline/manifest.json'),
+            lambda ref:artifact(self.ws,ref['path'],ref.get('media_type')))
         states=[]
         for task in graph['tasks']:
             statuses=[conditions[c]['status'] for c in task['condition_ids']]
             status='verified' if all(s=='verified' for s in statuses) else 'manual_pending' if all(s=='manual_pending' for s in statuses) else 'needs_retest' if 'needs_retest' in statuses else 'pending'
-            states.append({'task_id':task['id'],'status':status,'result_refs':[r for c in task['condition_ids'] for r in conditions[c]['result_refs']]})
+            states.append({'task_id':task['id'],'status':status,'result_refs':[r for c in task['condition_ids'] for r in conditions[c]['result_refs']],
+                **available.get(task['id'],{'implementation':'unknown','implementation_refs':[]})})
         return states
+
+    def import_public_notes(self):
+        """Preserve role-authored public notes as claims, never controller facts."""
+        roots=[self.ws/'.lab-pipeline/agent-state']
+        for box in (getattr(self.e,'AGENT_TASKS',Path(os.getenv('AGENT_TASKS','/agent-tasks'))),
+                    Path(os.getenv('PLANNER_TASKS','/planner-tasks'))):
+            roots.append(Path(box)/'public-state'/self.job['project_id']/self.job['id'])
+        imported=self.state.setdefault('imported_note_ids',[])
+        known=set(imported)
+        for base,path in [(root,path) for root in roots for path in sorted((root/'notes').glob('N-*.json'))]:
+            if path.stem in known:continue
+            try:
+                with _open(base,tuple(path.relative_to(base).parts)) as source:note=json.load(source)
+                if note.get('note_id',path.stem)!=path.stem:continue
+                scope=note.get('scope',{})
+                if any(scope.get(k)!=self.scope[k] for k in ('project_id','spec_revision')):continue
+                if note.get('role') not in ('planner','coder','reviewer'):continue
+                if not isinstance(note.get('body_md'),str):continue
+            except (OSError,ValueError,TypeError):continue
+            record=self.event('reflection',{'artifact_type':'PublicAgentNote','note':note,
+                'meaning':'Role-authored interpretation retained in full, not independent verification.'},note['role'],tags=['proposed'])
+            entry={'note_id':path.stem,'kind':note.get('kind','note'),'role':note['role'],'scope':scope,
+                'links':note.get('links',[]),'status':note.get('status','not_assessed'),
+                'record_id':record['record_id'],'payload_ref':record['entry']['payload_ref']}
+            entry.update({k:note[k] for k in ('hypothesis_id','incident_id','finding_id','observation_refs','condition_ids','task_ids') if k in note})
+            self.state.setdefault('causal_notes',[]).append(entry);imported.append(path.stem);known.add(path.stem)
+        # Full command artifacts also cross role boundaries. Role mailboxes are
+        # private; export only scoped public results through the evidence broker.
+        from common.evidence_access import register_file
+        commands=self.state.setdefault('command_evidence',{})
+        for base,path in [(root,path) for root in roots for path in sorted((root/'commands').glob('*/execution.json'))]:
+            identity=path.parent.name
+            if identity in commands:continue
+            try:
+                with _open(base,tuple(path.relative_to(base).parts)) as source:execution=json.load(source)
+                if execution.get('status') in ('started','running'):continue
+                scope=execution.get('scope',{})
+                if any(scope.get(k)!=self.scope[k] for k in ('project_id','spec_revision')):continue
+                refs=[]
+                for relative in (path.relative_to(base).as_posix(),
+                    path.parent.relative_to(base).as_posix()+'/stdout.txt',path.parent.relative_to(base).as_posix()+'/stderr.txt'):
+                    refs.append(register_file(self.ws,base,relative,scope=scope,kind='agent_command',metadata={'execution_id':identity}))
+            except (OSError,ValueError,TypeError):continue
+            commands[identity]={'execution_id':identity,'scope':scope,'status':execution['status'],
+                'evidence_refs':[{k:r[k] for k in ('evidence_id','path','sha256')} for r in refs]}
+            self.event('reflection',{'artifact_type':'PublicCommandEvidence',**commands[identity],
+                'meaning':'Agent command observation, distinct from independent acceptance proof.'},'controller',tags=['untested'])
+        self.save()
+
+    def causal_context_ref(self):
+        return export_json(self.ws,'causal-index.json',{'version':1,'scope':self.scope,
+            'notes':self.state.get('causal_notes',[]),'findings':list(self.state.get('finding_ledger',{}).values()),
+            'command_evidence':list(self.state.get('command_evidence',{}).values()),
+            'meaning':'Complete navigation. Public model interpretations are distinct from runner observations. Use query_memory and read_artifact on demand.'})
+
+    def diagnostic_result(self):
+        """Backfill exact-run navigation without rewriting acceptance/history."""
+        previous=read_json(self.output,'pipeline/latest-result.json')
+        if not previous:return None
+        if previous.get('scope',{}).get('spec_revision')!=self.scope['spec_revision']:return None
+        # Use the request's stage for targeted versus full verification. A newer
+        # latest_verification file must never supply an older run's diagnostics.
+        relative=previous.get('request_ref',{}).get('path','')
+        match=re.fullmatch(r'(round-[0-9]{2,16}(?:/full-verification)?)/pipeline-verification-request\.json',relative)
+        stage=self.output/(match[1] if match else f"round-{previous['scope']['round']:02d}")
+        legacy=read_json(stage,'verification_complete.json')
+        if not legacy:
+            candidate=read_json(self.output,'latest_verification.json')
+            recorded=(candidate or {}).get('pipeline_result',{})
+            if (recorded.get('runner_run_id')==previous.get('runner_run_id')
+                    and recorded.get('scope')==previous.get('scope')):legacy=candidate
+        legacy=legacy or {}
+        key=digest({'run':previous.get('runner_run_id'),'scope':previous.get('scope'),
+                    'stage':stage.relative_to(self.output).as_posix(),'navigation_version':2})
+        cached=read_json(self.output,'pipeline/diagnostic-navigation-'+key+'.json')
+        if cached:
+            self.state['execution_diagnostics']=cached['execution_diagnostics']
+            return {**previous,'execution_diagnostics':cached['execution_diagnostics'],
+                    'observation_navigation':cached['observation_navigation']}
+        from common.verification_feedback import execution_diagnostics,observation_navigation
+        diagnostics=previous.get('execution_diagnostics')
+        if diagnostics is None:
+            diagnostics=execution_diagnostics(self.ws,self.output,legacy,previous['scope']['round'],scope=previous['scope'])
+        observations=observation_navigation(self.ws,stage,legacy,previous['scope'])
+        navigation={'execution_diagnostics':diagnostics,'observation_navigation':observations,'original_scope':previous['scope'],
+                    'meaning':'Derived diagnostic navigation only; original acceptance history unchanged.'}
+        write_json(self.output,'pipeline/diagnostic-navigation-'+key+'.json',navigation)
+        self.state['execution_diagnostics']=diagnostics
+        self.event('validation',{'artifact_type':'DiagnosticNavigation',**navigation},'controller',tags=['untested'])
+        return {**previous,'execution_diagnostics':diagnostics,'observation_navigation':observations}
 
     def refresh_condition_progress(self,catalog,graph=None):
         def historical_manifest(scope):
@@ -474,7 +574,8 @@ class Cycle:
                 for cp in profile['checkpoints'] if cp['contract_changed']]
             compact['checkpoints']=[{k:v for k,v in cp.items()
                 if k not in ('last_test_contract','last_proposal_fingerprint')} for cp in profile['checkpoints']
-                if cp['unresolved_observations'] or (cp['scenario_id'],cp['checkpoint_id']) in failed_keys]
+                if cp['unresolved_observations'] or cp['unresolved_gaps']
+                or (cp['scenario_id'],cp['checkpoint_id']) in failed_keys]
             for cp in compact['checkpoints']:
                 trace={'condition_id':profile['condition_id'],'scenario_id':cp['scenario_id'],
                     'checkpoint_id':cp['checkpoint_id'],'history':[r for r in profile['history']
@@ -482,12 +583,18 @@ class Cycle:
                 trace_name='checkpoint-history-'+digest(trace)+'.json'
                 write_json(self.output,'pipeline/condition-progress/'+trace_name,trace)
                 cp['history_ref']=export_json(self.ws,trace_name,trace)
+                latest=trace['history'][-1]
+                cp['latest_attempt_kind']=latest.get('attempt_kind')
+                cp['latest_fixture_status']=latest.get('fixture_status')
             summaries.append(compact|{'history_ref':ref})
         summary={k:v for k,v in projection.items() if k!='conditions'}
         summary['conditions']=summaries
         if graph:
             summary['selection_advice']=condition_progress.selection_advice(projection,graph,self.coverage(catalog))
             summary['selection_advice']['deferred_returns']=self.state.get('return_agenda',[])
+            decision=self.state.get('decision') or {}
+            if decision.get('scope',{}).get('round')!=self.number:decision={}
+            summary['selection_advice'].update(self.remember_unresolved_work(summary,graph,decision))
         write_json(self.output,'pipeline/condition-progress.json',summary)
         index_name='condition-progress-'+digest(summary)+'.json'
         write_json(self.output,'pipeline/condition-progress/'+index_name,summary)
@@ -496,7 +603,80 @@ class Cycle:
         self.state['condition_progress']={'index_ref':ref,
             'repeated_condition_ids':[p['condition_id'] for p in summaries if p['repeated_unresolved']],
             'unmapped_verification_refs':projection['unmapped_verification_refs']}
+        reflection=self.state.get('reflection') or {}
+        if (reflection.get('reason')=='Repeated unresolved condition/checkpoint observations'
+                and not self.state['condition_progress']['repeated_condition_ids']):
+            self.event('reflection',{'artifact_type':'SupersededSchedulingProjection','previous':reflection,
+                'reason':'Recomputed actual measurement history; unstarted checks are observation gaps, not repeated product failures.'},
+                'controller',tags=['superseded'])
+            self.state.pop('reflection',None);self.state['repeated_observation']=0
         return summary,ref
+
+    def remember_unresolved_work(self,progress,graph,decision):
+        """Retain observation gaps and failures without constraining work selection.
+
+        This is a derived index of actual runner history. It does not guess a
+        cause, turn a gap into a failed product check, or extend the assignment.
+        A later measurement clears only its own scenario/checkpoint reminder.
+        """
+        tasks={t['id']:t for t in graph['tasks']}
+        selected={cid for action in decision.get('actions',[]) for cid in action['condition_ids']}
+        selected.update(decision.get('regression_condition_ids',[]))
+        deferred={x['task_id']:x for x in self.state.get('return_agenda',[])}
+        deferred.update({x['task_id']:x for x in decision.get('deferred',[])})
+        deferred_conditions={cid for tid in deferred if tid in tasks for cid in tasks[tid]['condition_ids']}
+        grouped={}
+        for condition in progress['conditions']:
+            cid=condition['condition_id']
+            for checkpoint in condition['checkpoints']:
+                if not (checkpoint['unresolved_observations'] or checkpoint['unresolved_gaps']):continue
+                sid,cpid=checkpoint['scenario_id'],checkpoint['checkpoint_id']
+                # An unbound observation gap belongs to its own condition.
+                key=(sid,cpid,cid if sid is None else None)
+                row=grouped.setdefault(key,{'reminder_id':'UW-'+digest([self.scope['project_id'],
+                    self.scope['spec_revision'],*key])[:24],'scenario_id':sid,'checkpoint_id':cpid,
+                    'condition_ids':[],'task_ids':[],'observations':[],
+                    'history_refs':[],'result_refs':[]})
+                row['condition_ids'].append(cid)
+                row['observations'].append({'condition_id':cid,'last_status':checkpoint['last_status'],
+                    'last_round':checkpoint['last_round'],'attempt_kind':checkpoint.get('latest_attempt_kind'),
+                    'fixture_status':checkpoint.get('latest_fixture_status'),
+                    'unresolved_measurements':checkpoint['unresolved_observations'],
+                    'unresolved_gaps':checkpoint['unresolved_gaps']})
+                for name,ref in (('history_refs',checkpoint['history_ref']),
+                                 ('result_refs',checkpoint['latest_result_ref'])):
+                    if ref not in row[name]:row[name].append(ref)
+        for row in grouped.values():
+            ids=set(row['condition_ids'])
+            row['task_ids']=sorted(t['id'] for t in tasks.values() if ids.intersection(t['condition_ids']))
+            row['scheduled_condition_ids']=sorted(ids&selected)
+            row['explicitly_deferred_condition_ids']=sorted((ids-selected)&deferred_conditions)
+            row['unscheduled_condition_ids']=sorted(ids-selected-deferred_conditions)
+            row['planner_deferrals']=[deferred[tid] for tid in row['task_ids'] if tid in deferred]
+            fixture_gap=any(o['fixture_status'] not in (None,'PASS') for o in row['observations'])
+            row['next_step_advice']=(
+                'Read the linked fixture result and exact logs, repair or validate executable setup, '
+                'then rerun this checkpoint before inferring product behaviour.' if fixture_gap else
+                'Compare the linked hypotheses, changes and independent results; choose a distinguishing '
+                'experiment or obtain the missing measurement for this checkpoint.')
+        reminders=sorted(grouped.values(),key=lambda r:r['reminder_id'])
+        value={'version':1,'project_id':self.scope['project_id'],'spec_revision':self.scope['spec_revision'],
+            'reminders':reminders,'meaning':'Controller-derived observation navigation, not a diagnosis or acceptance verdict. '
+                'Unscheduled work is advisory: choose useful related tasks or give a next step and return condition. '
+                'No missing deferral causes a retry, replan, pause or automatic extra coder assignment.'}
+        name='unresolved-work-'+digest(value)+'.json'
+        reference=export_json(self.ws,name,value)
+        write_json(self.output,'pipeline/unresolved-work/'+name,value)
+        write_json(self.output,'pipeline/unresolved-work.json',value)
+        previous=self.state.get('unresolved_work') or {}
+        self.state['unresolved_work']={'index_ref':reference,'reminder_count':len(reminders),
+            'unscheduled_count':sum(bool(r['unscheduled_condition_ids']) for r in reminders)}
+        if previous.get('index_ref')!=reference and (reminders or previous.get('reminder_count')):
+            self.event('reflection',{'artifact_type':'UnresolvedWorkReminders','index_ref':reference,
+                'reminder_count':len(reminders),'unscheduled_count':self.state['unresolved_work']['unscheduled_count'],
+                'projection':value,'meaning':value['meaning']},'controller',tags=['untested'])
+        return {'unresolved_work_ref':reference,'unresolved_work_count':len(reminders),
+            'unscheduled_work_count':self.state['unresolved_work']['unscheduled_count']}
 
     def validation_result(self,name,raw_ref,valid,issues):
         request=message('ValidationRequest',scope=self.scope,payload_ref=raw_ref,schema_name=name,
@@ -578,6 +758,7 @@ class Cycle:
         folder.mkdir(parents=True,exist_ok=True)
         original_binding=input_binding(inputs)
         journal_phase=label+'@'+digest({'round':self.number,'input_binding':original_binding})
+        continuation=role_context.continuation_key(self.job['id'],self.number,role,label,original_binding)
         complete=read_json(folder,'complete.json')
         checkpoint_error=None
         if complete and complete.get('input_binding')==original_binding:
@@ -709,7 +890,7 @@ class Cycle:
                 # following independent reviewer with its own workspace copy.
                 with _open(self.ws.parent,('ТЗ.md',)) as handle:normative=handle.read()
                 with _directory(self.ws,('.lab-pipeline',)) as target:_atomic(target,'spec.md',normative)
-            input_ref=export_json(self.ws,'input-'+label+'.json',inputs)
+            input_ref=export_json(self.ws,'input-'+label+'-'+digest(inputs)+'.json',inputs)
             schema_path='/opt/lab/schemas/pipeline/'+model_contract+'.submission.schema.json'
             context={'input':inputs,'input_ref':input_ref,'output_contract':model_contract,'scope':self.scope,
                 'schema_path':schema_path,'validation_schema_path':'/opt/lab/schemas/pipeline/'+model_contract+'.schema.json',
@@ -717,6 +898,15 @@ class Cycle:
                 'memory':memory.compact_summary(self.output),'correction':start_state.get('feedback'),
                 'correction_index_ref':self.correction_index(model_contract,journal_phase)}
             if compact_enabled:
+                self.import_public_notes()
+                context['input']=role_context.model_input(inputs,full_input_ref=input_ref)
+                observed_result=self.diagnostic_result()
+                context['role_context']=role_context.build(role,label,self.scope,inputs,full_input_ref=input_ref,
+                    latest_result=observed_result,ledger=self.causal_context_ref(),diff_ref=getattr(self,'_review_diff_ref',None))
+                if observed_result:
+                    context['role_context']['links']['latest_observation_ref']=export_json(self.ws,
+                        'role-observations-'+digest(observed_result)+'.json',observed_result)
+                context['continuation_key']=continuation
                 context['agent_report_refs']={role_name:{'phase':report['phase'],'report_ref':report['report_ref']}
                     for role_name,report in self.state.get('agent_reports',{}).items()}
             if name=='PlannerDecision' and inputs.get('graph_ref') and inputs.get('catalog_ref'):
@@ -786,13 +976,19 @@ class Cycle:
             lock=project_lock(self.ws.parent) if role!='coder' or repair else nullcontext()
             with lock:
                 try:
+                    context_key=continuation if not repair else role_context.continuation_key(self.job['id'],self.number,role,
+                        label+'-patch',digest(repair['base_ref']))
+                    tool_context=export_json(self.ws,'tool-context-'+context_key+'.json',{'scope':dict(self.scope),
+                        'role':role,'readonly':role!='coder' or bool(repair),'project_id':self.job['project_id'],
+                        'job_id':self.job['id'],'continuation_key':context_key})
                     result=self.e.request_agent(self.job['id'],self.job['project_id'],self.number,prompt,attempt_dir/'codex.jsonl',
                         role=role,preserve_result=True,output_contract=requested_name,allowance=allowance,
-                        on_result=self.agent_result_received)
+                        on_result=self.agent_result_received,continuation_key=context_key,scope=dict(self.scope),tool_context_path=tool_context['path'])
                 finally:
                     original_exception=sys.exc_info()[1]
                     try:
                         self.import_corrections(attempt_dir/'codex.jsonl',requested_name,journal_phase)
+                        if compact_enabled:self.import_public_notes()
                         self.save()
                     except BaseException:
                         if original_exception is None:raise
@@ -883,7 +1079,11 @@ class Cycle:
                     hydration_value=wire_value
                     if prose:
                         hydration_value={**wire_value,'notes_md':prose+('\n\n'+wire_value.get('notes_md','') if wire_value.get('notes_md') else '')}
-                    value=agent_protocol.hydrate(hydration_value,scope=self.scope,inputs=inputs,
+                    hydration_inputs=inputs
+                    if name=='ReviewResult':
+                        hydration_inputs={**inputs,'open_findings':[v['finding'] for v in self.state.get('finding_ledger',{}).values() if v['status']=='open'],
+                            'finding_namespace':digest({'scope':self.scope,'phase':label,'input':original_binding})}
+                    value=agent_protocol.hydrate(hydration_value,scope=self.scope,inputs=hydration_inputs,
                         artifact=lambda p:artifact(self.ws,p),read=lambda ref:source_bytes(self.ws,ref),
                         write=lambda file,obj:export_json(self.ws,file,obj),changed_files=changed,
                         archive=lambda nested:self.archive_agent_report(nested,role,label+'-scenarios'))
@@ -1020,11 +1220,12 @@ class Cycle:
 Only .lab-pipeline/spec.md and explicit user clarifications define product requirements. Read relevant project sections on demand; do not reread all memory. No hidden domain-specific requirements.
 JSON is for selected actions, statuses, IDs, dependency links and executable test definitions. Explain decisions, hypotheses, failures, successes, risks and proposed experiments completely in ordinary visible Markdown before the final machine submission, without mandatory headings. notes_md may be empty when the explanation was already given in visible Markdown. Do not discard useful information to shorten the response.
 Test process: use a single pre-execution test inventory, not duplicated manual method lists or only successful report entries. Optional execution.precondition_tests names genuine setup checks before affected product actions; never relabel a product assertion as setup. An invalid fixture means dependent behaviour is unverified, not PASS. Preserve raw results and previous unresolved work. Group changes by shared cause and a useful independent check; state the hypothesis and distinguishing observation in ordinary Markdown. No fixed number of tasks or retries is introduced.
-The controller supplies scope, hashes, MIME, action/finding IDs and input references. Do not generate or copy those fields. Exact citation formatting and proof of text reads do not gate your answer. Use real evidence to reason, state uncertainty and let the reviewer assess meaning. Only independent execution establishes PASS.
+Platform test-world infrastructure: for confirmed Minecraft 1.21.11 ordinary client runs, the independent runner supplies a fresh vanilla world and gameDir. Native Quick Play is the default. An optional image-owned dependency adapter selects the normal title-screen lifecycle only when actual launch metadata identifies a supported dependency that needs it, then observes its initialization before opening the saved world. Projects without that dependency have no requirement to install, initialize or test it. World/dependency preparation is laboratory setup, not addon functionality or a task to repeat in every mod. Do not add duplicate initialization events or change product requirements to repair platform setup. Real Fabric client GameTests keep their own world lifecycle; custom harnesses can declare lab_world_fixture_mode=managed in gradle.properties. See /opt/lab/fixtures/minecraft-client/README.md when needed. A supplied template or setup receipt never proves world/player readiness, permissions or product behavior: scenario setup and assertions must observe them. Never replace a real fixture check with a pure unit rule.
+The controller supplies scope, hashes, MIME and IDs for new actions/findings. Reuse the existing finding_id and hypothesis_id when referring to an earlier issue; use empty finding_id for a new issue. Exact citation formatting and proof of text reads do not gate your answer. Use real evidence to reason, state uncertainty and let the reviewer assess meaning. Only independent execution establishes PASS.
 USER POLICY: Test videos, screenshots and photos are optional supporting artifacts owned by the runner/dashboard, not coder tasks. Do not create capture-only requirements, work items, manual checks, external blockers or user questions about recording format, duration, framing or quality. Missing/corrupt recordings must not delay coding, testing or readiness. Test actual mod behavior with executable assertions. This policy concerns test evidence capture, not a product feature that itself manipulates images/video.
 Technical unknowns and experiment statuses describe missing facts, not permission gates. A work package may research an API and then implement using observed facts, without returning to the planner just to obtain coding permission. If an observation needs Minecraft, prepare a real scenario for the independent runner. If facts remain unavailable, preserve findings and open issues, defer only the affected work, and continue independent assigned tasks. Never invent an API or mark an unresolved observation as verified. Genuine user/external dependencies still constrain dependent work.
 {extra}
-OUTPUT OVERRIDE: the compact schema is the complete response format, including when earlier task descriptions mention canonical storage fields. Put explanatory hypotheses/unknowns in notes_md. AgentGraph/AgentCatalog/AgentCatalogPatch retain machine traceability links; source refs need only actual path and line range, never hashes or quoted text.
+The compact schema is the active response format. Put explanatory hypotheses/unknowns in visible Markdown or linked record_note entries without repeating them. AgentGraph/AgentCatalog/AgentCatalogPatch retain machine traceability links; source refs need only actual path and line range, never hashes or quoted text.
 {'Read only: no edits, compilation, game execution or writer delegation.' if role!='coder' else 'Edit only this project. Preserve existing sources and tests. Write AgentScenarios v1 to .lab-pipeline/scenarios-proposed.json: real execution/checkpoint mappings, test_file as path, no scope or hashes. The controller normalizes it. In AgentReport use scenario_manifest_path; respond to every supplied reviewer finding in responses using its finding_id, disposition and free Markdown notes_md. No separate ReviewResponse files or source hash computation required.'}
 No credentials, .env changes, EULA acceptance, git push, publication, purchases, Docker access or host mounts. Respect pause, budget and isolation. Keep existing source; never reset the project. Consult relevant skills only.'''
         return f'''You are the {role} in the versioned development pipeline. Output {contract} version v1.
@@ -1253,9 +1454,10 @@ Only the independent runner can establish test success. Reviewer agreement is no
 
     def ensure_handoff(self,catalog,graph,review=None):
         result=read_json(self.output,'pipeline/latest-result.json')
-        if result and (result.get('scope',{}).get('spec_revision')!=self.scope['spec_revision']
-                       or result.get('scope',{}).get('source_revision')!=self.scope['source_revision']):
-            result=None  # A prior source version cannot resolve current uncertainty.
+        if result and result.get('scope',{}).get('spec_revision')!=self.scope['spec_revision']:
+            result=None
+        # A historical source cannot certify current behaviour, but its failure
+        # remains diagnostic evidence. Question resolution must cite its scope.
         # Once real diagnostics exist, resolve only affected technical questions
         # with a delta; the soft cutoff must not freeze them open forever.
         experiments=[q for q in catalog.get('question_resolutions',[]) if q['status']=='open' and q['kind']=='experiment']
@@ -1386,7 +1588,17 @@ Only the independent runner can establish test success. Reviewer agreement is no
 
     def review(self,subject,catalog,graph,context,refs,*,all_conditions=False,label=None,required_conditions=None):
         _,progress_ref=self.refresh_condition_progress(catalog,graph)
+        observation=self.diagnostic_result()
+        navigation=(observation or {}).get('observation_navigation',{})
         context={**context,'condition_progress_ref':progress_ref,
+            'open_finding_ledger_ref':self.causal_context_ref(),
+            'diff_baseline_kind':getattr(self,'_diff_baseline_kind',None),
+            'runtime_observation_ref':navigation.get('full_ref'),
+            'frozen_build_artifacts_ref':navigation.get('build_artifacts_ref'),
+            'scenario_evidence_ref':navigation.get('scenario_evidence_ref'),
+            'historical_observation_scope':(observation or {}).get('scope'),
+            'runtime_evidence_review':role_context.RUNTIME_POLICY,
+            'executable_fixture_review':role_context.FIXTURE_POLICY,
             'test_meaning_review':'Compare current executable assertions with the normative clauses and historical '
                 'test_contract entries in the linked condition histories. Inspect actual code, not just labels. '
                 'A legitimate correction of a fixture or an incorrect observable must retain the required action '
@@ -1400,9 +1612,10 @@ Only the independent runner can establish test success. Reviewer agreement is no
         if required_conditions is not None:
             context={**context,'required_condition_ids':sorted(required_conditions),'full_review':False,
                 'review_instruction':'Review this delta, linked conditions and every prior unresolved finding. Reuse prior review for unchanged clauses; do not re-review the entire catalog unless a changed dependency requires it.'}
-        context_ref=export_json(self.ws,'review-context.json',context)
+        context_ref=export_json(self.ws,'review-context-'+digest(context)+'.json',context)
         request=message('ReviewRequest',scope=self.scope,subject=subject,context_ref=context_ref,
-            catalog_ref=export_json(self.ws,'catalog.json',catalog),subject_refs=refs,diff_ref=None,
+            catalog_ref=export_json(self.ws,'catalog.json',catalog),subject_refs=refs,
+            diff_ref=getattr(self,'_review_diff_ref',None) if subject=='code' else None,
             memory_index_ref=artifact(self.ws,'.lab-memory/pipeline/index.json','application/json'),
             focus=['Compare actual code/test logic with every relevant source clause. No hardcoded requirements from other projects.',
                    'Assess whether research/implementation choices follow observed facts. Research and coding may occur in one package; an experiment label does not require a separate permission cycle. Preserve unresolved claims and request real runtime checks when needed.',
@@ -1423,8 +1636,29 @@ Only the independent runner can establish test success. Reviewer agreement is no
             for f in value['findings']:
                 self.citation_advice(f['code_refs'],observed,'finding-'+f['id'])
                 if any(r not in {x['id'] for x in catalog['requirements']} for r in f['requirement_ids']):raise ValueError('Review cites unknown requirement IDs')
-        return self.ask('ReviewResult','reviewer',request,label or 'review-'+subject,validate_extra=validate,
-            instruction='Assess meaning independently by reading the requested documents and relevant exact source ranges. Do not add hidden product requirements. ready_for_verification only means review completed; it never marks tests PASS.')
+        value=self.ask('ReviewResult','reviewer',request,label or 'review-'+subject,validate_extra=validate,
+            instruction='Assess meaning independently by reading the actual diff, relevant source clauses and tests. '
+                'Check that action goal, selected condition/task IDs and executable assertions describe the same behaviour. '
+                'Do not add hidden product requirements. Read open_finding_ledger_ref in the linked context: reuse finding_id '
+                'for the same unresolved issue, use empty finding_id only for a new issue; explicitly list resolved_finding_ids '
+                'only after checking their changes/evidence. Wording changes or neighbouring PASS do not close an issue. '
+                'For claims about a previous run, inspect role_context runtime_facts, exact log fragments and '
+                'build_artifacts_ref source members. A placeholder SKIP or missing final JUnit does not prove '
+                'no product action occurred. Separate observed symptoms from root-cause hypotheses. If causes '
+                'remain ambiguous, use needs_experiment with a concrete distinguishing runtime observation; '
+                'do not demand documentation as a blocker for an ordinary API uncertainty. '
+                'A fixture repair requires executable preparation plus independent fixture checks; inspect '
+                'the actual code diff before accepting an implemented claim based on descriptive metadata. '
+                'ready_for_verification only means review completed; it never marks tests PASS.')
+        ledger=self.state.setdefault('finding_ledger',{})
+        for fid in value.get('resolved_finding_ids',[]):
+            if fid in ledger:ledger[fid].update(status='resolved',resolution_scope=dict(self.scope))
+        for finding in value['findings']:
+            prior=ledger.get(finding['id'],{})
+            ledger[finding['id']]={**prior,'id':finding['id'],'finding':finding,'status':'open',
+                'first_scope':prior.get('first_scope',dict(self.scope)),'last_scope':dict(self.scope)}
+        self.save()
+        return value
 
     def plan(self,catalog,graph,previous):
         label='plan';feedback=None
@@ -1444,6 +1678,7 @@ Only the independent runner can establish test success. Reviewer agreement is no
 
     def plan_package(self,catalog,graph,previous,label,package_feedback):
         self.scope['source_revision']=acceptance.source_fingerprint(self.ws)
+        previous=self.diagnostic_result() or previous
         if self.state.get('preparation_handoff') or getattr(self.e,'COMPACT_PROTOCOL',True):
             self.ensure_handoff(catalog,graph,self.state.get('last_preparation_review'))
         progress,progress_ref=self.refresh_condition_progress(catalog,graph)
@@ -1478,14 +1713,31 @@ Only the independent runner can establish test success. Reviewer agreement is no
             validate_extra=validate_decision,
             instruction='Choose the most useful adaptive package from ANY available project tasks, not one Markdown group. Combine related work when efficient. No quota of new features. Repair a real regression or falsify a hypothesis when useful. '
             'Group work by a shared causal change and a meaningful independent verification, not merely by a shared file or heading. '
+            'Read role_context facts first; distinguish an observed execution barrier from your causal hypothesis. '
+            'Read exact runtime fragments and frozen build/source members for the run being explained; '
+            'do not infer that an action never ran from missing final JUnit or an initial running/SKIP report. '
+            'When evidence permits several causes, plan a concrete experiment that distinguishes them, '
+            'while preserving useful implementation and independent review findings. '
+            'A not_attempted/stopped_by scenario is not a failed product experiment. Use read_requirements for current semantic IDs '
+            'and query_memory/read_artifact for selected previous attempts. Publish useful hypotheses and negative experiments '
+            'with record_note, reusing hypothesis_id/incident_id; assess supported/refuted/inconclusive only against actual observations. '
+            'Implementation availability is separate from verification freshness: a repair of present code does not require '
+            'reimplementing every unverified dependency. Keep genuinely absent prerequisites and user/external blockers. '
+            'Specify action dependency indexes only for real causal ordering, not because actions are adjacent. '
             'For each action explain the current hypothesis, proposed change and distinguishing expected observation in goal/expected_observation/notes_md; no new JSON fields or fixed package size. '
             'Separate addon defects, invalid fixtures, test-inventory mismatches and provider failures in the explanation. '
             'When fixture_result says invalid_fixture, repair/validate that fixture before inferring product behaviour from dependent checkpoints; continue independent work. '
+            'The platform provides a generic world and dependencies. Project-specific geometry/entities '
+            'need executable preparation and independent fixture assertions before product actions and '
+            'product-effect assertions. A manifest description alone cannot implement a fixture repair. '
             'A bookkeeping/test-registry fix does not implement all features that its shared suite covers; keep unrelated product outcomes open. '
             'For repeated failures read original attempts and existing diagnostics, change the experiment or implementation, or select independent work with an explicit return condition. Do not blindly repeat the same patch. '
             'Read condition_progress_ref first: its per-condition history_ref links every actual checkpoint attempt '
             'to the full hypothesis/plan, coder changes, independent result and subsequent analysis. '
             'For a specific repeated checkpoint prefer its own history_ref; do not dump the condition history or whole archive. '
+            'Read selection_advice.unresolved_work_ref for failed checks and missing observations, including invalid fixtures. '
+            'Choose useful work freely; for unresolved work you leave unscheduled explain a concrete next step and return condition '
+            'in deferred. An omission produces an advisory reminder, never a stop or permission gate. '
             'A different source revision, message or successful neighbour is not progress on a failing checkpoint. '
             'In notes_md explain what observations confirmed/refuted prior hypotheses; otherwise label them unknown. '
             'If a hypothesis already failed, choose an experiment whose possible outcomes distinguish causes, '
@@ -1522,7 +1774,9 @@ Only the independent runner can establish test success. Reviewer agreement is no
         verified={x['task_id'] for x in self.task_states(catalog,graph) if x['status']=='verified'}
         known_tasks={x['id'] for x in graph['tasks']}
         self.state['return_agenda']=[v for k,v in returns.items() if k not in verified and k in known_tasks]
-        self.state['decision']=decision;self.save()
+        self.state['decision']=decision
+        self.remember_unresolved_work(progress,graph,decision)
+        self.save()
         write_json(self.output,'planner-state.json',{'round':self.number,'summary':decision['rationale'],'actions':decision['actions'],'mode':decision['strategy'],'pipeline_version':'v1'})
         return decision,graph
 
@@ -1540,8 +1794,16 @@ Only the independent runner can establish test success. Reviewer agreement is no
     def _code_and_review(self,catalog,graph,decision):
         if self.state.get('preparation_handoff'):
             preparation.validate_package(decision,self.state['preparation_handoff'],graph,catalog)
-        plan_ref=export_json(self.ws,'decision.json',decision)
+        export_json(self.ws,'decision.json',decision)  # mutable navigation only
+        plan_ref=export_json(self.ws,'decision-'+digest(decision)+'.json',decision)
         _,progress_ref=self.refresh_condition_progress(catalog,graph)
+        base_snapshot=read_json(self.stage,'pipeline/source-base.json')
+        if not base_snapshot:
+            historical=bool(read_json(self.stage,'pipeline/coding-state.json'))
+            base_snapshot=role_context.capture_sources(self.ws)
+            base_snapshot['baseline_kind']='recovered_current_tree' if historical else 'before_coding'
+            write_json(self.stage,'pipeline/source-base.json',base_snapshot)
+        self._diff_baseline_kind=base_snapshot.get('baseline_kind','before_coding')
         assignment=message('CoderAssignment',scope=self.scope,plan_ref=plan_ref,
             catalog_ref=export_json(self.ws,'catalog.json',catalog),graph_ref=export_json(self.ws,'graph.json',graph),
             memory_index_ref=artifact(self.ws,'.lab-memory/pipeline/index.json','application/json'),writable_roots=['.'],
@@ -1550,12 +1812,16 @@ Only the independent runner can establish test success. Reviewer agreement is no
                 'Research and implement within this package using observed facts. Inspect API/source as needed; a technical experiment status does not require separate planner permission to code.',
                 'If a fact remains unavailable, preserve the observed findings and open issue, defer only affected work and continue independent assigned tasks. Prepare real scenarios for independent Minecraft execution; never manufacture results.',
                 'Read condition_progress_ref for each assigned unresolved condition: compare previous hypotheses, changes and independent outcomes. Explain supported/refuted/unknown conclusions in notes_md and avoid repeating a failed approach without a discriminating new measurement. Preserve the normative meaning of executable tests; correcting a bad oracle is not permission to remove the required action or its real effect.',
-                'Write ScenarioManifest v1 to .lab-pipeline/scenarios-proposed.json and reference it. Controller JSON is excluded from the source fingerprint to avoid a self-referencing hash. Each checkpoint has a real named JUnit test mapping in execution.checkpoint_tests.',
+                'The condition progress selection_advice.unresolved_work_ref retains unresolved fixture gaps and failed checkpoints. These reminders preserve follow-up work; they do not expand the accepted assignment. Keep independent assigned work moving and leave unassigned observations open for the planner.',
+                'Write AgentScenarios v1 to .lab-pipeline/scenarios-proposed.json. Each checkpoint has a real named JUnit mapping. Controller computes source hashes and report references.',
                 'Use one pre-execution test inventory for Gradle discovery and scenario expected_tests. Derive it from JUnit discovery/class selection before tests run, not from only the successful results. Keep checkpoint-to-condition meaning stable; extra diagnostic cases do not invent new product coverage.',
                 'Declare execution.precondition_tests for independent named JUnit fixture checks where needed: build bounds, world blocks/entities and client synchronization before the addon acts. Include them in expected_tests but do not bind them to product conditions. Product actions and their effects remain ordinary assertions. When setup fails report actual facts and leave dependent behaviour unverified; no skip/calibration to gain PASS.',
-                'Write ReviewResponse files under .lab-pipeline/ as well. After all source/test edits use source_revision to compute the real resulting hash.',
+                role_context.FIXTURE_POLICY,
+                'For a runtime diagnosis read the exact previous run log fragments and frozen built source members in role_context. Missing final JUnit or a running/SKIP placeholder does not establish that no product action occurred. Preserve the observed failure and treat its cause as a hypothesis until a distinguishing executable check supports it.',
+                'Respond to supplied findings using compact responses and persistent finding_id. Report each assigned action in action_outcomes as implemented_claim, partial, not_attempted or needs_experiment; these are claims, not PASS.',
+                'For reviewed identical unit runs, optionally declare execution.reuse with group/profile/initial_state. Null means separate. Never share different initial states, source revisions, permissions or gameplay experiments.',
                 'Use the supplied compatibility JARs only when this project actually requires them. No generic product assumptions.',
-                'Return CoderReport v1. base_source_revision is assignment.scope.source_revision; scope.source_revision is the real current fingerprint after edits.'])
+                'Return AgentReport v1 with scenario_manifest_path and public Markdown notes. Do not generate hashes or canonical metadata.'])
         contracts.validate('CoderAssignment',assignment)
         saved=read_json(self.stage,'pipeline/coding-state.json')
         if saved and saved.get('decision_hash')==digest(decision):
@@ -1637,12 +1903,17 @@ Only the independent runner can establish test success. Reviewer agreement is no
             write_json(self.output,'pipeline/manifest.json',manifest)
             export_json(self.ws,'manifest.json',manifest)
             report_ref=export_json(self.ws,'coder-report.json',report)
+            delta=role_context.source_diff(base_snapshot,role_context.capture_sources(self.ws))
+            self._review_diff_ref=export_text(self.ws,'source-diff-'+digest(delta)+'.patch',delta['text'])
+            export_json(self.ws,'source-diff-index.json',{k:v for k,v in delta.items() if k!='text'}|
+                        {'diff_ref':self._review_diff_ref,'baseline_kind':self._diff_baseline_kind})
             write_json(self.stage,'pipeline/coding-state.json',{**checkpoint,'report':report})
             self.publish('review',catalog=catalog,graph=graph,decision=decision)
             review=self.review('code',catalog,graph,assignment,[report_ref,export_json(self.ws,'manifest.json',manifest)],label='review-code-'+str(revision),
                 required_conditions={cid for action in decision['actions'] for cid in action['condition_ids']})
             self.state['review']=review;self.save()
-            signature=digest({'source':self.scope['source_revision'],'findings':review['findings']})
+            signature=digest({'findings':sorted(f['id'] for f in review['findings']),
+                'observation_run':(read_json(self.output,'pipeline/latest-result.json') or {}).get('runner_run_id')})
             if review['disposition'] in ('ready_for_verification','needs_experiment'):
                 return report,manifest,review
             if self.coding_review_handoff_due():
@@ -1789,9 +2060,17 @@ def run(engine,job,workspace,output,previous):
                         'previous_session':session},'controller',tags=['proposed'])
                     decision,graph=cycle.plan(catalog,graph,previous)
                     write_json(cycle.stage,'pipeline/session.json',{'scope':cycle.scope,'catalog':catalog,'graph':graph,'decision':decision})
+                if getattr(engine,'COMPACT_PROTOCOL',True) and cycle.state.get('context_runtime_version')!='optimized-roles-v1':
+                    cycle.event('plan',{'summary':'Refresh scheduling with primary diagnostics and implementation availability',
+                        'previous_session':session,'meaning':'Accepted catalog, graph, sources and history retained. Only the next work selection is refreshed for the upgraded context.'},
+                        'controller',tags=['superseded'])
+                    decision,graph=cycle.plan(catalog,graph,cycle.diagnostic_result() or previous)
+                    cycle.state['context_runtime_version']='optimized-roles-v1';cycle.save()
+                    write_json(cycle.stage,'pipeline/session.json',{'scope':cycle.scope,'catalog':catalog,'graph':graph,'decision':decision})
             else:
                 catalog,graph=cycle.decomposition()
                 decision,graph=cycle.plan(catalog,graph,previous)
+                cycle.state['context_runtime_version']='optimized-roles-v1';cycle.save()
                 write_json(cycle.stage,'pipeline/session.json',{'scope':cycle.scope,'catalog':catalog,'graph':graph,'decision':decision})
             if decision['strategy']=='wait':
                 cycle.publish('waiting',catalog=catalog,graph=graph,decision=decision,reason=decision['rationale'])

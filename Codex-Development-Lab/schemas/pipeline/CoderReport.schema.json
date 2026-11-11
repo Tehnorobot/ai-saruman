@@ -70,6 +70,37 @@
         "description": "Краткое описание записи или изменения."
       },
       "description": "Известные нерешённые вопросы."
+    },
+    "action_outcomes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "action_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "implemented_claim",
+              "partial",
+              "not_attempted",
+              "needs_experiment",
+              "not_assessed"
+            ]
+          },
+          "notes_md": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "action_id",
+          "status",
+          "notes_md"
+        ],
+        "additionalProperties": false
+      },
+      "description": "Per-action coder claims only; absence remains not_assessed, never PASS."
     }
   },
   "required": [

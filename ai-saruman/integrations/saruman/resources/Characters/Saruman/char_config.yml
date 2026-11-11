@@ -1,7 +1,7 @@
 Names:
   Default: Саруман
-  Minecraft: saruman-mag
-  Aliases: [saruman-mag, Saruman, saruman, Саруман, саруман]
+  Minecraft: saruman_mag
+  Aliases: [saruman_mag, Saruman, saruman, Саруман, саруман]
 Socials:
   TwitchChannelName: ""
 # Add only trusted operator nicknames. Ordinary players cannot elevate permissions.

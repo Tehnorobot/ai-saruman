@@ -15,3 +15,12 @@ agent-tasks/*
 planner-tasks/*
 !planner-tasks/.gitkeep
 runner-output/
+fixtures/minecraft-client/runtime/
+audit/world-client-runtime/
+audit/world-fixture-smoke/
+audit/world-loom-probe/
+audit/client-dependency-runtime/
+audit/client-dependency-smoke-*/
+audit/client-dependency-loom-*/
+audit/mage-home-fixture-work/
+audit/mage-home-gameplay-*/

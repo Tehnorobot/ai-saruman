@@ -82,8 +82,9 @@ class RecordedEnvironmentTests(unittest.TestCase):
             checks = {check['label']: check for check in report['checks']}
             self.assertEqual(checks['minecraft_client_gametest']['status'], 'PASS')
             self.assertEqual(checks['minecraft_client_gametest']['exit_code'], 0)
-            self.assertEqual(checks['video_capture']['status'], 'FAIL')
-            self.assertEqual(report['status'], 'FAIL')
+            self.assertNotIn('video_capture', checks)
+            self.assertEqual(report['capture_diagnostics'][0]['status'], 'FAIL')
+            self.assertEqual(report['status'], 'BUILD_VERIFIED_GAMEPLAY_UNVERIFIED')
             self.assertIsNone(report['video'])
 
 
@@ -125,7 +126,7 @@ class CaptureProbeTests(unittest.TestCase):
 
     def test_invalid_duration_or_dimensions_never_produce_success(self):
         for fields in ({'duration': '0'}, {'duration': '-1'}, {'duration': 'nan'},
-                       {'duration': 'inf'}, {'duration': '61'}, {'width': 0}, {'height': 0}):
+                       {'duration': 'inf'}, {'width': 0}, {'height': 0}):
             with self.subTest(fields=fields):
                 self.assertNotEqual(self.probe(**fields)['status'], 'PASS')
 
@@ -215,6 +216,27 @@ class NativeCaptureTests(unittest.TestCase):
         self.assertEqual(result['status'], 'PASS', result)
         self.assertNotEqual(result['video_capture']['status'], 'PASS')
         self.assertIsNone(result['video_capture']['trigger_source'])
+
+    def test_recorder_start_failure_does_not_skip_the_graphical_child(self):
+        with patch.object(entry.CaptureMonitor, 'start', side_effect=RuntimeError('synthetic recorder failure')):
+            result = entry.recorded_run([sys.executable, '-I', '-c', PAINT_WINDOW], self.workspace,
+                                        self.output / 'client.log', 12)
+        self.assertEqual(result['status'], 'PASS', result)
+        self.assertEqual(result['video_capture']['status'], 'ERROR')
+        self.assertIn('synthetic recorder failure', result['video_capture']['detail'])
+
+    @unittest.skipUnless(os.getenv('LAB_RUN_LONG_VIDEO_TESTS') == '1', 'Opt-in 64-second capture fixture')
+    def test_recording_over_one_minute_stops_at_the_supervisor_selected_limit(self):
+        painter = PAINT_WINDOW.replace('+ 1.6', '+ 64.0')
+        with patch.dict(os.environ, {'LAB_VIDEO_MAX_SECONDS': '62'}):
+            result = entry.recorded_run([sys.executable, '-I', '-c', painter], self.workspace,
+                                        self.output / 'client.log', 90)
+        self.assertEqual(result['status'], 'PASS', result)
+        metadata = result['video_capture']
+        self.assertEqual(metadata['status'], 'PASS', metadata)
+        self.assertEqual(metadata['capture_seconds_limit'], 62)
+        self.assertGreater(metadata['duration_seconds'], 60)
+        self.assertLessEqual(metadata['duration_seconds'], 62.25)
 
     def test_real_encoded_black_fixture_fails_quality_probe(self):
         path = self.output / 'synthetic-black.mp4'

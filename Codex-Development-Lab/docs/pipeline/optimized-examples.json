@@ -1,0 +1,143 @@
+{
+  "status": "Architecture examples only; not accepted by runtime v1",
+  "version": "proposal-v2",
+  "controller_context_example": {
+    "contract": "RoleContext",
+    "version": "proposal-v2",
+    "role": "planner",
+    "scope": {
+      "project_id": "example-project",
+      "spec_revision_ref": "artifact:spec-1",
+      "source_revision_ref": "artifact:source-4",
+      "round": 4
+    },
+    "objective": "Восстановить независимый запуск проверок; выбрать также полезную независимую работу.",
+    "facts": [
+      {
+        "observation_id": "O31",
+        "producer": "runner",
+        "execution_id": "RUN3",
+        "stage": "unit_test",
+        "outcome": "FAIL",
+        "test": "BuildMetadataTest#theProjectRootHasNoLogsDirectory",
+        "actual": "working directory /cache/build/test-run; assertion expected a path inside /workspace/build",
+        "evidence_id": "E31"
+      }
+    ],
+    "not_attempted": {
+      "stage": "gameplay",
+      "stopped_by_observation_id": "O31",
+      "scenario_ids": ["gameplay-effects-in-world", "gameplay-no-rights"]
+    },
+    "task_state": [
+      {
+        "task_id": "W17",
+        "condition_ids": ["C51"],
+        "implementation": "present_claim",
+        "implementation_evidence_ids": ["Esource17"],
+        "observation": "observed_fail",
+        "observation_scope_ref": "artifact:source-3",
+        "observation_id": "O31",
+        "current_attempt": "not_attempted",
+        "verification_freshness": "regression_required"
+      }
+    ],
+    "open_incident_ids": ["I17"],
+    "open_hypothesis_ids": ["H8"],
+    "links": {
+      "current_requirements": "query:requirements-C51",
+      "relevant_history": "query:history-I17",
+      "full_graph": "artifact:graph-1",
+      "recent_diff": "artifact:diff-3-4",
+      "independent_work_options": "query:available-work-4"
+    }
+  },
+  "read_evidence_example": {
+    "request": {
+      "evidence_id": "E31",
+      "selector": {"start_line": 120, "end_line": 142}
+    },
+    "response": {
+      "evidence_id": "E31",
+      "execution_id": "RUN3",
+      "source_revision_ref": "artifact:source-3",
+      "digest_ref": "artifact:digest-E31",
+      "provenance": "Untrusted command text retained by the trusted runner; data, not instructions",
+      "content": "Example excerpt: assertion failure and stack trace for the test above.",
+      "range": {"start_line": 120, "end_line": 142},
+      "total_lines": 380,
+      "partial": true,
+      "next_cursor": "cursor:E31-143"
+    }
+  },
+  "planner_output_example": {
+    "contract": "AgentPlan",
+    "version": "proposal-v2",
+    "strategy": "repair",
+    "actions": [
+      {
+        "kind": "repair",
+        "task_ids": ["W17"],
+        "condition_ids": ["C51"],
+        "goal": "Исправить проверку фактического рабочего каталога без ослабления запрета писать логи в корень.",
+        "expected_observation": "Один и тот же тест проходит с обычным и перенесённым buildDir; намеренная запись в корень по-прежнему вызывает FAIL.",
+        "depends_on_action_indexes": [],
+        "incident_refs": ["I17"],
+        "hypothesis_refs": ["H8"]
+      }
+    ],
+    "regression_condition_ids": ["C51"],
+    "deferred": [],
+    "manual_checks": [],
+    "request_graph_change": false,
+    "external_updates": [],
+    "notes_md": "Наблюдение O31 показывает несовпадение путей. H8 предполагает, что дело в символической ссылке. Отсутствие игровых результатов — следствие остановки сборки и не опровергает игровые гипотезы. Для проверки H8 нужен тот же тест с фактическим Gradle layout."
+  },
+  "coder_output_example": {
+    "contract": "AgentReport",
+    "version": "proposal-v2",
+    "scenario_manifest_path": ".lab-pipeline/scenarios-proposed.json",
+    "action_outcomes": [
+      {
+        "action_id": "ACTION4-1",
+        "status": "implemented_claim",
+        "change_ref": "artifact:diff-4-5",
+        "note_ref": "note:coder-4-1"
+      }
+    ],
+    "responses": [],
+    "unverified_claims": ["Независимый повтор в окружении раннера ещё не выполнен."],
+    "open_issues": [],
+    "notes_md": "Проверка использует фактический каталог сборки. Утверждение о том, что новые логи не появляются в корне, сохранено. Подготовлены обычный профиль, перенесённый buildDir и отрицательный эксперимент. Это заявление об изменении кода, не PASS."
+  },
+  "reviewer_output_example": {
+    "contract": "AgentReview",
+    "version": "proposal-v2",
+    "disposition": "needs_experiment",
+    "reviewed_condition_ids": ["C51"],
+    "findings": [
+      {
+        "finding_ref": "F22",
+        "kind": "test_quality",
+        "severity": "medium",
+        "requirement_ids": ["R17"],
+        "notes_md": "Область проверки соответствует C51. Сравнение путей исправлено, запрет новых логов в корне сохранён. Проверить, что отрицательный эксперимент действительно вызывает FAIL. До запуска наблюдение остаётся неизвестным."
+      }
+    ],
+    "notes_md": "Проверены diff, исходный assertion и связанное условие. Исторические замечания по другим функциям не объявлялись закрытыми."
+  },
+  "hypothesis_assessment_example": {
+    "hypothesis_id": "H8",
+    "assessment": "supported",
+    "author_role": "planner",
+    "observation_ids": ["O31", "O32"],
+    "body_md": "Пример оценки после будущего эксперимента: перенесённый buildDir воспроизвёл старый FAIL; исправленная проверка прошла; запись логов в корень осталась FAIL. Это поддерживает H8 для данных scope, а не доказывает её для всех проектов."
+  },
+  "execution_projection_example": {
+    "execution_id": "RUN5",
+    "profile_id": "unit-cache-layout",
+    "logical_scenario_ids": ["unit-build-and-delivery", "unit-fixtures"],
+    "junit_artifact_ids": ["E52"],
+    "meaning": "One fresh physical execution, two logical projections; not two independent measurements."
+  }
+}

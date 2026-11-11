@@ -55,6 +55,9 @@
           },
           "notes_md": {
             "type": "string"
+          },
+          "finding_id": {
+            "type": "string"
           }
         },
         "required": [
@@ -68,6 +71,12 @@
     },
     "notes_md": {
       "type": "string"
+    },
+    "resolved_finding_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
     }
   },
   "required": [

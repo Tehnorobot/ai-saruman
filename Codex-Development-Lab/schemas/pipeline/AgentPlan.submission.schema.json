@@ -48,7 +48,8 @@
           "task_ids",
           "condition_ids",
           "goal",
-          "expected_observation"
+          "expected_observation",
+          "depends_on_action_indexes"
         ],
         "additionalProperties": false,
         "properties": {
@@ -80,6 +81,12 @@
           },
           "expected_observation": {
             "type": "string"
+          },
+          "depends_on_action_indexes": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            }
           }
         }
       }

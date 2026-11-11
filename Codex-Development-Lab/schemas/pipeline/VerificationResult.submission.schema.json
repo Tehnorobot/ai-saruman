@@ -10,7 +10,8 @@
     "build_status",
     "scenario_results",
     "infrastructure_errors",
-    "raw_report_refs"
+    "raw_report_refs",
+    "execution_diagnostics"
   ],
   "additionalProperties": false,
   "properties": {
@@ -70,6 +71,75 @@
       "description": "Оригинальные отчёты и журналы.",
       "items": {
         "$ref": "#/$defs/ArtifactRef"
+      }
+    },
+    "execution_diagnostics": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "diagnostic_id",
+          "stage",
+          "label",
+          "status",
+          "argv",
+          "exit_code",
+          "actual",
+          "evidence_refs"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "diagnostic_id": {
+            "type": "string"
+          },
+          "stage": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "argv": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "exit_code": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "actual": {
+            "type": "string"
+          },
+          "evidence_refs": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "evidence_id",
+                "path",
+                "sha256"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "evidence_id": {
+                  "type": "string"
+                },
+                "path": {
+                  "type": "string"
+                },
+                "sha256": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
       }
     }
   },
@@ -145,7 +215,12 @@
         "status",
         "checkpoints",
         "media_refs",
-        "fixture_result"
+        "fixture_result",
+        "attempted",
+        "stopped_by",
+        "execution_stage",
+        "execution_id",
+        "measurement_reused"
       ],
       "additionalProperties": false,
       "properties": {
@@ -270,6 +345,29 @@
               }
             }
           }
+        },
+        "attempted": {
+          "type": "boolean"
+        },
+        "stopped_by": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "execution_stage": {
+          "type": "string",
+          "enum": [
+            "build",
+            "scenario",
+            "not_started"
+          ]
+        },
+        "execution_id": {
+          "type": "string"
+        },
+        "measurement_reused": {
+          "type": "boolean"
         }
       }
     },
@@ -341,7 +439,8 @@
         "build_status",
         "scenario_results",
         "infrastructure_errors",
-        "raw_report_refs"
+        "raw_report_refs",
+        "execution_diagnostics"
       ],
       "additionalProperties": false,
       "properties": {
@@ -401,6 +500,75 @@
           "description": "Оригинальные отчёты и журналы.",
           "items": {
             "$ref": "#/$defs/ArtifactRef"
+          }
+        },
+        "execution_diagnostics": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "diagnostic_id",
+              "stage",
+              "label",
+              "status",
+              "argv",
+              "exit_code",
+              "actual",
+              "evidence_refs"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "diagnostic_id": {
+                "type": "string"
+              },
+              "stage": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string"
+              },
+              "argv": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "exit_code": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "actual": {
+                "type": "string"
+              },
+              "evidence_refs": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "evidence_id",
+                    "path",
+                    "sha256"
+                  ],
+                  "additionalProperties": false,
+                  "properties": {
+                    "evidence_id": {
+                      "type": "string"
+                    },
+                    "path": {
+                      "type": "string"
+                    },
+                    "sha256": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       }

@@ -110,6 +110,35 @@ class VerificationPlanTests(unittest.TestCase):
         self.assertEqual(self.trace(), ['build', 'tasks'])
         self.assertEqual(report['status'], 'FAIL')
 
+    def test_world_preparation_failure_keeps_build_and_never_becomes_pipeline_error(self):
+        from worker import world_fixture
+        with patch.object(world_fixture,'WorldFixtureSession') as factory:
+            fixture=factory.return_value
+            fixture.launch.side_effect=RuntimeError('Exact generator failure')
+            fixture.close.return_value={'status':'ERROR','reason':'Exact generator failure'}
+            report=self.verify(eula='true',recorded=self.synthetic_recording)
+        self.assertEqual(self.trace(),['build','tasks'])
+        self.assertEqual(report['status'],'BUILD_VERIFIED_GAMEPLAY_UNVERIFIED')
+        self.assertEqual(report['checks'][-1]['status'],'NOT_TESTED')
+        self.assertIn('Exact generator failure',report['checks'][-1]['detail'])
+        self.assertFalse(any(c['label']=='verification_pipeline' for c in report['checks']))
+
+    def test_template_preparation_starts_before_compilation_and_cancels_after_build_failure(self):
+        from worker import world_fixture
+        from unittest.mock import Mock
+        fixture=Mock()
+        fixture.close.return_value={'status':'NOT_EXECUTED'}
+        def start(*args,**kwargs):
+            self.assertEqual(self.trace(),[])
+            return fixture
+        self.configure(build_exit=7)
+        with patch.object(world_fixture,'WorldFixtureSession',side_effect=start):
+            report=self.verify(eula='true',recorded=self.synthetic_recording)
+        self.assertEqual(report['checks'][0]['exit_code'],7)
+        self.assertEqual(self.trace(),['build'])
+        fixture.close.assert_called_once_with(cancel=True)
+        fixture.launch.assert_not_called()
+
     def test_timeout_is_bounded_and_does_not_start_another_stage(self):
         self.configure(build_sleep=10)
         started = time.monotonic()

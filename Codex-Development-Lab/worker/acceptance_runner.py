@@ -8,6 +8,8 @@ from pathlib import Path
 import re
 import stat
 import xml.etree.ElementTree as ET
+from copy import deepcopy
+import uuid
 
 
 MAX_JSON = 1024 * 1024
@@ -18,6 +20,19 @@ TASK = re.compile(r'[A-Za-z][A-Za-z0-9_]{0,95}\Z', re.ASCII)
 
 def _text(value, maximum=256):
     return isinstance(value, str) and 0 < len(value) <= maximum and not any(ord(c) < 32 for c in value)
+
+
+def execution_reuse(scenario):
+    """An explicit reviewed equivalence declaration, never inferred from a task name."""
+    value = scenario.get('execution_reuse')
+    if value is None:
+        return None
+    if (not isinstance(value, dict) or set(value) != {'group', 'profile', 'initial_state'}
+            or any(not isinstance(v, str) or not CATALOG_ID.fullmatch(v) for v in value.values())):
+        raise ValueError('Invalid execution reuse declaration')
+    if scenario.get('kind') == 'gameplay':
+        raise ValueError('Gameplay scenarios cannot share a physical execution')
+    return value
 
 
 def load_request(path):
@@ -69,7 +84,70 @@ def load_request(path):
         pairs = [(t['classname'], t['name']) for t in tests]
         if len(set(pairs)) != len(pairs):
             raise ValueError('Duplicate expected tests')
+        execution_reuse(scenario)
     return request
+
+
+def _execution_key(request, scenario, argv, workspace):
+    reuse = execution_reuse(scenario)
+    if reuse is None:
+        return None
+    from common.acceptance import source_fingerprint
+    inputs = {'spec_sha256': request['spec_sha256'], 'source_sha256': source_fingerprint(workspace),
+              'kind': scenario['kind'], 'argv': argv, 'reuse': reuse,
+              'expected_tests': sorted((t['classname'], t['name']) for t in scenario['expected_tests']),
+              # The hash distinguishes real process environments without exporting their values.
+              'environment_sha256': hashlib.sha256(json.dumps(dict(os.environ), sort_keys=True).encode()).hexdigest()}
+    return hashlib.sha256(json.dumps(inputs, sort_keys=True).encode()).hexdigest()
+
+
+def _clone_reports(output, proof, destination):
+    """Copy immutable supervisor snapshots to each logical scenario's allowed namespace."""
+    from common.history import _open
+    destination.mkdir(mode=0o700)
+    copied = deepcopy(proof)
+    for number, descriptor in enumerate(copied['reports']):
+        relative = descriptor['file']
+        if (not isinstance(relative, str) or '\\' in relative or ':' in relative
+                or relative.startswith('/') or any(p in ('', '.', '..') for p in relative.split('/'))):
+            raise ValueError('Unsafe shared execution evidence path')
+        with _open(output, tuple(relative.split('/'))) as source:
+            info = os.fstat(source.fileno())
+            if not stat.S_ISREG(info.st_mode) or info.st_size > 4 * 1024 * 1024:
+                raise ValueError('Unsafe shared execution evidence')
+            raw = source.read(4 * 1024 * 1024 + 1)
+        if len(raw) != info.st_size or hashlib.sha256(raw).hexdigest() != descriptor['sha256']:
+            raise ValueError('Shared execution evidence hash mismatch')
+        target = destination / ('report-%03d.xml' % number)
+        with target.open('xb') as handle:
+            handle.write(raw)
+        descriptor['file'] = target.relative_to(output).as_posix()
+    return copied
+
+
+def _inventory(output, proof):
+    """Exact case inventory from already checked immutable XML, including extra cases."""
+    from common.history import _open
+    cases = []
+    for descriptor in proof['reports']:
+        with _open(output, tuple(descriptor['file'].split('/'))) as source:
+            raw = source.read(4 * 1024 * 1024 + 1)
+        if hashlib.sha256(raw).hexdigest() != descriptor['sha256']:
+            raise ValueError('Build evidence changed after collection')
+        document = ET.fromstring(raw.decode('utf-8-sig'))
+        cases.extend((case.get('classname'), case.get('name')) for case in document.iter('testcase'))
+    return sorted(cases)
+
+
+def store_execution_record(output, directory, record):
+    """Durable supervisor-owned physical-run metadata, separate from logical views."""
+    raw = (json.dumps(record, sort_keys=True, indent=2) + '\n').encode('utf-8')
+    target = directory / 'execution.json'
+    with target.open('xb') as handle:
+        handle.write(raw)
+        handle.flush()
+        os.fsync(handle.fileno())
+    return {'file':target.relative_to(output).as_posix(), 'sha256':hashlib.sha256(raw).hexdigest()}
 
 
 def _visit_xml(build, callback):
@@ -208,9 +286,30 @@ def assertion_evidence(build, destination, expected_tests):
                             'scope_note': 'Project-authored assertions require separate review against the specification.'}
 
 
+def _copy_execution_log(output, source_path, destination):
+    from common.history import _open
+    if (not isinstance(source_path, str) or '\\' in source_path or ':' in source_path
+            or source_path.startswith('/') or any(p in ('', '.', '..') for p in source_path.split('/'))):
+        raise ValueError('Unsafe shared execution log path')
+    with _open(output, tuple(source_path.split('/'))) as source:
+        info = os.fstat(source.fileno())
+        if not stat.S_ISREG(info.st_mode) or info.st_size > 512 * 1024 * 1024:
+            raise ValueError('Unsafe or oversized shared execution log')
+        with destination.open('xb') as target:
+            for block in iter(lambda:source.read(1024 * 1024), b''):
+                target.write(block)
+
+
 def run_scenarios(request, plan, workspace, output, timeout_seconds, run_command,
-                  recorded_run, *, build=Path('/cache/build'), eula=False):
-    report = {'schema_version': 1, 'spec_sha256': request['spec_sha256'], 'scenarios': []}
+                  recorded_run, *, build=Path('/cache/build'), eula=False, build_execution=None,
+                  world_fixture=None):
+    report = {'schema_version': 1, 'spec_sha256': request['spec_sha256'], 'scenarios': [],
+              'execution_runs': []}
+    # Sharing is invocation-local and contiguous. Any different physical run
+    # invalidates the candidate, so gameplay/state-changing tasks cannot be
+    # silently crossed to reuse an earlier initial state.
+    shared = None
+    build_candidate = build_execution
     for scenario in request['scenarios']:
         sid = scenario['id']
         relative = 'acceptance/' + sid
@@ -220,26 +319,87 @@ def run_scenarios(request, plan, workspace, output, timeout_seconds, run_command
                   'status': 'NOT_TESTED', 'test_status': 'NOT_TESTED', 'video': None,
                   'log': None, 'detail': 'Not executed'}
         report['scenarios'].append(result)
+        command = None
+        execution_id = None
+        journal_path = None
         try:
             if 'gradle' not in plan:
                 result['detail'] = 'Acceptance execution requires a Gradle project'
                 continue
             if scenario['kind'] == 'gameplay' and (not eula or recorded_run is None):
-                result['detail'] = 'Gameplay requires existing EULA acceptance and trusted recording'
+                result.update(detail=('Gameplay requires existing Minecraft EULA acceptance' if not eula
+                    else 'Trusted gameplay execution/recording runner is unavailable'),
+                    attempted=False,execution_stage='world_preparation',stopped_by='world_fixture')
                 continue
-            clear_test_reports(build)
             runner = recorded_run if scenario['kind'] == 'gameplay' else run_command
             argv = plan['gradle'] + [scenario['task'], '--rerun-tasks']
             # This property selects the Minecraft client scenario. Unit/API
             # scenarios use their dedicated task and must not enter its registry.
             if scenario['kind'] == 'gameplay':
                 argv.append('-PlabAcceptanceScenario=' + sid)
+            key = _execution_key(request, scenario, argv, workspace)
+            candidate = shared if key is not None and shared and shared['key'] == key else None
+            if candidate is None and build_candidate is not None and key is not None and scenario['kind'] == 'unit' and scenario['task'] == 'test':
+                from common.acceptance import source_fingerprint
+                # An opt-in logical unit selection may project the fresh test
+                # dependency of global build. Actual argv stays build, not test.
+                wanted = sorted((t['classname'], t['name']) for t in scenario['expected_tests'])
+                if (build_candidate.get('fresh') is True and build_candidate['command'].get('status') == 'PASS'
+                        and build_candidate.get('source_sha256') == source_fingerprint(workspace)
+                        and _inventory(output, build_candidate['proof']) == wanted):
+                    candidate = {'key':key, 'result':build_candidate['result']}
+                    report['execution_runs'].append(deepcopy(build_candidate['execution_record']))
+            build_candidate = None
+            if candidate is not None:
+                physical = candidate['result']
+                own_id, own_requirements = result['id'], result['requirement_ids']
+                result.update(deepcopy(physical))
+                result.update(id=own_id, requirement_ids=own_requirements, measurement_reused=True)
+                result['assertion_evidence'] = _clone_reports(output, physical['assertion_evidence'], directory / 'assertions')
+                result['assertion_evidence']['expected_tests'] = deepcopy(scenario['expected_tests'])
+                if physical.get('log'):
+                    _copy_execution_log(output, physical['log'], directory / 'test.log')
+                    result['log'] = relative + '/test.log'
+                shared = {'key':key, 'result':deepcopy(result)}
+                continue
+            shared = None
+            clear_test_reports(build)
             result['log'] = relative + '/test.log'
             options = {'scenario_id': sid} if scenario['kind'] == 'gameplay' else {}
+            if scenario['kind']=='gameplay' and world_fixture is not None:
+                try:
+                    argv,env,fixture=world_fixture.launch(argv,sid,directory)
+                    options['env']=env
+                    result['world_fixture']=fixture
+                except Exception as exc:
+                    result.update(detail='World preparation unavailable: '+str(exc),attempted=False,
+                                  execution_stage='world_preparation',stopped_by='world_fixture')
+                    continue
+            execution_id = 'RUN-' + uuid.uuid4().hex
+            if scenario['kind'] == 'gameplay':
+                from common.gameplay_execution import prepare_journal
+                # Journal absence never prevents a real command from running.
+                # Random per-run paths cannot reuse an earlier process journal.
+                try:
+                    journal_path = prepare_journal(execution_id)
+                    options['env'] = {**options.get('env', {}),
+                        'LAB_GAMEPLAY_EXECUTION_JOURNAL':str(journal_path),
+                        'LAB_GAMEPLAY_EXECUTION_ID':execution_id}
+                except (OSError, ValueError) as exc:
+                    result['journal_preparation_error'] = str(exc)[:500]
+                result.update(attempted=True, execution_stage='scenario', execution_id=execution_id)
             command = runner(argv, workspace, directory / 'test.log', timeout_seconds, **options)
             result['command_tail']=str(command.get('tail',''))[-2000:]
             result.update(test_status=command['status'], duration_seconds=command.get('duration_seconds'),
-                          exit_code=command.get('exit_code'), argv=argv)
+                          exit_code=command.get('exit_code'), argv=argv,
+                          execution_id=execution_id, measurement_reused=False)
+            execution_record = {'execution_id':execution_id, 'logical_input_sha256':key,
+                'argv':argv, 'kind':scenario['kind'], 'origin_scenario_id':sid,
+                'log':result['log'], 'status':command['status'], 'spec_sha256':request['spec_sha256'],
+                'execution_reuse':deepcopy(scenario.get('execution_reuse'))}
+            result['execution_record'] = store_execution_record(output, directory, execution_record)
+            execution_record['record_ref'] = result['execution_record']
+            report['execution_runs'].append(execution_record)
             if command['status'] != 'PASS':
                 result.update(status='FAIL', detail='Scenario command did not succeed: ' + command['status'])
             quality = command.get('video_capture')
@@ -257,10 +417,42 @@ def run_scenarios(request, plan, workspace, output, timeout_seconds, run_command
             if command['status'] != 'PASS':
                 result.update(status='FAIL', detail='Scenario command did not succeed: ' + command['status']+
                     ('; '+detail if status=='FAIL' else ''))
+            if key is not None:
+                shared = {'key':key, 'result':deepcopy(result)}
         except Exception as exc:
+            if scenario['kind']=='gameplay' and execution_id is not None and command is None:
+                result.update(test_status='ERROR',exit_code=None)
             result.update(status='FAIL' if result['test_status'] in ('FAIL', 'ERROR', 'TIMEOUT') else 'NOT_TESTED',
                           detail=type(exc).__name__ + ': ' + str(exc)[:500])
         finally:
+            if scenario['kind']=='gameplay' and execution_id is not None:
+                from common.gameplay_execution import collect_execution_lifecycle
+                try:
+                    result['execution_lifecycle'] = collect_execution_lifecycle(build, directory, output,
+                        sid, execution_id, command or {'status':'ERROR','exit_code':None,
+                            'supervisor_error':result.get('detail')},journal_path=journal_path)
+                except (OSError,ValueError,UnicodeError) as exc:
+                    result['execution_lifecycle_error'] = str(exc)[:500]
+                finally:
+                    if journal_path is not None:
+                        from common.gameplay_execution import release_journal
+                        try:release_journal(journal_path)
+                        except (OSError,ValueError) as exc:
+                            result['journal_cleanup_error'] = str(exc)[:500]
+            if scenario['kind']=='gameplay' and world_fixture is not None:
+                collector=getattr(world_fixture,'collect_client_setup',None)
+                if collector is not None:
+                    try:
+                        setup=collector(directory)
+                        if setup:
+                            setup['file']=relative+'/'+setup['file']
+                            result['dependency_preparation']=setup
+                    except (OSError,ValueError,UnicodeError) as exc:
+                        result['dependency_preparation']={'status':'UNAVAILABLE',
+                            'detail':'Unable to retain client setup diagnostics: '+str(exc)}
+                try:world_fixture.release()
+                except Exception as exc:
+                    result['world_cleanup']={'status':'DEFERRED_TO_CONTAINER_REMOVAL','detail':str(exc)[:500]}
             from common.failure_details import enrich_result
             result.update(enrich_result(scenario,result))
     (output / 'acceptance_results.json').write_text(json.dumps(report, indent=2), encoding='utf-8')

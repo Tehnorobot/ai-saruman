@@ -1,5 +1,10 @@
 # Runtime pipeline contracts, version `v1`
 
+Current role context, evidence access, optional action outcomes, stable findings
+and execution reuse: [optimized runtime](../../docs/OPTIMIZED_RUNTIME_RU.md).
+Historical objects remain readable. Optional additions are explicit in new strict
+submissions; canonical metadata still belongs to the controller.
+
 Each `<Name>.schema.json` is a self-contained JSON Schema Draft 2020-12.
 `examples/<Name>.json` contains one shape-valid example. Example hashes and
 project paths are illustrative; they do not prove any real implementation.

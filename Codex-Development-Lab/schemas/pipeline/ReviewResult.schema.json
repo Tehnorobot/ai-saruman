@@ -3,19 +3,19 @@
   "properties": {
     "contract": {
       "const": "ReviewResult",
-      "description": "\u0418\u043c\u044f \u0442\u0438\u043f\u0430 \u0441\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u044f; \u0432\u044b\u0431\u0438\u0440\u0430\u0435\u0442 \u0441\u0445\u0435\u043c\u0443."
+      "description": "Имя типа сообщения; выбирает схему."
     },
     "version": {
       "const": "v1",
-      "description": "\u0412\u0435\u0440\u0441\u0438\u044f \u0444\u043e\u0440\u043c\u0430\u0442\u0430; \u0437\u0434\u0435\u0441\u044c \u0442\u043e\u043b\u044c\u043a\u043e v1."
+      "description": "Версия формата; здесь только v1."
     },
     "scope": {
       "$ref": "#/$defs/Scope",
-      "description": "\u041f\u0440\u043e\u0435\u043a\u0442, \u0432\u0435\u0440\u0441\u0438\u044f \u0422\u0417, \u0432\u0435\u0440\u0441\u0438\u044f \u043a\u043e\u0434\u0430 \u0438 \u0440\u0430\u0443\u043d\u0434."
+      "description": "Проект, версия ТЗ, версия кода и раунд."
     },
     "request_ref": {
       "$ref": "#/$defs/ArtifactRef",
-      "description": "\u0418\u0441\u0445\u043e\u0434\u043d\u044b\u0439 \u0437\u0430\u043f\u0440\u043e\u0441 \u044d\u0442\u043e\u0433\u043e \u0440\u0435\u0437\u0443\u043b\u044c\u0442\u0430\u0442\u0430."
+      "description": "Исходный запрос этого результата."
     },
     "disposition": {
       "type": "string",
@@ -24,14 +24,14 @@
         "ready_for_verification",
         "needs_experiment"
       ],
-      "description": "\u0412\u0435\u0440\u0434\u0438\u043a\u0442 \u0440\u0435\u0432\u044c\u044e \u0438\u043b\u0438 \u043e\u0442\u0432\u0435\u0442 \u043a\u043e\u0434\u0435\u0440\u0430; \u043d\u0435 \u0441\u0442\u0430\u0442\u0443\u0441 \u0442\u0435\u0441\u0442\u0430."
+      "description": "Вердикт ревью или ответ кодера; не статус теста."
     },
     "findings": {
       "type": "array",
       "items": {
         "$ref": "#/$defs/Finding"
       },
-      "description": "\u0417\u0430\u043c\u0435\u0447\u0430\u043d\u0438\u044f \u0441 \u043c\u0435\u0441\u0442\u043e\u043c, \u043f\u0440\u0438\u0447\u0438\u043d\u043e\u0439 \u0438 \u0441\u043f\u043e\u0441\u043e\u0431\u043e\u043c \u043f\u0440\u043e\u0432\u0435\u0440\u043a\u0438."
+      "description": "Замечания с местом, причиной и способом проверки."
     },
     "unknowns": {
       "type": "array",
@@ -39,7 +39,7 @@
         "type": "string",
         "minLength": 1
       },
-      "description": "\u0427\u0442\u043e \u043e\u0431\u0437\u043e\u0440 \u043d\u0435 \u043f\u043e\u0434\u0442\u0432\u0435\u0440\u0434\u0438\u043b."
+      "description": "Что обзор не подтвердил."
     },
     "reviewed_condition_ids": {
       "type": "array",
@@ -57,6 +57,14 @@
         "$ref": "#/$defs/SourceRef"
       },
       "description": "Literal tool-observed sources supporting this review, including reviews with no findings."
+    },
+    "resolved_finding_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true,
+      "description": "Existing findings explicitly resolved by this review; review judgement is not independent PASS."
     }
   },
   "required": [
@@ -71,9 +79,9 @@
     "evidence_refs"
   ],
   "additionalProperties": false,
-  "description": "\u0420\u0435\u0432\u044c\u044e\u0435\u0440 \u2192 \u043a\u043e\u043d\u0442\u0440\u043e\u043b\u043b\u0435\u0440 \u0438 \u043a\u043e\u0434\u0435\u0440. \u0412\u0435\u0440\u0434\u0438\u043a\u0442 \u043e \u0440\u0435\u0432\u044c\u044e, \u043d\u0435 \u043e \u043f\u0440\u043e\u0445\u043e\u0436\u0434\u0435\u043d\u0438\u0438 \u0438\u0433\u0440\u044b.",
+  "description": "Ревьюер → контроллер и кодер. Вердикт о ревью, не о прохождении игры.",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "ReviewResult \u2014 runtime v1",
+  "title": "ReviewResult — runtime v1",
   "$defs": {
     "ArtifactRef": {
       "type": "object",
@@ -81,17 +89,17 @@
         "path": {
           "type": "string",
           "minLength": 1,
-          "description": "\u0414\u043b\u044f ArtifactRef: \u043f\u0443\u0442\u044c \u043e\u0442\u043d\u043e\u0441\u0438\u0442\u0435\u043b\u044c\u043d\u043e \u043a\u043e\u0440\u043d\u044f \u043f\u0440\u043e\u0435\u043a\u0442\u0430; \u0434\u043b\u044f Issue: \u043f\u0443\u0442\u044c \u043f\u043e\u043b\u044f \u0432 JSON.",
+          "description": "Для ArtifactRef: путь относительно корня проекта; для Issue: путь поля в JSON.",
           "pattern": "^(?!/)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//)(?!.*[\\\\:\\x00])[^/]+(?:/[^/]+)*$"
         },
         "sha256": {
           "$ref": "#/$defs/Hash",
-          "description": "\u0425\u0435\u0448 \u0442\u043e\u0447\u043d\u043e\u0433\u043e \u0441\u043e\u0434\u0435\u0440\u0436\u0438\u043c\u043e\u0433\u043e \u0444\u0430\u0439\u043b\u0430; \u043f\u0440\u043e\u0432\u0435\u0440\u044f\u0435\u0442\u0441\u044f \u043f\u0440\u0438 \u0447\u0442\u0435\u043d\u0438\u0438."
+          "description": "Хеш точного содержимого файла; проверяется при чтении."
         },
         "media_type": {
           "type": "string",
           "minLength": 1,
-          "description": "MIME-\u0442\u0438\u043f \u0444\u0430\u0439\u043b\u0430."
+          "description": "MIME-тип файла."
         }
       },
       "required": [
@@ -107,7 +115,7 @@
         "id": {
           "type": "string",
           "minLength": 1,
-          "description": "\u0423\u043d\u0438\u043a\u0430\u043b\u044c\u043d\u044b\u0439 ID \u0432\u043d\u0443\u0442\u0440\u0438 \u0441\u043e\u043e\u0442\u0432\u0435\u0442\u0441\u0442\u0432\u0443\u044e\u0449\u0435\u0433\u043e \u043a\u0430\u0442\u0430\u043b\u043e\u0433\u0430."
+          "description": "Уникальный ID внутри соответствующего каталога."
         },
         "kind": {
           "type": "string",
@@ -116,7 +124,7 @@
             "technical_risk",
             "suggestion"
           ],
-          "description": "\u0412 Action: \u0432\u0438\u0434 \u0440\u0430\u0431\u043e\u0442\u044b; \u0432 Finding: \u043a\u043b\u0430\u0441\u0441 \u0437\u0430\u043c\u0435\u0447\u0430\u043d\u0438\u044f; \u0432 \u043f\u0430\u043c\u044f\u0442\u0438: \u0442\u0438\u043f \u0437\u0430\u043f\u0438\u0441\u0438."
+          "description": "В Action: вид работы; в Finding: класс замечания; в памяти: тип записи."
         },
         "severity": {
           "type": "string",
@@ -125,38 +133,38 @@
             "medium",
             "low"
           ],
-          "description": "\u0420\u0438\u0441\u043a \u0437\u0430\u043c\u0435\u0447\u0430\u043d\u0438\u044f, \u043d\u0435 \u043d\u043e\u0432\u043e\u0435 \u0442\u0440\u0435\u0431\u043e\u0432\u0430\u043d\u0438\u0435 \u043f\u0440\u043e\u0434\u0443\u043a\u0442\u0430."
+          "description": "Риск замечания, не новое требование продукта."
         },
         "requirement_ids": {
           "type": "array",
           "items": {
             "type": "string",
             "minLength": 1,
-            "description": "\u041a\u0430\u043a \u043f\u0440\u043e\u0432\u0435\u0440\u0438\u0442\u044c \u043f\u0440\u0435\u0434\u043f\u043e\u043b\u0430\u0433\u0430\u0435\u043c\u0443\u044e \u043f\u0440\u043e\u0431\u043b\u0435\u043c\u0443."
+            "description": "Как проверить предполагаемую проблему."
           },
-          "description": "\u0421\u0432\u044f\u0437\u0430\u043d\u043d\u044b\u0435 \u0442\u0440\u0435\u0431\u043e\u0432\u0430\u043d\u0438\u044f; ID \u0434\u043e\u043b\u0436\u043d\u044b \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u043e\u0432\u0430\u0442\u044c."
+          "description": "Связанные требования; ID должны существовать."
         },
         "code_refs": {
           "type": "array",
           "items": {
             "$ref": "#/$defs/SourceRef"
           },
-          "description": "\u0422\u043e\u0447\u043d\u044b\u0435 \u043c\u0435\u0441\u0442\u0430 \u0432 \u0438\u0441\u0445\u043e\u0434\u043d\u0438\u043a\u0430\u0445."
+          "description": "Точные места в исходниках."
         },
         "observation": {
           "type": "string",
           "minLength": 1,
-          "description": "\u0427\u0442\u043e \u0440\u0435\u0432\u044c\u044e\u0435\u0440 \u043d\u0430\u0431\u043b\u044e\u0434\u0430\u0435\u0442 \u0432 \u043a\u043e\u0434\u0435."
+          "description": "Что ревьюер наблюдает в коде."
         },
         "consequence": {
           "type": "string",
           "minLength": 1,
-          "description": "\u041f\u043e\u0447\u0435\u043c\u0443 \u044d\u0442\u043e \u043c\u043e\u0436\u0435\u0442 \u043d\u0430\u0440\u0443\u0448\u0438\u0442\u044c \u0437\u0430\u0434\u0430\u0447\u0443."
+          "description": "Почему это может нарушить задачу."
         },
         "suggested_check": {
           "type": "string",
           "minLength": 1,
-          "description": "\u041a\u0430\u043a \u043f\u0440\u043e\u0432\u0435\u0440\u0438\u0442\u044c \u043f\u0440\u0435\u0434\u043f\u043e\u043b\u0430\u0433\u0430\u0435\u043c\u0443\u044e \u043f\u0440\u043e\u0431\u043b\u0435\u043c\u0443."
+          "description": "Как проверить предполагаемую проблему."
         }
       },
       "required": [
@@ -180,19 +188,19 @@
       "properties": {
         "contract": {
           "const": "ReviewResult",
-          "description": "\u0418\u043c\u044f \u0442\u0438\u043f\u0430 \u0441\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u044f; \u0432\u044b\u0431\u0438\u0440\u0430\u0435\u0442 \u0441\u0445\u0435\u043c\u0443."
+          "description": "Имя типа сообщения; выбирает схему."
         },
         "version": {
           "const": "v1",
-          "description": "\u0412\u0435\u0440\u0441\u0438\u044f \u0444\u043e\u0440\u043c\u0430\u0442\u0430; \u0437\u0434\u0435\u0441\u044c \u0442\u043e\u043b\u044c\u043a\u043e v1."
+          "description": "Версия формата; здесь только v1."
         },
         "scope": {
           "$ref": "#/$defs/Scope",
-          "description": "\u041f\u0440\u043e\u0435\u043a\u0442, \u0432\u0435\u0440\u0441\u0438\u044f \u0422\u0417, \u0432\u0435\u0440\u0441\u0438\u044f \u043a\u043e\u0434\u0430 \u0438 \u0440\u0430\u0443\u043d\u0434."
+          "description": "Проект, версия ТЗ, версия кода и раунд."
         },
         "request_ref": {
           "$ref": "#/$defs/ArtifactRef",
-          "description": "\u0418\u0441\u0445\u043e\u0434\u043d\u044b\u0439 \u0437\u0430\u043f\u0440\u043e\u0441 \u044d\u0442\u043e\u0433\u043e \u0440\u0435\u0437\u0443\u043b\u044c\u0442\u0430\u0442\u0430."
+          "description": "Исходный запрос этого результата."
         },
         "disposition": {
           "type": "string",
@@ -201,14 +209,14 @@
             "ready_for_verification",
             "needs_experiment"
           ],
-          "description": "\u0412\u0435\u0440\u0434\u0438\u043a\u0442 \u0440\u0435\u0432\u044c\u044e \u0438\u043b\u0438 \u043e\u0442\u0432\u0435\u0442 \u043a\u043e\u0434\u0435\u0440\u0430; \u043d\u0435 \u0441\u0442\u0430\u0442\u0443\u0441 \u0442\u0435\u0441\u0442\u0430."
+          "description": "Вердикт ревью или ответ кодера; не статус теста."
         },
         "findings": {
           "type": "array",
           "items": {
             "$ref": "#/$defs/Finding"
           },
-          "description": "\u0417\u0430\u043c\u0435\u0447\u0430\u043d\u0438\u044f \u0441 \u043c\u0435\u0441\u0442\u043e\u043c, \u043f\u0440\u0438\u0447\u0438\u043d\u043e\u0439 \u0438 \u0441\u043f\u043e\u0441\u043e\u0431\u043e\u043c \u043f\u0440\u043e\u0432\u0435\u0440\u043a\u0438."
+          "description": "Замечания с местом, причиной и способом проверки."
         },
         "unknowns": {
           "type": "array",
@@ -216,7 +224,7 @@
             "type": "string",
             "minLength": 1
           },
-          "description": "\u0427\u0442\u043e \u043e\u0431\u0437\u043e\u0440 \u043d\u0435 \u043f\u043e\u0434\u0442\u0432\u0435\u0440\u0434\u0438\u043b."
+          "description": "Что обзор не подтвердил."
         },
         "reviewed_condition_ids": {
           "type": "array",
@@ -248,7 +256,7 @@
         "evidence_refs"
       ],
       "additionalProperties": false,
-      "description": "\u0420\u0435\u0432\u044c\u044e\u0435\u0440 \u2192 \u043a\u043e\u043d\u0442\u0440\u043e\u043b\u043b\u0435\u0440 \u0438 \u043a\u043e\u0434\u0435\u0440. \u0412\u0435\u0440\u0434\u0438\u043a\u0442 \u043e \u0440\u0435\u0432\u044c\u044e, \u043d\u0435 \u043e \u043f\u0440\u043e\u0445\u043e\u0436\u0434\u0435\u043d\u0438\u0438 \u0438\u0433\u0440\u044b."
+      "description": "Ревьюер → контроллер и кодер. Вердикт о ревью, не о прохождении игры."
     },
     "Scope": {
       "type": "object",
@@ -256,20 +264,20 @@
         "project_id": {
           "type": "string",
           "minLength": 1,
-          "description": "\u0423\u0441\u0442\u043e\u0439\u0447\u0438\u0432\u044b\u0439 ID \u043f\u0440\u043e\u0435\u043a\u0442\u0430."
+          "description": "Устойчивый ID проекта."
         },
         "spec_revision": {
           "$ref": "#/$defs/Hash",
-          "description": "SHA-256 \u043a\u0430\u043d\u043e\u043d\u0438\u0447\u0435\u0441\u043a\u043e\u0433\u043e \u043c\u0430\u043d\u0438\u0444\u0435\u0441\u0442\u0430 \u0422\u0417 \u0438 \u044f\u0432\u043d\u044b\u0445 \u0443\u0442\u043e\u0447\u043d\u0435\u043d\u0438\u0439."
+          "description": "SHA-256 канонического манифеста ТЗ и явных уточнений."
         },
         "source_revision": {
           "$ref": "#/$defs/Hash",
-          "description": "SHA-256 \u043a\u0430\u043d\u043e\u043d\u0438\u0447\u0435\u0441\u043a\u043e\u0433\u043e \u043c\u0430\u043d\u0438\u0444\u0435\u0441\u0442\u0430 \u0438\u0441\u0445\u043e\u0434\u043d\u0438\u043a\u043e\u0432 \u0441\u043d\u0438\u043c\u043a\u0430."
+          "description": "SHA-256 канонического манифеста исходников снимка."
         },
         "round": {
           "type": "integer",
           "minimum": 0,
-          "description": "\u041d\u043e\u043c\u0435\u0440 \u043f\u043e\u043f\u044b\u0442\u043a\u0438; \u043d\u0435 \u043f\u0440\u043e\u0446\u0435\u043d\u0442 \u0433\u043e\u0442\u043e\u0432\u043d\u043e\u0441\u0442\u0438."
+          "description": "Номер попытки; не процент готовности."
         }
       },
       "required": [
@@ -285,22 +293,22 @@
       "properties": {
         "artifact": {
           "$ref": "#/$defs/ArtifactRef",
-          "description": "\u0424\u0430\u0439\u043b, \u0438\u0437 \u043a\u043e\u0442\u043e\u0440\u043e\u0433\u043e \u0432\u0437\u044f\u0442\u0430 \u0446\u0438\u0442\u0430\u0442\u0430."
+          "description": "Файл, из которого взята цитата."
         },
         "start_line": {
           "type": "integer",
           "minimum": 1,
-          "description": "\u041f\u0435\u0440\u0432\u0430\u044f \u0441\u0442\u0440\u043e\u043a\u0430 \u0444\u0440\u0430\u0433\u043c\u0435\u043d\u0442\u0430, \u0441 1."
+          "description": "Первая строка фрагмента, с 1."
         },
         "end_line": {
           "type": "integer",
           "minimum": 1,
-          "description": "\u041f\u043e\u0441\u043b\u0435\u0434\u043d\u044f\u044f \u0441\u0442\u0440\u043e\u043a\u0430 \u0444\u0440\u0430\u0433\u043c\u0435\u043d\u0442\u0430 \u0432\u043a\u043b\u044e\u0447\u0438\u0442\u0435\u043b\u044c\u043d\u043e."
+          "description": "Последняя строка фрагмента включительно."
         },
         "excerpt": {
           "type": "string",
           "minLength": 1,
-          "description": "\u0422\u043e\u0447\u043d\u0430\u044f \u0446\u0438\u0442\u0430\u0442\u0430 \u0438\u0437 \u0443\u043a\u0430\u0437\u0430\u043d\u043d\u043e\u0439 \u0432\u0435\u0440\u0441\u0438\u0438 \u0444\u0430\u0439\u043b\u0430."
+          "description": "Точная цитата из указанной версии файла."
         }
       },
       "required": [

@@ -214,7 +214,7 @@ def prepare_request(catalog, plan, previous=None, source_sha256=''):
 def source_fingerprint(workspace, inventory=None):
     root=Path(workspace)
     ignored={'.git','.gradle','.lab-cache','.agents','.codex','build','node_modules','__pycache__',
-             'run','run-clientGameTest','run-serverGameTest','.pytest_cache','.venv','venv','.lab-feedback','.lab-memory','.lab-pipeline'}
+             'run','run-clientGameTest','run-serverGameTest','.pytest_cache','.venv','venv','.lab-feedback','.lab-memory','.lab-pipeline','.lab-evidence'}
     # Working notes and controller context are not executable source or evidence.
     generated={'acceptance-request.json','acceptance-catalog.json',
                'round-memory.json','document-index.json','agent-handoff.json','acceptance-tasks.json'}

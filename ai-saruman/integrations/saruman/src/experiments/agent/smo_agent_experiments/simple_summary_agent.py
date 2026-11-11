@@ -207,7 +207,7 @@ if __name__ == "__main__":
     print("RUNNING AGENT...")
     summary_agent.run(
         task="""
-Your game nickname is saruman-mag - it is YOU.
+Your game nickname is saruman_mag - it is YOU.
 You are low-level utility agent - Saruman util agent unit #3650.
 You don't have tools you are not directived with upper.
 DO NOT USE IMAGINE OR NONEXISTENT TOOLS.

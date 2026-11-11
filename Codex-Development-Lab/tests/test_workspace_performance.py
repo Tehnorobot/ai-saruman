@@ -188,7 +188,8 @@ class BatchContainerPolicyTests(unittest.TestCase):
         self.assertTrue(host['ReadonlyRootfs'])
         self.assertIn('no-new-privileges:true', host['SecurityOpt'])
         mounts = host['Mounts']
-        self.assertEqual({m['Target'] for m in mounts}, {'/workspace', '/output', '/cache'})
+        self.assertEqual({m['Target'] for m in mounts},
+                         {'/workspace', '/output', '/cache', '/world-templates', '/game-data'})
         self.assertTrue(all(m['Type'] == 'volume' and m['Source'] == 'private-runner-state' for m in mounts))
         self.assertFalse(host.get('Binds'))
         self.assertFalse(any('sock' in m['Target'] or m['Target'] == '/state' for m in mounts))
@@ -196,6 +197,8 @@ class BatchContainerPolicyTests(unittest.TestCase):
                                'argv': ['python3', '-c', 'pass'], 'record': False})
         self.assertEqual(command['User'], '1000:1000')
         self.assertFalse(command['HostConfig'].get('CapAdd'))
+        self.assertEqual({m['Target'] for m in command['HostConfig']['Mounts']},
+                         {'/workspace', '/output', '/cache'})
 
     def test_cache_is_shared_only_between_runs_of_same_project(self):
         configs = [self.config(self.batch(pid)) for pid in ('a' * 14, 'e' * 14)]

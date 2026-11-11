@@ -11,6 +11,7 @@ from pathlib import Path
 import shutil
 import socket
 import socketserver
+import stat
 import tempfile
 import time
 import uuid
@@ -62,6 +63,54 @@ class Broker:
 
     def directory(self, token):
         return self.root / 'runs' / identifier(token, 32)
+
+    def prepare_world_cache(self):
+        """Expose only the broker-owned template leaf to trusted verification.
+
+        This is deliberately outside each project's UID-1000-owned cache: a
+        project must not rename a protected template directory through a writable
+        parent. The mount path is fixed by policy, never supplied by a caller.
+        Do not walk template contents; the image-owned store validates them.
+        """
+        if os.name != 'posix' or not hasattr(os, 'O_NOFOLLOW'):
+            raise RuntimeError('World templates require Linux descriptor path checks')
+        flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+        descriptor = os.open('/', flags)
+        try:
+            for component in self.root.absolute().parts[1:]:
+                child = os.open(component, flags, dir_fd=descriptor)
+                os.close(descriptor)
+                descriptor = child
+                info = os.fstat(descriptor)
+                if info.st_uid != 0:
+                    raise RuntimeError('World template ancestor must belong to the broker root')
+                # /tmp may be a normal root-owned sticky directory in isolated
+                # tests. Other writable ancestors could replace the cache's
+                # entry after this descriptor check and before Engine mounts it.
+                if (stat.S_IMODE(info.st_mode) & 0o022
+                        and not info.st_mode & stat.S_ISVTX):
+                    raise RuntimeError('World template ancestor is writable by another user')
+            info = os.fstat(descriptor)
+            if info.st_uid != 0:
+                raise RuntimeError('World template parent must belong to the broker root')
+            # A freshly mounted Docker volume may initially be 0755. Restrict
+            # the broker's own directory without taking ownership of an
+            # untrusted directory or adding CAP_CHOWN to verification.
+            os.fchmod(descriptor, 0o700)
+            try:
+                os.mkdir('world-templates', mode=0o700, dir_fd=descriptor)
+            except FileExistsError:
+                pass
+            child = os.open('world-templates', flags, dir_fd=descriptor)
+            try:
+                info = os.fstat(child)
+                if info.st_uid != 0 or stat.S_IMODE(info.st_mode) != 0o700:
+                    raise RuntimeError('World template cache has unsafe ownership or permissions')
+            finally:
+                os.close(child)
+        finally:
+            os.close(descriptor)
+        return self.root / 'world-templates'
 
     def prepare_cache(self, project):
         """Only expose a project's cache leaf; never traverse its task-owned contents.
@@ -144,14 +193,18 @@ class Broker:
         if len(list((self.root / 'runs').iterdir())) >= 4:
             raise ValueError('Runner capacity reached; recover previous runs first')
         self.prepare_cache(request['project'])
+        if request.get('verification') is True:
+            self.prepare_world_cache()
         token = uuid.uuid4().hex
         directory = self.directory(token)
         directory.mkdir(mode=0o700)
-        for folder in ('workspace', 'output'):
+        folders=('workspace','output','game-data') if request.get('verification') is True else ('workspace','output')
+        for folder in folders:
             path = directory / folder
             trusted_output=folder=='output' and request.get('verification') is True
             path.mkdir(mode=0o700 if trusted_output else 0o755)
-            os.chown(path,0 if trusted_output else 1000,0 if trusted_output else 1000)
+            trusted=trusted_output or folder=='game-data'
+            os.chown(path,0 if trusted else 1000,0 if trusted else 1000)
         self.save(token, {'request': request, 'uploaded': False, 'started': None})
         return {'Id': token}
 
@@ -179,6 +232,8 @@ class Broker:
         if existing:
             raise ValueError('Run needs recovery before restart')
         self.prepare_cache(data['request']['project'])
+        if data['request'].get('verification') is True:
+            self.prepare_world_cache()
         # Commit intent before asking Engine. Recovery can always find by name,
         # including a crash after create but before the response is delivered.
         data['started'] = time.time()

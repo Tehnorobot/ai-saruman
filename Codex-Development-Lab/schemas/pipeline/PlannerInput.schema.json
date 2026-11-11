@@ -244,6 +244,21 @@
             "$ref": "#/$defs/ArtifactRef"
           },
           "description": "Доказательства статуса, а не текстовая самооценка агента."
+        },
+        "implementation": {
+          "type": "string",
+          "enum": [
+            "unknown",
+            "absent",
+            "present_claim",
+            "buildable"
+          ]
+        },
+        "implementation_refs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ArtifactRef"
+          }
         }
       },
       "required": [

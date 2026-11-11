@@ -35,10 +35,13 @@ def runtime_args(args) -> list[str]:
 
 
 def main(argv=None) -> int:
-    parser = argparse.ArgumentParser(
-        description="Саруман: игровой персонаж Minecraft"
+    parser = argparse.ArgumentParser(description="Саруман: игровой персонаж Minecraft")
+    parser.add_argument("command", choices=("doctor", "run", "reset-memory"))
+    parser.add_argument(
+        "--cancel",
+        action="store_true",
+        help="reset-memory: отменить запланированный сброс",
     )
-    parser.add_argument("command", choices=("doctor", "run"))
     parser.add_argument("--env-file", type=Path, default=ROOT / ".env.saruman")
     parser.add_argument(
         "--live", action="store_true", help="doctor: read-only проверки сервисов"
@@ -59,6 +62,18 @@ def main(argv=None) -> int:
     os.chdir(ROOT)
     try:
         load_environment(env_path)
+        if args.command == "reset-memory":
+            from saruman.memory_reset import cancel_reset, request_reset
+
+            if args.cancel:
+                cancel_reset()
+                print("Сброс игровой памяти отменён.")
+            else:
+                request_reset()
+                print(
+                    "Сброс памяти запланирован на следующий полный запуск Python runtime."
+                )
+            return 0
         from saruman.doctor import check
 
         # Run always validates services, but never requests a model generation.

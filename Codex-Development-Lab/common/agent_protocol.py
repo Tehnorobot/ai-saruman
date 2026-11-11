@@ -28,6 +28,7 @@ def compact_schema(name,canonical):
     if name=='AgentPlan':
         action=obj({'kind':deepcopy(canonical['$defs']['Action']['properties']['kind']),
             'task_ids':strings,'condition_ids':strings,'goal':text,'expected_observation':text})
+        action['properties']['depends_on_action_indexes']={'type':'array','items':{'type':'integer','minimum':0},'uniqueItems':True}
         schema=obj({**head,'strategy':prop('strategy'),'actions':array(action),'notes_md':text,
             'regression_condition_ids':prop('regression_condition_ids'),'deferred':prop('deferred'),
             'manual_checks':prop('manual_checks'),'request_graph_change':{'type':'boolean'},
@@ -38,10 +39,15 @@ def compact_schema(name,canonical):
         schema=obj({**head,'disposition':prop('disposition'),'reviewed_condition_ids':strings,
             'findings':array(obj({'kind':deepcopy(finding['kind']),'severity':deepcopy(finding['severity']),
                 'requirement_ids':strings,'notes_md':text})), 'notes_md':text})
+        schema['properties']['findings']['items']['properties']['finding_id']=text
+        schema['properties']['resolved_finding_ids']=strings
     elif name=='AgentReport':
         schema=obj({**head,'scenario_manifest_path':text,'notes_md':text,
             'responses':array(obj({'finding_id':text,'disposition':{'type':'string','enum':['fixed','rejected_with_reason','unverified']},'notes_md':text})),
             'unverified_claims':strings,'open_issues':strings})
+        schema['properties']['action_outcomes']=array(obj({'action_id':text,
+            'status':{'type':'string','enum':['implemented_claim','partial','not_attempted','needs_experiment','not_assessed']},
+            'notes_md':text}))
     else:
         schema=deepcopy(canonical)
         schema['properties']={**head,**{k:v for k,v in schema['properties'].items()
@@ -94,6 +100,16 @@ def _expand(value,node,root,artifact,read):
 def hydrate(value,*,scope,inputs,artifact,read,write,changed_files=(),archive=None):
     from common import pipeline_contracts as contracts
     name=value.get('contract');target=TARGETS[name]
+    if name in ('AgentPlan','AgentReview','AgentReport'):
+        # Optional additions keep historical accepted answers readable. These
+        # defaults never assert implementation, a causal dependency or PASS.
+        value=deepcopy(value)
+        if name=='AgentPlan':
+            for action in value.get('actions',[]):action.setdefault('depends_on_action_indexes',[])
+        elif name=='AgentReview':
+            for finding in value.get('findings',[]):finding.setdefault('finding_id','')
+            value.setdefault('resolved_finding_ids',[])
+        else:value.setdefault('action_outcomes',[])
     if name=='AgentScenarios':
         # Stored proposals predate optional fixture metadata. Provider strict
         # schemas require explicit empty arrays, while runtime contracts keep
@@ -102,6 +118,7 @@ def hydrate(value,*,scope,inputs,artifact,read,write,changed_files=(),archive=No
         value=deepcopy(value)
         for scenario in value.get('scenarios',[]):
             execution=scenario.get('execution',{})
+            execution.setdefault('reuse',None)
             prerequisites=execution.setdefault('precondition_tests',[])
             if isinstance(prerequisites,list):
                 for prerequisite in prerequisites:
@@ -112,16 +129,33 @@ def hydrate(value,*,scope,inputs,artifact,read,write,changed_files=(),archive=No
     if name=='AgentPlan':
         actions=[]
         for index,item in enumerate(value['actions']):
-            actions.append({**deepcopy(item),'id':'A'+str(index+1),
-                'depends_on_action_ids':[] if index==0 else ['A'+str(index)]})
+            dependencies=item['depends_on_action_indexes']
+            if len(dependencies)!=len(set(dependencies)) or any(type(n) is not int or not 0<=n<index for n in dependencies):
+                raise ValueError('Action dependencies must name distinct earlier action indexes, never inferred adjacency')
+            body={k:deepcopy(v) for k,v in item.items() if k!='depends_on_action_indexes'}
+            actions.append({**body,'id':'A'+str(index+1),
+                'depends_on_action_ids':['A'+str(n+1) for n in dependencies]})
         return {**head,'strategy':value['strategy'],'rationale':notes or 'See the selected work package.',
             'actions':actions,'hypotheses':[],'deferred':deepcopy(value['deferred']),
             'manual_checks':deepcopy(value['manual_checks']),'regression_condition_ids':value['regression_condition_ids'],
             'replacement_graph_ref':inputs['graph_ref'] if value['request_graph_change'] else None}
     if name=='AgentReview':
+        import hashlib
+        known={f['id'] for f in inputs.get('open_findings',[])}
+        if len(value['resolved_finding_ids'])!=len(set(value['resolved_finding_ids'])) or not set(value['resolved_finding_ids'])<=known:
+            raise ValueError('Resolve only distinct existing open finding IDs after reviewing the actual changes/evidence')
+        namespace=inputs.get('finding_namespace')
+        def finding_id(f,index):
+            if f['finding_id']:
+                if f['finding_id'] not in known:raise ValueError('finding_id must reuse an existing open finding or be empty for a new issue')
+                return f['finding_id']
+            # Old callers retain their local F IDs. Live controller supplies a
+            # persistent review namespace; IDs never depend on prose wording.
+            return 'F'+hashlib.sha256((namespace+':'+str(index)).encode()).hexdigest()[:16] if namespace else 'F'+str(index+1)
         return {**head,'request_ref':inputs['context_ref'],'disposition':value['disposition'],
             'reviewed_condition_ids':value['reviewed_condition_ids'],'evidence_refs':[],
-            'unknowns':[notes] if notes else [],'findings':[{'id':'F'+str(i+1),'kind':f['kind'],
+            'resolved_finding_ids':list(value['resolved_finding_ids']),
+            'unknowns':[notes] if notes else [],'findings':[{'id':finding_id(f,i),'kind':f['kind'],
                 'severity':f['severity'],'requirement_ids':f['requirement_ids'],'code_refs':[],
                 'observation':f['notes_md'] or 'See reviewer report.',
                 'consequence':'See reviewer notes.','suggested_check':'See reviewer notes and executable scenarios.'}
@@ -141,8 +175,13 @@ def hydrate(value,*,scope,inputs,artifact,read,write,changed_files=(),archive=No
                 'responses':[{'finding_id':r['finding_id'],'disposition':r['disposition'],
                     'explanation':r['notes_md'] or 'No explanation supplied.','evidence_refs':[]} for r in value['responses']]}
             response_refs=[write('review-response-normalized.json',response)]
+        outcomes={item['action_id']:deepcopy(item) for item in value['action_outcomes']}
+        known_actions={a['id'] for a in plan['actions']}
+        if len(outcomes)!=len(value['action_outcomes']) or not outcomes.keys()<=known_actions:
+            raise ValueError('Report distinct action_outcomes using IDs from the accepted assignment')
         return {**head,'base_source_revision':assignment['scope']['source_revision'],'plan_ref':assignment['plan_ref'],
             'action_ids':[a['id'] for a in plan['actions']],'summary':notes or 'See saved code and executable scenarios.',
+            'action_outcomes':[outcomes.get(a['id'],{'action_id':a['id'],'status':'not_assessed','notes_md':'No per-action claim supplied.'}) for a in plan['actions']],
             'changed_files':list(changed_files),'scenario_manifest_ref':manifest_ref,
             'review_response_refs':response_refs,'unverified_claims':value['unverified_claims'],'open_issues':value['open_issues']}
     schema=contracts.load_schema(target)
@@ -170,16 +209,19 @@ def to_wire(value):
         return {k:shrink(x) for k,x in v.items()}
     head={'contract':name,'version':'v1'}
     if name=='AgentPlan':return {**head,'strategy':value['strategy'],
-        'actions':[{k:a[k] for k in ('kind','task_ids','condition_ids','goal','expected_observation')} for a in value['actions']],
+        'actions':[{k:a[k] for k in ('kind','task_ids','condition_ids','goal','expected_observation')}|
+            {'depends_on_action_indexes':[n for n,other in enumerate(value['actions']) if other['id'] in a['depends_on_action_ids']]}
+            for a in value['actions']],
         'notes_md':value['rationale']+'\n\n'+json.dumps(value['hypotheses'],ensure_ascii=False),
         'deferred':value['deferred'],'manual_checks':value['manual_checks'],
         'regression_condition_ids':value['regression_condition_ids'],'request_graph_change':value['replacement_graph_ref'] is not None,
         'external_updates':[]}
-    if name=='AgentReview':return {**head,'disposition':value['disposition'],
+    if name=='AgentReview':return {**head,'disposition':value['disposition'],'resolved_finding_ids':value.get('resolved_finding_ids',[]),
         'reviewed_condition_ids':value['reviewed_condition_ids'],'notes_md':'\n\n'.join(value['unknowns']),
-        'findings':[{k:f[k] for k in ('kind','severity','requirement_ids')}|{'notes_md':'\n\n'.join(f[k] for k in ('observation','consequence','suggested_check'))} for f in value['findings']]}
+        'findings':[{k:f[k] for k in ('kind','severity','requirement_ids')}|{'finding_id':'','notes_md':'\n\n'.join(f[k] for k in ('observation','consequence','suggested_check'))} for f in value['findings']]}
     if name=='AgentReport':return {**head,'scenario_manifest_path':value['scenario_manifest_ref']['path'],
-        'notes_md':value['summary'],'responses':[], 'unverified_claims':value['unverified_claims'],'open_issues':value['open_issues']}
+        'notes_md':value['summary'],'responses':[], 'unverified_claims':value['unverified_claims'],'open_issues':value['open_issues'],
+        'action_outcomes':deepcopy(value.get('action_outcomes',[]))}
     body={k:shrink(v) for k,v in value.items() if k not in ('contract','version','scope','rationale',*OWNED.get(target,[]))}
     if name=='AgentScenarios':
         for scenario in body['scenarios']:scenario.pop('media',None)

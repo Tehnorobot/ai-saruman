@@ -162,6 +162,8 @@ def _prepare(catalog, manifest, decision, *, full=False):
         if not full and not set(ids)&(selected|regressions):continue
         scenarios.append((scenario, {'id':sid, 'kind':scenario['execution']['kind'],
             'task':scenario['execution']['gradle_task'], 'requirement_ids':refs, 'expected_tests':deepcopy(expected)}))
+        if scenario['execution'].get('reuse'):
+            scenarios[-1][1]['execution_reuse']=deepcopy(scenario['execution']['reuse'])
     # The planner selects related regressions; only final verification selects all.
     scenarios.sort(key=lambda item: not bool(set(item[0]['condition_ids']) & selected))
     return scenarios
@@ -208,6 +210,39 @@ def _junit(stage, scenario, item, job_root):
             message = '' if reason is None else reason.get('message') or reason.text or ''
             cases.setdefault(key, []).append({'status':status, 'message':message, 'report':artifact})
     return cases, artifacts, suite_failed
+
+
+def _build_junit(stage, report, job_root):
+    """Read only fresh, supervisor-declared build XML; never scan stale files."""
+    proof=report.get('build_assertion_evidence',{})
+    if not isinstance(proof,dict) or proof.get('fresh') is not True or proof.get('execution_stage')!='build':
+        return {},[],[]
+    cases,artifacts,errors,total={},[],[],0
+    for descriptor in proof.get('reports',[]):
+        try:
+            relative=descriptor.get('file')
+            if not isinstance(relative,str) or not re.fullmatch(r'test-results/lab-global-build/report-[0-9]+\.xml',relative):
+                raise ValueError('Build JUnit report is outside its fresh collection')
+            raw=_read(stage,relative,MAX_REPORT_BYTES);total+=len(raw)
+            if total>MAX_REPORT_TOTAL:raise ValueError('Build JUnit collection exceeds parsing budget')
+            if hashlib.sha256(raw).hexdigest()!=descriptor.get('sha256'):raise ValueError('Build JUnit hash mismatch')
+            if b'\x00' in raw or b'<!DOCTYPE' in raw.upper() or b'<!ENTITY' in raw.upper():raise ValueError('Unsafe build JUnit XML')
+            tree=ET.fromstring(raw.decode('utf-8-sig'))
+            if tree.tag not in ('testsuite','testsuites'):raise ValueError('Not a JUnit document')
+            artifact=_ref(job_root,stage,relative,raw,'application/xml');artifacts.append(artifact)
+            for node in tree.iter('testcase'):
+                key=(node.get('classname'),node.get('name'))
+                if not all(isinstance(x,str) and x for x in key):continue
+                failure=node.find('failure')
+                if failure is None:failure=node.find('error')
+                skipped=node.find('skipped');reason=failure if failure is not None else skipped
+                status='FAIL' if failure is not None else 'SKIPPED' if skipped is not None else 'PASS'
+                message='' if reason is None else reason.get('message') or reason.text or ''
+                cases.setdefault(key,[]).append({'status':status,'message':message,'report':artifact})
+        except (OSError,ValueError,TypeError,UnicodeError,ET.ParseError) as error:
+            errors.append(str(error))
+    # An incomplete/corrupt collection cannot establish any product outcome.
+    return ({},artifacts,errors) if errors else (cases,artifacts,errors)
 
 
 def _media(stage, scenario, item, job_root):
@@ -346,6 +381,12 @@ def verify(ws, stage, jid, catalog, manifest, decision, *, sandbox, poll, timeou
     if source_changed: errors.append('Source snapshot changed during independent verification')
     build = next((c.get('status') for c in report.get('checks', []) if c.get('label') == 'gradle_build'), 'NOT_EXECUTED')
     build = build if build in ('PASS','FAIL','NOT_EXECUTED') else 'ERROR'
+    from common.verification_feedback import execution_diagnostics
+    diagnostics=execution_diagnostics(ws,job_root,report,scope['round'],scope=scope)
+    stopped_by=[d['diagnostic_id'] for d in diagnostics if d['stage'] in ('build','command')]
+    world_stopped_by=[d['diagnostic_id'] for d in diagnostics if d['stage']=='world_preparation']
+    build_cases,build_reports,build_case_errors=_build_junit(stage,report,job_root)
+    report.setdefault('pipeline_diagnostics',[]).extend(build_case_errors)
     try:
         raw_results = acceptance.read_json(stage, 'acceptance_results.json', 16 * 1024 * 1024)
         if raw_results.get('spec_sha256') != scope['spec_revision']:
@@ -360,19 +401,69 @@ def verify(ws, stage, jid, catalog, manifest, decision, *, sandbox, poll, timeou
         # A compile failure or a broken test reporter belongs to the coder's
         # next repair. Only a failed trusted supervisor is an infrastructure stop.
         report.setdefault('pipeline_diagnostics',[]).append('Acceptance evidence unavailable: ' + str(exc))
-    scenario_results, originals = [], []
+    run_id='RUN-'+uuid.uuid4().hex
+    scenario_results, originals = [], list(build_reports)
     for scenario, legacy in selected:
         item_list = grouped.get(scenario['id'], [])
         item = item_list[0] if len(item_list) == 1 else {}
+        lifecycle = None
+        lifecycle_error = None
+        if legacy['kind'] == 'gameplay' and item:
+            from common.gameplay_execution import observed_execution_lifecycle
+            # Parser bounds never hide the complete selected process log.
+            # This original remains diagnostic even if its lifecycle is invalid.
+            if item.get('log') == 'acceptance/'+scenario['id']+'/test.log':
+                try:originals.append(_media_ref(job_root,stage,item['log'],'text/plain'))
+                except (OSError,ValueError):pass
+            try:
+                lifecycle = observed_execution_lifecycle(stage,item,scenario['id'])
+                descriptor = item.get('execution_lifecycle')
+                if lifecycle is not None:
+                    if isinstance(descriptor,dict):
+                        originals.append(_media_ref(job_root,stage,descriptor['file'],'application/json'))
+                    for entry,media_type in ((lifecycle.get('journal'),'application/x-ndjson'),
+                                             (lifecycle.get('log'),'text/plain')):
+                        if isinstance(entry,dict) and isinstance(entry.get('file'),str):
+                            originals.append(_media_ref(job_root,stage,entry['file'],media_type))
+            except (OSError,ValueError,TypeError,UnicodeError,RecursionError) as exc:
+                lifecycle_error = str(exc)
+        # This is the observed physical command result, independent of fixture
+        # assertions. An incomplete JUnit snapshot cannot erase a crashed client.
+        command_failed = (legacy['kind']=='gameplay'
+            and (item.get('test_status') in ('FAIL','ERROR','TIMEOUT')
+                 or type(item.get('exit_code')) is int and item['exit_code'] != 0))
         case_error = None
         cases, suite_failed = {}, False
+        blocked_by_build=not item_list and build in ('FAIL','ERROR','NOT_EXECUTED')
+        proof=item.get('assertion_evidence')
+        # Only the supervisor's exact unstarted-world record bypasses JUnit
+        # parsing. A failed command, a physical execution, or original reports
+        # must still be interpreted normally and cannot be waived as setup.
+        blocked_by_world=(len(item_list)==1 and legacy['kind']=='gameplay'
+            and item.get('attempted') is False and item.get('execution_stage')=='world_preparation'
+            and item.get('stopped_by') in ('world_fixture',['world_fixture'])
+            and item.get('status') in ('NOT_TESTED','NOT_EXECUTED')
+            and item.get('test_status') in (None,'NOT_TESTED','NOT_EXECUTED')
+            and not item.get('execution_id')
+            and (proof is None or isinstance(proof,dict) and not proof.get('reports')))
+        build_observation=False
         try:
-            if len(item_list) != 1: raise ValueError('Scenario has no unique fresh runner result')
-            if item.get('requirement_ids') != legacy['requirement_ids']:
-                raise ValueError('Executed scenario requirement mapping does not match the request')
             if source_changed: raise ValueError('Source snapshot changed during verification')
-            cases, reports, suite_failed = _junit(stage, legacy, item, job_root)
-            originals.extend(reports)
+            if blocked_by_build:
+                # Build may have executed product unit cases before failing.
+                # Their actual observations survive, but no gameplay evidence
+                # or ready verdict is inferred from a unit build collection.
+                if legacy['kind']=='unit':
+                    expected_pairs={(t['classname'],t['name']) for t in legacy['expected_tests']}
+                    cases={key:rows for key,rows in build_cases.items() if key in expected_pairs}
+                    build_observation=bool(cases)
+            else:
+                if len(item_list) != 1: raise ValueError('Scenario has no unique fresh runner result')
+                if item.get('requirement_ids') != legacy['requirement_ids']:
+                    raise ValueError('Executed scenario requirement mapping does not match the request')
+                if not blocked_by_world:
+                    cases, reports, suite_failed = _junit(stage, legacy, item, job_root)
+                    originals.extend(reports)
         except (OSError, ValueError, TypeError, UnicodeError, ET.ParseError) as exc:
             case_error = str(exc)
         bindings = {b['checkpoint_id']:b for b in scenario['execution']['checkpoint_tests']}
@@ -383,6 +474,11 @@ def verify(ws, stage, jid, catalog, manifest, decision, *, sandbox, poll, timeou
             evidence = []
             if case_error:
                 status, actual = 'ERROR', case_error
+            elif blocked_by_world:
+                status, actual = 'NOT_EXECUTED', str(item.get('detail') or
+                    'World preparation did not finish; see world_preparation execution diagnostics')
+            elif blocked_by_build and not rows:
+                status, actual = 'NOT_EXECUTED', 'Not attempted after the observed build-stage barrier; see execution_diagnostics'
             elif binding is None:
                 status, actual = 'NOT_EXECUTED', 'No exact JUnit identity is bound to this checkpoint'
             elif not rows:
@@ -392,6 +488,12 @@ def verify(ws, stage, jid, catalog, manifest, decision, *, sandbox, poll, timeou
             else:
                 status = rows[0]['status']
                 actual = binding['classname'] + '#' + binding['name'] + ': ' + (rows[0]['message'] or status)
+                if status == 'SKIPPED' and command_failed:
+                    # A skipped initial snapshot says nothing about later
+                    # execution. Keep unobserved assertions unexecuted while
+                    # retaining the actual process failure at scenario scope.
+                    status = 'NOT_EXECUTED'
+                    actual += '; no completed JUnit observation before the failed command terminated'
                 proof = {'checkpoint_id':checkpoint['id'], 'test':binding, 'status':status,
                          'actual':actual, 'report':rows[0]['report']}
                 relative = 'checkpoint-evidence/' + hashlib.sha256((scenario['id']+'\0'+checkpoint['id']).encode()).hexdigest() + '.json'
@@ -401,8 +503,11 @@ def verify(ws, stage, jid, catalog, manifest, decision, *, sandbox, poll, timeou
                 evidence.append({'artifact':_ref(job_root, stage, relative, raw, 'application/json'),
                                  'start_line':line,'end_line':line,'excerpt':lines[line-1]})
             observations.append({'checkpoint_id':checkpoint['id'],'status':status,'actual':actual,'evidence_refs':evidence})
-        media, media_errors = _media(stage, scenario, item, job_root)
+        media, media_errors = ([],[]) if blocked_by_world else _media(stage, scenario, item, job_root)
         fixture = _fixture_result(scenario, cases, case_error, suite_failed)
+        if blocked_by_world and fixture is not None:
+            for check in fixture['checks']:
+                check['actual']=str(item.get('detail') or 'Not attempted: world preparation unavailable')
         statuses = [o['status'] for o in observations]
         expected_rows = [cases.get((t['classname'],t['name']),[]) for t in legacy['expected_tests']]
         if case_error or 'ERROR' in statuses or any(len(rows)>1 for rows in expected_rows): status = 'ERROR'
@@ -412,22 +517,17 @@ def verify(ws, stage, jid, catalog, manifest, decision, *, sandbox, poll, timeou
         elif 'SKIPPED' in statuses or any(rows[0]['status']=='SKIPPED' for rows in expected_rows): status = 'SKIPPED'
         elif item.get('test_status') != 'PASS' or item.get('status') != 'TEST_PASSED': status = 'NOT_EXECUTED'
         else: status = 'PASS'
-        if fixture is not None and fixture['status'] != 'PASS':
+        if fixture is not None and fixture['status'] != 'PASS' and not blocked_by_world:
             fixture['raw_checkpoints'] = deepcopy(observations)
             explanation = '; '.join(check['classname'] + '#' + check['name'] + ': ' + check['actual']
                                     for check in fixture['checks'] if check['status'] != 'PASS')
             affected = set(fixture['affected_checkpoint_ids'])
-            # An absent later setup may simply mean a prior product assertion
-            # already failed. Lack of a prerequisite result cannot exonerate
-            # that observed failure; it still cannot establish any PASS.
-            preserved_failures = set()
-            for observation in observations:
-                relevant = [check for check in fixture['checks']
-                            if observation['checkpoint_id'] in check['checkpoint_ids']]
-                if (observation['status'] == 'FAIL' and relevant and not case_error
-                        and all(check['status'] in ('PASS', 'NOT_EXECUTED') for check in relevant)
-                        and any(check['status'] == 'NOT_EXECUTED' for check in relevant)):
-                    preserved_failures.add(observation['checkpoint_id'])
+            # A named product assertion failure is still an observed failure
+            # when setup fails too. Fixture gates cannot waive product failures.
+            product_ids = {checkpoint['id'] for checkpoint in scenario['checkpoints']
+                           if checkpoint['condition_ids']}
+            preserved_failures = {o['checkpoint_id'] for o in observations
+                                  if o['status']=='FAIL' and o['checkpoint_id'] in product_ids and not case_error}
             observations = [{**o, 'status':'NOT_EXECUTED',
                              'actual':fixture['reason_code'] + ': ' + explanation
                              + '. Original checkpoint observation: ' + o['actual']}
@@ -436,23 +536,51 @@ def verify(ws, stage, jid, catalog, manifest, decision, *, sandbox, poll, timeou
             remaining = {o['status'] for o in observations if o['checkpoint_id'] not in affected
                          or o['checkpoint_id'] in preserved_failures}
             status = 'ERROR' if 'ERROR' in remaining else 'FAIL' if 'FAIL' in remaining else 'NOT_EXECUTED'
+        if command_failed:
+            status = 'ERROR' if status == 'ERROR' or item.get('test_status') == 'ERROR' else 'FAIL'
+        if lifecycle_error:
+            report.setdefault('pipeline_diagnostics',[]).append(scenario['id']+': '+lifecycle_error)
         if case_error:report.setdefault('pipeline_diagnostics',[]).append(scenario['id'] + ': ' + case_error)
         report.setdefault('pipeline_diagnostics',[]).extend(scenario['id'] + ': ' + value for value in media_errors)
         scenario_result = {'scenario_id':scenario['id'],'status':status,
                            'checkpoints':observations,'media_refs':media}
+        physical_id=(report.get('build_assertion_evidence',{}).get('execution_id') if build_observation
+                     else item.get('execution_id'))
+        scenario_result.update(execution_id=physical_id if isinstance(physical_id,str) and physical_id else run_id+':'+scenario['id'],
+                               measurement_reused=bool(item.get('measurement_reused',False)))
+        if blocked_by_build:
+            scenario_result.update(attempted=build_observation,stopped_by=stopped_by,
+                                   execution_stage='build' if build_observation else 'not_started')
+        elif blocked_by_world:
+            scenario_result.update(attempted=False,stopped_by=world_stopped_by or ['world_fixture'],
+                                   execution_stage='not_started')
+        elif legacy['kind']=='gameplay' and (lifecycle is not None or item.get('execution_id') or command_failed):
+            scenario_result.update(attempted=True,execution_stage='scenario')
         if fixture is not None:
             scenario_result['fixture_result'] = fixture
         scenario_results.append(scenario_result)
     raw_reports = list({r['path']:r for r in originals}.values())
+    for check in report.get('checks',[]):
+        relative=check.get('log') if isinstance(check,dict) else None
+        if isinstance(relative,str) and re.fullmatch(r'[A-Za-z0-9_-]+\.log',relative):
+            try:raw_reports.append(_media_ref(job_root,stage,relative,'text/plain'))
+            except (OSError,ValueError):pass
+    if world_stopped_by:
+        for relative,mime in (('world-fixture/world-fixture.json','application/json'),
+                              ('world-fixture/prepare.log','text/plain'),
+                              ('world-fixture/error.log','text/plain'),
+                              ('world-fixture/process.log','text/plain')):
+            try:raw_reports.append(_media_ref(job_root,stage,relative,mime))
+            except (OSError,ValueError):pass
     try:
         raw = _read(stage, 'acceptance_results.json', 16 * 1024 * 1024)
         raw_reports.append(_ref(job_root, stage, 'acceptance_results.json', raw, 'application/json'))
     except (OSError,ValueError): pass
     value = {'contract':'VerificationResult','version':'v1','scope':scope,
         'request_ref':_ref(job_root, stage, 'pipeline-verification-request.json', request_raw, 'application/json'),
-        'runner_run_id':'RUN-' + uuid.uuid4().hex, 'build_status':build,
+        'runner_run_id':run_id, 'build_status':build,
         'scenario_results':scenario_results,'infrastructure_errors':list(dict.fromkeys(errors)),
-        'raw_report_refs':raw_reports}
+        'raw_report_refs':raw_reports,'execution_diagnostics':diagnostics}
     validate('VerificationResult', value)
     _json(stage, 'pipeline-verification-result.json', value)
     return value, report

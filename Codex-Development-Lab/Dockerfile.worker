@@ -32,6 +32,9 @@ RUN python3 -m pip install --no-cache-dir --break-system-packages -r /tmp/requir
 COPY common /opt/lab/common
 COPY schemas /opt/lab/schemas
 COPY worker /opt/lab/worker
+COPY fixtures/minecraft-client /opt/lab/fixtures/minecraft-client
+RUN python3 /opt/lab/fixtures/minecraft-client/fetch_server.py
+RUN python3 /opt/lab/fixtures/minecraft-client/dependency-bootstrap/build.py
 COPY agent /opt/lab/agent
 COPY skills /opt/lab/skills
 COPY AGENTS.md /opt/lab/AGENTS.md

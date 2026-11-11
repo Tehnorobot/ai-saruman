@@ -6,7 +6,8 @@
     "disposition",
     "reviewed_condition_ids",
     "findings",
-    "notes_md"
+    "notes_md",
+    "resolved_finding_ids"
   ],
   "additionalProperties": false,
   "properties": {
@@ -45,7 +46,8 @@
           "kind",
           "severity",
           "requirement_ids",
-          "notes_md"
+          "notes_md",
+          "finding_id"
         ],
         "additionalProperties": false,
         "properties": {
@@ -75,12 +77,21 @@
           },
           "notes_md": {
             "type": "string"
+          },
+          "finding_id": {
+            "type": "string"
           }
         }
       }
     },
     "notes_md": {
       "type": "string"
+    },
+    "resolved_finding_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
     }
   },
   "$defs": {}

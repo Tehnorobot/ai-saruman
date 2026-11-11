@@ -15,11 +15,65 @@ import stat
 import subprocess
 import tempfile
 import time
+import uuid
 
 try:  # Adjacent image-owned module under the isolated supervisor, package in tests.
-    from .acceptance_runner import load_request, run_scenarios
+    from .acceptance_runner import load_request, run_scenarios, clear_test_reports, assertion_evidence, store_execution_record
 except ImportError:
-    from acceptance_runner import load_request, run_scenarios
+    from acceptance_runner import load_request, run_scenarios, clear_test_reports, assertion_evidence, store_execution_record
+
+
+FRESH_TESTS_INIT = '''allprojects {
+    tasks.withType(org.gradle.api.tasks.testing.Test).configureEach {
+        outputs.upToDateWhen { false }
+        outputs.doNotCacheIf("Independent acceptance needs fresh test observations") { true }
+    }
+}
+'''
+
+
+def _fresh_test_plan(plan, directory):
+    """Keep compile/dependency caches, but never reuse Test result outputs."""
+    if 'gradle' not in plan:
+        return plan
+    script = Path(directory) / 'fresh-tests.gradle'
+    script.write_text(FRESH_TESTS_INIT, encoding='utf-8')
+    script.chmod(0o444)
+    # The root-owned parent cannot be written by project UID; traversing it
+    # exposes only this non-secret image-owned init file to Gradle.
+    Path(directory).chmod(0o755)
+    prefix = plan['gradle'] + ['--init-script', str(script)]
+    return {**plan, 'gradle':prefix, 'argv':prefix + plan['argv'][len(plan['gradle']):]}
+
+
+def _build_snapshot(request, plan, build_result, workspace, output, build=Path('/cache/build'), *, source_revision=None):
+    """Capture fresh global build tests before per-scenario cleanup changes them."""
+    from common.acceptance import source_fingerprint
+    expected = {}
+    for scenario in (request or {}).get('scenarios', []):
+        if scenario['kind'] != 'gameplay':
+            for test in scenario['expected_tests']:
+                expected[(test['classname'],test['name'])] = test
+    parent = output / 'test-results'
+    parent.mkdir(mode=0o700, exist_ok=True)
+    directory = parent / 'lab-global-build'
+    status, detail, proof = assertion_evidence(build, directory, list(expected.values()))
+    for descriptor in proof['reports']:
+        descriptor['file'] = 'test-results/lab-global-build/' + descriptor['file']
+    execution_id = 'RUN-' + uuid.uuid4().hex
+    record = {'execution_id':execution_id, 'argv':build_result['argv'], 'kind':'build',
+              'origin_scenario_id':None, 'log':build_result['log'], 'status':build_result['status'],
+              'source_sha256':source_revision or source_fingerprint(workspace),
+              'spec_sha256':(request or {}).get('spec_sha256')}
+    record['record_ref'] = store_execution_record(output, directory, record)
+    result = {'status':status, 'detail':detail, 'assertion_evidence':proof,
+              'test_status':build_result['status'], 'argv':build_result['argv'],
+              'exit_code':build_result.get('exit_code'), 'duration_seconds':build_result.get('duration_seconds'),
+              'log':build_result['log'], 'execution_id':execution_id, 'video':None,
+              'execution_record':record['record_ref']}
+    return {'fresh':True, 'execution_stage':'build', 'execution_id':execution_id,
+            'source_sha256':source_revision or source_fingerprint(workspace), 'reports':proof['reports'],
+            'proof':proof, 'result':result, 'command':build_result, 'execution_record':record}
 
 
 def gradle_command(workspace):
@@ -211,6 +265,8 @@ def run_verification(timeout_seconds, *, workspace=Path('/workspace'), output=Pa
     report = {'checks': results, 'status': 'INCOMPLETE', 'video': None,
               'gameplay_scenarios': [],
               'gameplay_coverage_note': 'Command success and video do not verify all required gameplay scenarios.'}
+    init_directory = None
+    world_fixture = None
 
     def stage(label, argv, filename, *, recording=False):
         runner = recorded_run if recording else run_command
@@ -224,16 +280,36 @@ def run_verification(timeout_seconds, *, workspace=Path('/workspace'), output=Pa
     try:
         acceptance = load_request(output / 'acceptance-request.json')
         plan = select_plan(workspace)
+        if (plan.get('minecraft') and (any(s['kind']=='gameplay' for s in (acceptance or {}).get('scenarios',[]))
+                or acceptance is None)):
+            from worker.world_fixture import WorldFixtureSession
+            # A separate image-owned process generates vanilla terrain while
+            # the unprivileged project compiles; no project source is involved.
+            world_fixture = WorldFixtureSession(workspace,output/'world-fixture',timeout_seconds,
+                eula=os.getenv('MINECRAFT_EULA_ACCEPTED','false')=='true')
+        if 'gradle' in plan:
+            init_directory = tempfile.TemporaryDirectory(prefix='lab-fresh-tests-')
+            plan = _fresh_test_plan(plan, init_directory.name)
+            clear_test_reports(Path('/cache/build'))
         report['plan'] = {key: value for key, value in plan.items() if key != 'gradle'}
         if plan['argv'] is None:
             results.append({'label': plan['label'], 'status': 'NOT_CONFIGURED',
                             'detail': 'No recognised build/test configuration'})
         else:
+            from common.acceptance import source_fingerprint
+            build_source_revision = source_fingerprint(workspace) if 'gradle' in plan else None
             build = stage(plan['label'], plan['argv'], 'build.log')
+            build_execution = None
+            if 'gradle' in plan:
+                build_execution = _build_snapshot(acceptance, plan, build, workspace, output,
+                                                  source_revision=build_source_revision)
+                report['build_assertion_evidence'] = {key:build_execution[key] for key in
+                    ('fresh','execution_stage','execution_id','source_sha256','reports')}
             if build['status'] == 'PASS' and acceptance is not None:
                 report['acceptance_results'] = run_scenarios(
                     acceptance, plan, workspace, output, timeout_seconds, run_command,
-                    recorded_run, eula=os.getenv('MINECRAFT_EULA_ACCEPTED', 'false') == 'true')
+                    recorded_run, eula=os.getenv('MINECRAFT_EULA_ACCEPTED', 'false') == 'true',
+                    build_execution=build_execution, world_fixture=world_fixture)
                 if any(s['status'] == 'FAIL' for s in report['acceptance_results']['scenarios']):
                     results.append({'label': 'acceptance_scenarios', 'status': 'FAIL',
                                     'detail': 'One or more acceptance scenario commands or assertions failed'})
@@ -254,20 +330,38 @@ def run_verification(timeout_seconds, *, workspace=Path('/workspace'), output=Pa
                         with (output / 'game_tasks.log').open('r', encoding='utf-8', errors='replace') as log:
                             tasks = log.read(4 * 1024 * 1024)
                         if re.search(r'^\s*runClientGameTest(?:\s+-.*)?\s*$', tasks, re.MULTILINE):
-                            client = stage('minecraft_client_gametest', plan['gradle'] + ['runClientGameTest'],
-                                           'client_gametest.log', recording=True)
-                            quality = client.pop('video_capture', {'status': 'ERROR',
-                                                'reason': 'Trusted recorder did not supply capture validation'})
-                            report['video_capture'] = quality
-                            (output / 'video_capture.json').write_text(json.dumps(quality, indent=2), encoding='utf-8')
-                            if quality.get('status') != 'PASS':
-                                results.append({'label': 'video_capture',
-                                                'status': 'FAIL' if quality.get('status') == 'FAIL' else 'ERROR',
-                                                'detail': quality.get('reason', 'Video capture validation failed')})
-                            video = output / 'minecraft_client_capture.mp4'
-                            if (quality.get('status') == 'PASS' and video.is_file()
-                                    and not video.is_symlink() and video.stat().st_size):
-                                report['video'] = video.name
+                            argv=plan['gradle'] + ['runClientGameTest']
+                            extra={}
+                            try:
+                                if world_fixture is not None:
+                                    argv,extra,fixture=world_fixture.launch(argv,'global-client',output)
+                                    report['global_world_fixture']=fixture
+                            except Exception as exc:
+                                results.append({'label':'minecraft_client_gametest','status':'NOT_TESTED',
+                                                'detail':'World preparation unavailable: '+str(exc)})
+                            else:
+                                client = recorded_run(argv,workspace,output/'client_gametest.log',timeout_seconds,
+                                                      **({'env':extra} if extra else {}))
+                                if world_fixture is not None:
+                                    try:
+                                        setup=world_fixture.collect_client_setup(output)
+                                        if setup:report['client_dependency_preparation']=setup
+                                    except (OSError,ValueError,UnicodeError) as exc:
+                                        report['client_dependency_preparation']={'status':'UNAVAILABLE','detail':str(exc)}
+                                client.update(label='minecraft_client_gametest',log='client_gametest.log',argv=argv)
+                                results.append(client)
+                                quality = client.pop('video_capture', {'status': 'ERROR',
+                                                    'reason': 'Trusted recorder did not supply capture validation'})
+                                report['video_capture'] = quality
+                                (output / 'video_capture.json').write_text(json.dumps(quality, indent=2), encoding='utf-8')
+                                if quality.get('status') != 'PASS':
+                                    report.setdefault('capture_diagnostics', []).append({
+                                        'status': quality.get('status', 'ERROR'),
+                                        'detail': quality.get('reason', 'Video capture validation failed')})
+                                video = output / 'minecraft_client_capture.mp4'
+                                if (quality.get('status') == 'PASS' and video.is_file()
+                                        and not video.is_symlink() and video.stat().st_size):
+                                    report['video'] = video.name
                         else:
                             results.append({'label': 'minecraft_client_gametest', 'status': 'NOT_CONFIGURED',
                                             'detail': 'No runClientGameTest task exists'})
@@ -277,6 +371,13 @@ def run_verification(timeout_seconds, *, workspace=Path('/workspace'), output=Pa
         results.append({'label': 'verification_pipeline', 'status': 'ERROR',
                         'detail': f'{type(exc).__name__}: {exc}'})
     finally:
+        if world_fixture is not None:
+            # Preparation is infrastructure evidence. Its failure never
+            # invalidates successful unit tests or invents a product failure.
+            # launch() has already joined required preparation. If no client
+            # needed it (failed build/discovery, no task), do not wait on an
+            # unused generator. A completed valid receipt is still preserved.
+            report['world_fixture']=world_fixture.close(cancel=True)
         try:
             report['jars'] = collect_artifacts(output)
             if (results and results[0]['status'] == 'PASS' and results[0]['label'] == 'gradle_build'
@@ -295,4 +396,6 @@ def run_verification(timeout_seconds, *, workspace=Path('/workspace'), output=Pa
             json.dump(report, handle, indent=2)
             temporary = handle.name
         os.replace(temporary, output / 'verification.json')
+        if init_directory is not None:
+            init_directory.cleanup()
     return report

@@ -12,7 +12,8 @@
         "C1"
       ],
       "goal": "Устранить отсутствие посадки",
-      "expected_observation": "sapling_placed=true"
+      "expected_observation": "sapling_placed=true",
+      "depends_on_action_indexes": []
     }
   ],
   "notes_md": "Место найдено, но посадка не подтверждена. Проверить действие установки.\n\n[{\"id\": \"H1\", \"statement\": \"Команда посадки не вызывается\", \"observation_refs\": [{\"artifact\": {\"path\": \"runs/2/game.log\", \"sha256\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\", \"media_type\": \"text/plain\"}, \"start_line\": 18, \"end_line\": 18, \"excerpt\": \"sapling_placed=false\"}], \"experiment\": \"Записать событие вызова посадки\", \"prediction\": \"Событие отсутствует при воспроизведении\"}]",

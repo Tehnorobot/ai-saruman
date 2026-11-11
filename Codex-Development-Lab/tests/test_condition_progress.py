@@ -79,7 +79,9 @@ class ConditionProgressTests(unittest.TestCase):
         self.attempt(1)
         self.attempt(2,status='NOT_EXECUTED',neighbour='NOT_EXECUTED')
         p=self.condition()
-        self.assertTrue(p['repeated_unresolved'])
+        self.assertFalse(p['repeated_unresolved'])
+        self.assertEqual(p['checkpoints'][0]['unresolved_observations'],1)
+        self.assertEqual(p['checkpoints'][0]['unresolved_gaps'],1)
         self.assertEqual(p['checkpoints'][0]['failures_since_pass'],1)
 
     def test_renamed_checkpoint_does_not_silently_close_old_failure(self):
@@ -100,6 +102,13 @@ class ConditionProgressTests(unittest.TestCase):
         coder=memory.read_payload(self.root,row['coder_ref']['record_id'])
         self.assertEqual(coder['changed_files'][0]['path'],'evidence.json')
         self.assertEqual(memory.read_payload(self.root,row['result_ref']['record_id'])['scenario_results'][0]['checkpoints'][0]['actual'],'failed')
+
+    def test_unrelated_global_plan_wording_does_not_change_the_condition_proposal(self):
+        self.attempt(1,hypothesis='One global explanation')
+        self.attempt(2,hypothesis='Different unrelated global explanation')
+        history=self.condition()['history']
+        self.assertEqual(history[0]['proposal_fingerprint'],history[1]['proposal_fingerprint'])
+        self.assertEqual(self.condition()['checkpoints'][0]['exact_proposal_repeats'],1)
 
     def test_historical_controller_snapshots_restore_existing_attempts(self):
         self.attempt(1,immutable_mapping=False);self.attempt(2,immutable_mapping=False)
@@ -134,9 +143,11 @@ class ConditionProgressTests(unittest.TestCase):
     def test_assigned_but_never_observed_condition_has_an_explicit_gap(self):
         self.attempt(1,omit_scenarios=True);self.attempt(2,omit_scenarios=True)
         p=self.condition();gap=p['checkpoints'][0]
-        self.assertTrue(p['repeated_unresolved'])
+        self.assertFalse(p['repeated_unresolved'])
+        self.assertTrue(p['repeated_observation_gaps'])
         self.assertIsNone(gap['scenario_id'])
-        self.assertEqual(gap['unresolved_observations'],2)
+        self.assertEqual(gap['unresolved_observations'],0)
+        self.assertEqual(gap['unresolved_gaps'],2)
         self.attempt(3)
         p=self.condition();gap=next(cp for cp in p['checkpoints'] if cp['scenario_id'] is None)
         self.assertEqual(gap['last_status'],'OBSERVATION_AVAILABLE')

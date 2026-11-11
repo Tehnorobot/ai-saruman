@@ -50,6 +50,12 @@
  window.addEventListener('popstate',restoreLocation);
  window.addEventListener('hashchange',restoreLocation);
  acceptance.addEventListener('close',()=>{if(page==='acceptance'&&!acceptance.open)showPage('overview')});
+ get('recordingSettingsOpen').onclick=()=>{
+  showPage('settings');
+  get('recordingSettings').scrollIntoView({block:'start'});
+  get('recordingSettings').focus({preventScroll:true});
+  window.dispatchEvent(new CustomEvent('lab-recording-settings-open'));
+ };
  get('newProjectOpen').onclick=()=>{get('newProjectOpen').focus();create.showModal()};
  get('newProjectClose').onclick=()=>{create.close();get('newProjectOpen').focus()};
  create.addEventListener('close',()=>get('newProjectOpen').focus());

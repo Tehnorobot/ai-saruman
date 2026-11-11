@@ -284,6 +284,40 @@
                 "additionalProperties": false
               },
               "description": "Optional scenario-wide fixture prerequisites. Name fresh JUnit setup assertions before addon actions; each must be in expected_tests and must not establish a product condition. Empty means no explicit fixture dependency. Failed or unconfirmed prerequisites leave product checks NOT_EXECUTED; originals remain archived."
+            },
+            "reuse": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "group": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 120
+                    },
+                    "profile": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 120
+                    },
+                    "initial_state": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 120
+                    }
+                  },
+                  "required": [
+                    "group",
+                    "profile",
+                    "initial_state"
+                  ],
+                  "additionalProperties": false
+                }
+              ],
+              "description": "Explicit reviewed consent to share identical fresh unit execution inputs. Null preserves separate runs; gameplay cannot share."
             }
           },
           "required": [

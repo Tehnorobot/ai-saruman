@@ -1,6 +1,5 @@
 {
   "type": "object",
-  "description": "Кодер → контроллер. Отчёт о правках; это утверждение агента, ещё не PASS.",
   "required": [
     "contract",
     "version",
@@ -13,9 +12,11 @@
     "scenario_manifest_ref",
     "review_response_refs",
     "unverified_claims",
-    "open_issues"
+    "open_issues",
+    "action_outcomes"
   ],
   "additionalProperties": false,
+  "description": "Кодер → контроллер. Отчёт о правках; это утверждение агента, ещё не PASS.",
   "properties": {
     "contract": {
       "description": "Имя типа сообщения; выбирает схему.",
@@ -32,16 +33,16 @@
       "type": "string"
     },
     "scope": {
-      "description": "Проект, версия ТЗ, версия кода и раунд.",
-      "$ref": "#/$defs/Scope"
+      "$ref": "#/$defs/Scope",
+      "description": "Проект, версия ТЗ, версия кода и раунд."
     },
     "base_source_revision": {
-      "description": "Версия исходников до правок кодера.",
-      "$ref": "#/$defs/Hash"
+      "$ref": "#/$defs/Hash",
+      "description": "Версия исходников до правок кодера."
     },
     "plan_ref": {
-      "description": "Принятый план раунда.",
-      "$ref": "#/$defs/ArtifactRef"
+      "$ref": "#/$defs/ArtifactRef",
+      "description": "Принятый план раунда."
     },
     "action_ids": {
       "type": "array",
@@ -63,8 +64,8 @@
       }
     },
     "scenario_manifest_ref": {
-      "description": "Версия описания сценариев для данного снимка.",
-      "$ref": "#/$defs/ArtifactRef"
+      "$ref": "#/$defs/ArtifactRef",
+      "description": "Версия описания сценариев для данного снимка."
     },
     "review_response_refs": {
       "type": "array",
@@ -88,6 +89,37 @@
         "type": "string",
         "description": "Краткое описание записи или изменения."
       }
+    },
+    "action_outcomes": {
+      "type": "array",
+      "description": "Per-action coder claims only; absence remains not_assessed, never PASS.",
+      "items": {
+        "type": "object",
+        "required": [
+          "action_id",
+          "status",
+          "notes_md"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "action_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "implemented_claim",
+              "partial",
+              "not_attempted",
+              "needs_experiment",
+              "not_assessed"
+            ]
+          },
+          "notes_md": {
+            "type": "string"
+          }
+        }
+      }
     }
   },
   "$defs": {
@@ -105,8 +137,8 @@
           "description": "Для ArtifactRef: путь относительно корня проекта; для Issue: путь поля в JSON."
         },
         "sha256": {
-          "description": "Хеш точного содержимого файла; проверяется при чтении.",
-          "$ref": "#/$defs/Hash"
+          "$ref": "#/$defs/Hash",
+          "description": "Хеш точного содержимого файла; проверяется при чтении."
         },
         "media_type": {
           "type": "string",
@@ -116,7 +148,6 @@
     },
     "CoderReport": {
       "type": "object",
-      "description": "Кодер → контроллер. Отчёт о правках; это утверждение агента, ещё не PASS.",
       "required": [
         "contract",
         "version",
@@ -132,6 +163,7 @@
         "open_issues"
       ],
       "additionalProperties": false,
+      "description": "Кодер → контроллер. Отчёт о правках; это утверждение агента, ещё не PASS.",
       "properties": {
         "contract": {
           "description": "Имя типа сообщения; выбирает схему.",
@@ -148,16 +180,16 @@
           "type": "string"
         },
         "scope": {
-          "description": "Проект, версия ТЗ, версия кода и раунд.",
-          "$ref": "#/$defs/Scope"
+          "$ref": "#/$defs/Scope",
+          "description": "Проект, версия ТЗ, версия кода и раунд."
         },
         "base_source_revision": {
-          "description": "Версия исходников до правок кодера.",
-          "$ref": "#/$defs/Hash"
+          "$ref": "#/$defs/Hash",
+          "description": "Версия исходников до правок кодера."
         },
         "plan_ref": {
-          "description": "Принятый план раунда.",
-          "$ref": "#/$defs/ArtifactRef"
+          "$ref": "#/$defs/ArtifactRef",
+          "description": "Принятый план раунда."
         },
         "action_ids": {
           "type": "array",
@@ -179,8 +211,8 @@
           }
         },
         "scenario_manifest_ref": {
-          "description": "Версия описания сценариев для данного снимка.",
-          "$ref": "#/$defs/ArtifactRef"
+          "$ref": "#/$defs/ArtifactRef",
+          "description": "Версия описания сценариев для данного снимка."
         },
         "review_response_refs": {
           "type": "array",
@@ -225,12 +257,12 @@
           "description": "Устойчивый ID проекта."
         },
         "spec_revision": {
-          "description": "SHA-256 канонического манифеста ТЗ и явных уточнений.",
-          "$ref": "#/$defs/Hash"
+          "$ref": "#/$defs/Hash",
+          "description": "SHA-256 канонического манифеста ТЗ и явных уточнений."
         },
         "source_revision": {
-          "description": "SHA-256 канонического манифеста исходников снимка.",
-          "$ref": "#/$defs/Hash"
+          "$ref": "#/$defs/Hash",
+          "description": "SHA-256 канонического манифеста исходников снимка."
         },
         "round": {
           "type": "integer",

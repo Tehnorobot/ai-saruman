@@ -2,6 +2,7 @@
   "contract": "AgentReview",
   "version": "v1",
   "disposition": "changes_requested",
+  "resolved_finding_ids": [],
   "reviewed_condition_ids": [
     "C1"
   ],
@@ -13,6 +14,7 @@
       "requirement_ids": [
         "R1"
       ],
+      "finding_id": "",
       "notes_md": "После движения нет действия посадки\n\nC1 может не выполняться\n\nПроверить появление саженца в мире"
     }
   ]

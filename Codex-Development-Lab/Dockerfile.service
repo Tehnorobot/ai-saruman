@@ -13,6 +13,7 @@ COPY storage /opt/lab/storage
 COPY tests /opt/lab/tests
 COPY agent /opt/lab/agent
 COPY worker /opt/lab/worker
+COPY fixtures/minecraft-client/*.gradle /opt/lab/fixtures/minecraft-client/
 COPY runner /opt/lab/runner
 COPY network /opt/lab/network
 COPY provider_gateway /opt/lab/provider_gateway

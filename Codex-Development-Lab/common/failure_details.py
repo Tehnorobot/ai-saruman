@@ -8,8 +8,6 @@ import xml.etree.ElementTree as ET
 
 from common.history import _ids, _open
 
-MAX_TESTS=64
-MAX_CASES=512
 MAX_REPORT_BYTES=4*1024*1024
 MAX_TOTAL_BYTES=16*1024*1024
 
@@ -25,7 +23,7 @@ def _text(value,limit=500):
     return value[:limit] if isinstance(value,str) else ''
 
 
-def summarize(scenario,result):
+def summarize(scenario,result,*,offset=0,limit=None):
     """Describe exactly the expected checks; missing evidence never becomes PASS.
 
     ``test_cases`` is emitted by the trusted JUnit collector. Historical results
@@ -38,7 +36,9 @@ def summarize(scenario,result):
     cases=proof.get('test_cases',[])
     cases=cases if isinstance(cases,list) else []
     grouped={}
-    for case in cases[:MAX_CASES]:
+    if type(offset) is not int or offset<0 or limit is not None and (type(limit) is not int or limit<1):
+        raise ValueError('Failure detail offset/page size must be nonnegative/positive')
+    for case in cases:
         key=_key(case)
         if key is not None:grouped.setdefault(key,[]).append(case)
     failures=proof.get('failures',[])
@@ -47,7 +47,7 @@ def summarize(scenario,result):
     missing=proof.get('missing_tests',[])
     missing={_key(t) for t in missing if _key(t) is not None} if isinstance(missing,list) else set()
     checks=[];known=set()
-    for test in expected[:MAX_TESTS]:
+    for test in expected:
         key=_key(test)
         if key is None or key in known:continue
         known.add(key);observed=grouped.get(key,[])
@@ -77,16 +77,18 @@ def summarize(scenario,result):
     for row in checks:counts[labels[row['status']]]+=1
     additional=[]
     for key,case in failed.items():
-        if key not in known and len(additional)<8:
+        if key not in known:
             additional.append({'classname':key[0],'name':key[1],'status':'FAIL',
                                'reason':_text(case.get('message')) or 'Дополнительная ошибка JUnit.'})
     return {'schema_version':1,'scenario_id':scenario.get('id',result.get('id')),
-            'requirement_ids':list(scenario.get('requirement_ids',[]))[:64],
-            'counts':counts,'checks':checks,'additional_failures':additional,
+            'requirement_ids':list(scenario.get('requirement_ids',[])),
+            'counts':counts,'checks':checks[offset:None if limit is None else offset+limit],'additional_failures':additional,
+            'page':{'offset':offset,'returned':len(checks[offset:None if limit is None else offset+limit]),
+                    'total':len(checks),'next_offset':offset+limit if limit is not None and offset+limit<len(checks) else None},
             'observed_failure':_text(result.get('detail'),1000),
             'root_cause_status':'NOT_ESTABLISHED',
             'scope_note':'Это результаты проверок сценария, а не подтверждение выполнения всего пункта ТЗ. Причина ошибки требует отдельной диагностики.',
-            'truncated':len(expected)>MAX_TESTS or len(cases)>MAX_CASES}
+            'truncated':bool(offset or limit is not None and offset+limit<len(checks) or proof.get('collection_truncated'))}
 
 
 def enrich_result(scenario,result):
@@ -114,7 +116,6 @@ def _xml_cases(raw,relative):
             message=node.get('message') or (node.text or '').split('\n',1)[0]
         rows.append({'classname':key[0],'name':key[1],'status':status,
                      'message':message[:500],'report':relative})
-        if len(rows)>=MAX_CASES:break
     return rows
 
 
@@ -142,7 +143,7 @@ def hydrate(artifacts,pid,jid,scenario,result,*,round_number=None):
         value=enrich_result(scenario,value);value['failure_details']['evidence_errors']=['Artifact round is unavailable']
         return value
     cases=[];errors=[];total=0
-    for report in reports[:64]:
+    for report in reports:
         try:
             if not isinstance(report,dict):raise ValueError('Invalid report descriptor')
             relative,digest=report.get('file'),report.get('sha256')
@@ -157,11 +158,11 @@ def hydrate(artifacts,pid,jid,scenario,result,*,round_number=None):
             cases.extend(_xml_cases(raw,relative))
         except (OSError,ValueError,UnicodeError,ET.ParseError) as exc:
             if len(errors)<4:errors.append(type(exc).__name__+': '+str(exc)[:160])
-        if total>MAX_TOTAL_BYTES or len(cases)>=MAX_CASES:break
+        if total>MAX_TOTAL_BYTES:break
     # Do not trust an old persisted test_cases list when its XML cannot be read.
-    proof['test_cases']=cases[:MAX_CASES]
+    proof['test_cases']=cases
     value=enrich_result(scenario,value)
-    if len(cases)>=MAX_CASES or len(reports)>64 or total>MAX_TOTAL_BYTES:
+    if total>MAX_TOTAL_BYTES:
         value['failure_details']['truncated']=True
     if errors:value['failure_details']['evidence_errors']=errors
     return value

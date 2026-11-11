@@ -43,6 +43,10 @@
  async function request(path){const response=await fetch(path,{cache:'no-store'});if(!response.ok)throw Error('HTTP '+response.status);return response.json();}
  function base(jid=job){return '/api/jobs/'+encodeURIComponent(jid)+'/pipeline';}
  function renderPackage(parent){
+  const diagnostics=asArray(overview?.execution_diagnostics);
+  if(diagnostics.length){const d=diagnostics[0],box=card(parent,'Причина последней проверки',String(d.actual||d.label||'Диагностика доступна').slice(0,700));
+   box.append(make('p','foot','Наблюдаемый сбой. Причину и способ исправления оценивают агенты; незапущенные проверки остаются непроверенными.'));
+   jsonDetails(box,'Полная диагностика и ссылки',diagnostics);}
   if(overview?.preparation){const prep=overview.preparation;
    card(parent,'Подготовка',Math.floor((prep.elapsed_seconds||0)/60)+' мин активной подготовки · мягкая граница '+Math.round(prep.soft_limit_seconds/60)+' мин'+
     (prep.handoff_due?' · переход к реализации доступных задач':' · уточнение ТЗ и плана'));}

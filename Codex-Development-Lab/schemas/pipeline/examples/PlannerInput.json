@@ -27,12 +27,16 @@
           "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
           "media_type": "application/json"
         }
-      ]
+      ],
+      "implementation": "unknown",
+      "implementation_refs": []
     },
     {
       "task_id": "T2",
       "status": "pending",
-      "result_refs": []
+      "result_refs": [],
+      "implementation": "unknown",
+      "implementation_refs": []
     }
   ],
   "latest_result_refs": [

@@ -258,7 +258,8 @@ class ExecutorProtocolTests(unittest.TestCase):
             result = executor.tool('delegate', {'role': 'reviewer', 'task': 'Review source'})
         self.assertIn('NOT_TESTED', result)
         self.assertEqual({tool['name'] for tool in requests[0]['tools']},
-                         {'read_file', 'list_files', 'read_lines', 'search_text', 'read_requirements','inspect_artifact','source_revision'})
+                         {'read_file', 'list_files', 'read_lines', 'search_text', 'read_requirements','inspect_artifact','source_revision',
+                          'query_memory','read_artifact','read_diff','record_note','read_execution'})
         with self.assertRaises(ValueError):
             executor.tool('write_file', {'path': 'unsafe.py', 'content': 'x'}, readonly=True)
         self.assertFalse((self.root / 'unsafe.py').exists())

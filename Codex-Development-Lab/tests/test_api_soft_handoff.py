@@ -73,7 +73,7 @@ class ApiSoftHandoffTests(unittest.TestCase):
             run.assert_called_once_with('Review the change',agent='reviewer-4',readonly=True,turns=33)
 
     def test_configured_command_timeout_is_not_clamped_to_300_seconds(self):
-        process=Mock(returncode=0)
+        process=Mock(returncode=0,pid=12345)
         with tempfile.TemporaryDirectory() as root:
             executor=dslab.Executor({}, root)
             with patch.object(dslab.subprocess, 'Popen', return_value=process), redirect_stdout(io.StringIO()):

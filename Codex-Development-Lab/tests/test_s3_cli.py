@@ -30,7 +30,7 @@ class StorageTests(unittest.TestCase):
             self.assertEqual(c["region"], "ru-central1")
             self.assertEqual(c["endpoint"], "https://storage.yandexcloud.net")
         with patch.dict(os.environ, {"AWS_ACCESS_KEY_ID": "id", "AWS_SECRET_ACCESS_KEY": "secret", "YC_S3_BUCKET": "mybucket", "YC_VIDEO_MAX_SECONDS": "61"}, clear=True):
-            with self.assertRaises(ValueError): m.config()
+            self.assertIsNone(m.config()['seconds'])
 
     def test_state_atomic_and_safe_source(self):
         with tempfile.TemporaryDirectory() as td:

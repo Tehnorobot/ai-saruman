@@ -221,8 +221,12 @@ class AcceptanceRoutingTests(unittest.TestCase):
                 if kind == 'gameplay':
                     expected.append('-PlabAcceptanceScenario=named-check')
                 self.assertEqual(selected.call_args.args[0], expected)
-                self.assertEqual(selected.call_args.kwargs,
-                                 {'scenario_id': 'named-check'} if kind == 'gameplay' else {})
+                options=selected.call_args.kwargs
+                if kind == 'gameplay':
+                    self.assertEqual(options['scenario_id'],'named-check')
+                    self.assertEqual(set(options['env']),{'LAB_GAMEPLAY_EXECUTION_JOURNAL','LAB_GAMEPLAY_EXECUTION_ID'})
+                else:
+                    self.assertEqual(options,{})
                 self.assertEqual(report['scenarios'][0]['status'], 'NOT_TESTED')
 
 

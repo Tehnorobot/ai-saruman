@@ -54,6 +54,77 @@
         "$ref": "#/$defs/ArtifactRef"
       },
       "description": "Оригинальные отчёты и журналы."
+    },
+    "execution_diagnostics": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "diagnostic_id": {
+            "type": "string"
+          },
+          "stage": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "argv": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "exit_code": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "actual": {
+            "type": "string"
+          },
+          "evidence_refs": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "evidence_id": {
+                  "type": "string",
+                  "pattern": "^E-[a-f0-9]{64}$"
+                },
+                "path": {
+                  "type": "string"
+                },
+                "sha256": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                }
+              },
+              "required": [
+                "evidence_id",
+                "path",
+                "sha256"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "diagnostic_id",
+          "stage",
+          "label",
+          "status",
+          "argv",
+          "exit_code",
+          "actual",
+          "evidence_refs"
+        ],
+        "additionalProperties": false
+      }
     }
   },
   "required": [
@@ -273,6 +344,30 @@
             "affected_checkpoint_ids"
           ],
           "additionalProperties": false
+        },
+        "attempted": {
+          "type": "boolean"
+        },
+        "stopped_by": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "execution_stage": {
+          "type": "string",
+          "enum": [
+            "build",
+            "scenario",
+            "not_started"
+          ]
+        },
+        "execution_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "measurement_reused": {
+          "type": "boolean"
         }
       },
       "required": [
@@ -400,6 +495,77 @@
             "$ref": "#/$defs/ArtifactRef"
           },
           "description": "Оригинальные отчёты и журналы."
+        },
+        "execution_diagnostics": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "diagnostic_id": {
+                "type": "string"
+              },
+              "stage": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string"
+              },
+              "argv": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "exit_code": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "actual": {
+                "type": "string"
+              },
+              "evidence_refs": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "evidence_id": {
+                      "type": "string",
+                      "pattern": "^E-[a-f0-9]{64}$"
+                    },
+                    "path": {
+                      "type": "string"
+                    },
+                    "sha256": {
+                      "type": "string",
+                      "pattern": "^[a-f0-9]{64}$"
+                    }
+                  },
+                  "required": [
+                    "evidence_id",
+                    "path",
+                    "sha256"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "diagnostic_id",
+              "stage",
+              "label",
+              "status",
+              "argv",
+              "exit_code",
+              "actual",
+              "evidence_refs"
+            ],
+            "additionalProperties": false
+          }
         }
       },
       "required": [

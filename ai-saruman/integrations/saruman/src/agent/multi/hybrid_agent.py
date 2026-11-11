@@ -444,7 +444,7 @@ class HybridAgent:
         if (
             not raw
             or event.additional_fields.get("self")
-            or event.user == "saruman-mag"
+            or event.user == "saruman_mag"
         ):
             return
         request_id = str(event.processing_timestamp)

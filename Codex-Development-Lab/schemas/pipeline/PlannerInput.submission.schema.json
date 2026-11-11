@@ -1,6 +1,5 @@
 {
   "type": "object",
-  "description": "Контроллер → планировщик. Текущий снимок, состояния и доступная память.",
   "required": [
     "contract",
     "version",
@@ -15,6 +14,7 @@
     "condition_progress_ref"
   ],
   "additionalProperties": false,
+  "description": "Контроллер → планировщик. Текущий снимок, состояния и доступная память.",
   "properties": {
     "contract": {
       "description": "Имя типа сообщения; выбирает схему.",
@@ -31,16 +31,16 @@
       "type": "string"
     },
     "scope": {
-      "description": "Проект, версия ТЗ, версия кода и раунд.",
-      "$ref": "#/$defs/Scope"
+      "$ref": "#/$defs/Scope",
+      "description": "Проект, версия ТЗ, версия кода и раунд."
     },
     "catalog_ref": {
-      "description": "Принятый каталог требований; null допустим при начальной проверке.",
-      "$ref": "#/$defs/ArtifactRef"
+      "$ref": "#/$defs/ArtifactRef",
+      "description": "Принятый каталог требований; null допустим при начальной проверке."
     },
     "graph_ref": {
-      "description": "Принятый граф задач; null допустим при начальной проверке.",
-      "$ref": "#/$defs/ArtifactRef"
+      "$ref": "#/$defs/ArtifactRef",
+      "description": "Принятый граф задач; null допустим при начальной проверке."
     },
     "task_states": {
       "type": "array",
@@ -57,16 +57,16 @@
       }
     },
     "memory_index_ref": {
-      "description": "Индекс полного архива; записи читаются по необходимости.",
-      "$ref": "#/$defs/ArtifactRef"
+      "$ref": "#/$defs/ArtifactRef",
+      "description": "Индекс полного архива; записи читаются по необходимости."
     },
     "reflection_requested": {
       "type": "boolean",
       "description": "Сигнал о необходимости пересмотреть подход; не команда остановиться."
     },
     "budget": {
-      "description": "Оставшийся пользовательский бюджет на момент запроса.",
-      "$ref": "#/$defs/Budget"
+      "$ref": "#/$defs/Budget",
+      "description": "Оставшийся пользовательский бюджет на момент запроса."
     },
     "condition_progress_ref": {
       "$ref": "#/$defs/ArtifactRef",
@@ -88,8 +88,8 @@
           "description": "Для ArtifactRef: путь относительно корня проекта; для Issue: путь поля в JSON."
         },
         "sha256": {
-          "description": "Хеш точного содержимого файла; проверяется при чтении.",
-          "$ref": "#/$defs/Hash"
+          "$ref": "#/$defs/Hash",
+          "description": "Хеш точного содержимого файла; проверяется при чтении."
         },
         "media_type": {
           "type": "string",
@@ -120,7 +120,6 @@
     },
     "PlannerInput": {
       "type": "object",
-      "description": "Контроллер → планировщик. Текущий снимок, состояния и доступная память.",
       "required": [
         "contract",
         "version",
@@ -135,6 +134,7 @@
         "condition_progress_ref"
       ],
       "additionalProperties": false,
+      "description": "Контроллер → планировщик. Текущий снимок, состояния и доступная память.",
       "properties": {
         "contract": {
           "description": "Имя типа сообщения; выбирает схему.",
@@ -151,16 +151,16 @@
           "type": "string"
         },
         "scope": {
-          "description": "Проект, версия ТЗ, версия кода и раунд.",
-          "$ref": "#/$defs/Scope"
+          "$ref": "#/$defs/Scope",
+          "description": "Проект, версия ТЗ, версия кода и раунд."
         },
         "catalog_ref": {
-          "description": "Принятый каталог требований; null допустим при начальной проверке.",
-          "$ref": "#/$defs/ArtifactRef"
+          "$ref": "#/$defs/ArtifactRef",
+          "description": "Принятый каталог требований; null допустим при начальной проверке."
         },
         "graph_ref": {
-          "description": "Принятый граф задач; null допустим при начальной проверке.",
-          "$ref": "#/$defs/ArtifactRef"
+          "$ref": "#/$defs/ArtifactRef",
+          "description": "Принятый граф задач; null допустим при начальной проверке."
         },
         "task_states": {
           "type": "array",
@@ -177,16 +177,16 @@
           }
         },
         "memory_index_ref": {
-          "description": "Индекс полного архива; записи читаются по необходимости.",
-          "$ref": "#/$defs/ArtifactRef"
+          "$ref": "#/$defs/ArtifactRef",
+          "description": "Индекс полного архива; записи читаются по необходимости."
         },
         "reflection_requested": {
           "type": "boolean",
           "description": "Сигнал о необходимости пересмотреть подход; не команда остановиться."
         },
         "budget": {
-          "description": "Оставшийся пользовательский бюджет на момент запроса.",
-          "$ref": "#/$defs/Budget"
+          "$ref": "#/$defs/Budget",
+          "description": "Оставшийся пользовательский бюджет на момент запроса."
         },
         "condition_progress_ref": {
           "$ref": "#/$defs/ArtifactRef",
@@ -209,12 +209,12 @@
           "description": "Устойчивый ID проекта."
         },
         "spec_revision": {
-          "description": "SHA-256 канонического манифеста ТЗ и явных уточнений.",
-          "$ref": "#/$defs/Hash"
+          "$ref": "#/$defs/Hash",
+          "description": "SHA-256 канонического манифеста ТЗ и явных уточнений."
         },
         "source_revision": {
-          "description": "SHA-256 канонического манифеста исходников снимка.",
-          "$ref": "#/$defs/Hash"
+          "$ref": "#/$defs/Hash",
+          "description": "SHA-256 канонического манифеста исходников снимка."
         },
         "round": {
           "type": "integer",
@@ -227,7 +227,9 @@
       "required": [
         "task_id",
         "status",
-        "result_refs"
+        "result_refs",
+        "implementation",
+        "implementation_refs"
       ],
       "additionalProperties": false,
       "properties": {
@@ -237,7 +239,6 @@
         },
         "status": {
           "type": "string",
-          "description": "Наблюдаемый статус; допустимые значения заданы enum.",
           "enum": [
             "pending",
             "in_progress",
@@ -245,11 +246,27 @@
             "needs_retest",
             "manual_pending",
             "blocked"
-          ]
+          ],
+          "description": "Наблюдаемый статус; допустимые значения заданы enum."
         },
         "result_refs": {
           "type": "array",
           "description": "Доказательства статуса, а не текстовая самооценка агента.",
+          "items": {
+            "$ref": "#/$defs/ArtifactRef"
+          }
+        },
+        "implementation": {
+          "type": "string",
+          "enum": [
+            "unknown",
+            "absent",
+            "present_claim",
+            "buildable"
+          ]
+        },
+        "implementation_refs": {
+          "type": "array",
           "items": {
             "$ref": "#/$defs/ArtifactRef"
           }

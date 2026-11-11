@@ -7,7 +7,8 @@
     "notes_md",
     "responses",
     "unverified_claims",
-    "open_issues"
+    "open_issues",
+    "action_outcomes"
   ],
   "additionalProperties": false,
   "properties": {
@@ -67,6 +68,36 @@
       "type": "array",
       "items": {
         "type": "string"
+      }
+    },
+    "action_outcomes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "action_id",
+          "status",
+          "notes_md"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "action_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "implemented_claim",
+              "partial",
+              "not_attempted",
+              "needs_experiment",
+              "not_assessed"
+            ]
+          },
+          "notes_md": {
+            "type": "string"
+          }
+        }
       }
     }
   },

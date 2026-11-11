@@ -184,14 +184,24 @@ def _run_task(src):
                     task_input.write(json.dumps(task))
                 else:
                     deadline=datetime.fromtimestamp(time.time()+timeout, timezone.utc).isoformat()
-                    task_input.write(task['prompt']+'\nExecution handoff: '+deadline+' UTC is a soft completion target, not a process timeout. '
+                    helper=''
+                    if task.get('output_contract'):
+                        context=task.get('tool_context_path')
+                        if not context:
+                            context=None
+                        helper=('\nImage-owned retrieval tools: use python3 -m agent.codex_tools TOOL JSON --context '+context+' . '
+                            'Tools: read_requirements, query_memory, read_artifact, read_execution, read_diff, record_note, list_files, run_command. '
+                            'These tools preserve full linked memory and public notes without granting code writes to read-only roles. '
+                            'Run diagnostic commands through run_command to retain full stdout/stderr artifacts and refs; read public notes before repeating investigation. ') if context else ''
+                    task_input.write(task['prompt']+helper+'\nExecution handoff: '+deadline+' UTC is a soft completion target, not a process timeout. '
                         'Check the current UTC time between major investigation steps. Once due, stop broad exploration, '
                         'record observed findings and unresolved questions and submit the current valid result. '
                         'Do not invent completion or PASS. Sources and checkpoints must remain intact. '
                         'Only explicit user cancellation, configured token/request budgets and isolation rules stop work.')
                 task_input.seek(0)
+                process_environment={**os.environ,'LAB_ACTIVE_TASK_ID':tid}
                 proc=subprocess.Popen(cmd,cwd=root,stdin=task_input,stdout=f,stderr=subprocess.STDOUT,
-                    text=True,start_new_session=True)
+                    text=True,start_new_session=True,env=process_environment)
             while proc.poll() is None:
                 if (ROOT/'cancel'/tid).exists():
                     status='CANCELLED';break

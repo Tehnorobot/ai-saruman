@@ -92,7 +92,7 @@ class ProfileTests(unittest.TestCase):
                 validate_action_command(action)
         self.assertEqual(validate_action_command("goto 10 64 -20"), "@goto 10 64 -20")
         self.assertEqual(validate_action_command("@stop"), "@stop")
-        self.assertEqual(validate_action_command("@follow saruman-mag"), "@follow saruman-mag")
+        self.assertEqual(validate_action_command("@follow saruman_mag"), "@follow saruman_mag")
         with self.assertRaisesRegex(ValueError, "forbidden"):
             validate_action_command("@custom2 test", ["custom2"])
 
@@ -182,7 +182,7 @@ class ProfileTests(unittest.TestCase):
             from character.character_manager import CharacterManager
 
             character = CharacterManager("Saruman", force_new=True)
-            self.assertEqual(character.get_names().Minecraft, "saruman-mag")
+            self.assertEqual(character.get_names().Minecraft, "saruman_mag")
             self.assertEqual(character.get_character_config().GodUsers, [])
             self.assertEqual(character.get_character_config().VoicePlaybackRate, 1.0)
             for mode in ("streamer_abstract", "saruman", "saruman_combat"):
@@ -259,8 +259,8 @@ class ProfileTests(unittest.TestCase):
         from saruman.minecraft import normalize_chat_message
 
         self.assertEqual(
-            normalize_chat_message({"user": None, "msg": "<saruman-mag> hello"}),
-            {"user": "saruman-mag", "msg": "hello"},
+            normalize_chat_message({"user": None, "msg": "<saruman_mag> hello"}),
+            {"user": "saruman_mag", "msg": "hello"},
         )
         self.assertEqual(
             normalize_chat_message({"user": None, "msg": "<Alex_123> hello"}),
@@ -268,7 +268,7 @@ class ProfileTests(unittest.TestCase):
         )
         for event in (
             {"user": None, "msg": "Welcome to the server"},
-            {"user": "Alex", "msg": "<saruman-mag> quoted message"},
+            {"user": "Alex", "msg": "<saruman_mag> quoted message"},
         ):
             self.assertEqual(normalize_chat_message(event), event)
 

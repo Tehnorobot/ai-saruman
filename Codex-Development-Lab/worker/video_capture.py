@@ -145,7 +145,27 @@ def _failure(reason, detail, **metadata):
     return {'status': 'ERROR', 'reason': reason, 'detail': detail, **metadata}
 
 
-def probe_capture(path):
+DEFAULT_CAPTURE_MAX_SECONDS = 300
+
+
+def validate_capture_max_seconds(value):
+    """Accept the operator's whole-second limit without a separate video ceiling."""
+    if type(value) is not int or value < 1:
+        raise ValueError('Recording duration must be a positive integer of seconds')
+    return value
+
+
+def configured_capture_max_seconds():
+    """Read only the supervisor's environment, never the project command env."""
+    raw = os.environ.get('LAB_VIDEO_MAX_SECONDS')
+    if raw is None:
+        return DEFAULT_CAPTURE_MAX_SECONDS
+    if not re.fullmatch(r'[0-9]+', raw):
+        raise ValueError('LAB_VIDEO_MAX_SECONDS must be a positive integer')
+    return validate_capture_max_seconds(int(raw))
+
+
+def probe_capture(path, *, max_seconds=None):
     """Check real H.264 frames; existence/size alone is never capture evidence."""
     path = Path(path)
     metadata = {'bytes': 0, 'codec': None, 'width': None, 'height': None,
@@ -155,8 +175,13 @@ def probe_capture(path):
         if not stat.S_ISREG(info.st_mode):
             return _failure('invalid_file', 'Capture is not a regular file', **metadata)
         metadata['bytes'] = info.st_size
-        if not 0 < info.st_size <= 256 * 1024**2:
-            return _failure('invalid_size', 'Capture file is empty or exceeds 256 MiB', **metadata)
+        if info.st_size <= 0:
+            return _failure('invalid_size', 'Capture file is empty', **metadata)
+        if max_seconds is not None:
+            validate_capture_max_seconds(max_seconds)
+            allowed_bytes = max(256 * 1024**2, max_seconds * 8 * 1024**2)
+            if info.st_size > allowed_bytes:
+                return _failure('invalid_size', 'Capture exceeds the size allowance for the selected recording duration', **metadata)
         probe = subprocess.run([
             'ffprobe', '-v', 'error', '-select_streams', 'v:0',
             '-show_entries', 'stream=codec_name,width,height,duration,avg_frame_rate:format=duration',
@@ -171,9 +196,13 @@ def probe_capture(path):
         metadata.update(codec=stream.get('codec_name'), width=width, height=height,
                         duration_seconds=duration)
         if (metadata['codec'] != 'h264' or not math.isfinite(duration)
-                or not 0 < duration <= 60 or not 0 < width <= 4096 or not 0 < height <= 4096):
-            return _failure('invalid_video', 'Capture must be H.264, 0–60 seconds, with valid dimensions',
+                or not 0 < duration or not 0 < width <= 4096 or not 0 < height <= 4096):
+            return _failure('invalid_video', 'Capture must be H.264, with positive finite duration and valid dimensions',
                             **metadata)
+        if max_seconds is not None and duration - 0.25 > max_seconds:
+            return _failure('invalid_video', 'Capture exceeds the selected recording duration', **metadata)
+        if info.st_size > max(256 * 1024**2, duration * 8 * 1024**2):
+            return _failure('invalid_size', 'Capture exceeds the size allowance for its recorded duration', **metadata)
         if duration < 0.5:
             return _failure('too_short', 'Capture is too short for the 0.5-second black-frame check',
                             **metadata)
@@ -187,7 +216,7 @@ def probe_capture(path):
             '-i', str(path), '-map', '0:v:0', '-an',
             '-vf', 'blackdetect=d=0.5:pix_th=0.05:pic_th=0.98',
             '-f', 'null', '-'], stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
-            timeout=60, check=False)
+            timeout=max(60, duration * 1.5 + 30), check=False)
         if analysis.returncode:
             return _failure('decode_failed', 'ffmpeg could not decode capture frames', **metadata)
         intervals = []
@@ -213,7 +242,7 @@ def probe_capture(path):
                 'detail': 'H.264 capture decoded; black image occupies less than 97% of the duration', **metadata}
     except FileNotFoundError as exc:
         return _failure('missing_capture_or_tool', str(exc)[:300], **metadata)
-    except (OSError, ValueError, KeyError, IndexError, TypeError, ZeroDivisionError,
+    except (OSError, ValueError, KeyError, IndexError, TypeError, ZeroDivisionError, OverflowError,
             subprocess.SubprocessError) as exc:
         return _failure('validation_error', type(exc).__name__ + ': ' + str(exc)[:300], **metadata)
 
@@ -270,8 +299,9 @@ class ScenarioWindow:
 class CaptureMonitor:
     """Start a bounded root-owned recording only after a visible X11 window exists."""
 
-    def __init__(self, output, display=':99', max_seconds=58, poll_seconds=0.1, start_when=None):
-        if not 0 < max_seconds <= 58 or not 0.01 <= poll_seconds <= 1:
+    def __init__(self, output, display=':99', max_seconds=DEFAULT_CAPTURE_MAX_SECONDS, poll_seconds=0.1, start_when=None):
+        validate_capture_max_seconds(max_seconds)
+        if not 0.01 <= poll_seconds <= 1:
             raise ValueError('Invalid bounded capture monitor settings')
         if not re.fullmatch(r':[0-9]{1,3}', display):
             raise ValueError('Capture monitor accepts only a local X11 display')
@@ -356,7 +386,11 @@ class CaptureMonitor:
             if was_running:
                 process.send_signal(signal.SIGINT)
                 try:
-                    process.wait(timeout=1)
+                    # +faststart rewrites the MP4 header when closing. Longer
+                    # operator-selected movies need time proportional to their
+                    # actual bytes, rather than the former one-second cutoff.
+                    size = self.path.lstat().st_size if self.path.exists() else 0
+                    process.wait(timeout=max(3, size / (64 * 1024**2) + 3))
                 except subprocess.TimeoutExpired:
                     process.kill()
                     process.wait(timeout=1)
@@ -365,7 +399,7 @@ class CaptureMonitor:
         if self._capture_error is not None:
             self.metadata.update(status='ERROR', reason='recorder_error', detail=self._capture_error)
         elif process is not None:
-            self.metadata.update(probe_capture(self.path))
+            self.metadata.update(probe_capture(self.path, max_seconds=self.max_seconds))
             if self.metadata.get('status') == 'PASS':
                 # Export an actual decoded nonblack frame, never a world icon or
                 # an illustrative replacement. Keep the original movie intact.

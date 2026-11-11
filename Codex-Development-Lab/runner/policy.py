@@ -13,18 +13,21 @@ def identifier(value, length=14):
 
 def validate_request(payload):
     if not isinstance(payload,dict):raise ValueError('Runner request must be an object')
+    if ('capture_max_seconds' in payload and
+            (type(payload['capture_max_seconds']) is not int or payload['capture_max_seconds'] < 1)):
+        raise ValueError('Recording duration must be a positive integer in seconds')
     if payload.get('verification') is True:
         required={'project','job','verification','timeout_seconds','eula'}
-        if set(payload)!=required:
-            raise ValueError('Verification accepts only project, job, verification, timeout_seconds and eula')
+        if not required <= payload.keys() or payload.keys() - required - {'capture_max_seconds'}:
+            raise ValueError('Verification accepts only project, job, verification, timeout_seconds, eula and capture_max_seconds')
         identifier(payload['project']);identifier(payload['job'])
         if type(payload['timeout_seconds']) is not int or payload['timeout_seconds']<60:
             raise ValueError('Verification timeout must be an integer of at least 60 seconds')
         if type(payload['eula']) is not bool:raise ValueError('Verification consent must be boolean')
         return dict(payload)
     required = {'project', 'job', 'argv', 'record'}
-    if not required <= payload.keys() or payload.keys() - required - {'ci', 'eula'}:
-        raise ValueError('Only project, job, argv, record, ci and eula are accepted')
+    if not required <= payload.keys() or payload.keys() - required - {'ci', 'eula', 'capture_max_seconds'}:
+        raise ValueError('Only project, job, argv, record, ci, eula and capture_max_seconds are accepted')
     identifier(payload['project'])
     identifier(payload['job'])
     argv = payload['argv']
@@ -55,6 +58,7 @@ def container_config(image, volume, token, request, owner):
         'GRADLE_OPTS': '-Dorg.gradle.workers.max=4 -Dorg.gradle.daemon=true',
         'LP_NUM_THREADS': '4', 'OMP_NUM_THREADS': '4',
         'MINECRAFT_EULA_ACCEPTED': str(request.get('eula', False)).lower(),
+        'LAB_VIDEO_MAX_SECONDS': str(request.get('capture_max_seconds', 300)),
         'HTTP_PROXY':'http://lab-egress:3128','HTTPS_PROXY':'http://lab-egress:3128',
         'http_proxy':'http://lab-egress:3128','https_proxy':'http://lab-egress:3128',
         'NO_PROXY':'localhost,127.0.0.1,::1','no_proxy':'localhost,127.0.0.1,::1',
@@ -73,8 +77,14 @@ def container_config(image, volume, token, request, owner):
             'Mounts': [{'Type': 'volume', 'Source': volume, 'Target': target,
                         'VolumeOptions': {'NoCopy': True, 'Subpath': f'runs/{token}/{folder}'}}
                        for folder, target in (('workspace', '/workspace'), ('output', '/output'))]
+                      + ([{'Type':'volume','Source':volume,'Target':'/game-data',
+                           'VolumeOptions':{'NoCopy':True,'Subpath':f'runs/{token}/game-data'}}]
+                         if verification else [])
                       +[{'Type':'volume','Source':volume,'Target':'/cache',
-                         'VolumeOptions':{'NoCopy':True,'Subpath':f"projects/{request['project']}/cache"}}],
+                         'VolumeOptions':{'NoCopy':True,'Subpath':f"projects/{request['project']}/cache"}}]
+                      +([{'Type':'volume','Source':volume,'Target':'/world-templates',
+                          'VolumeOptions':{'NoCopy':True,'Subpath':'world-templates'}}]
+                        if verification else []),
             'ReadonlyRootfs': True, 'CapDrop': ['ALL'],
             **({'CapAdd':['SETUID','SETGID']} if verification else {}),
             'SecurityOpt': ['no-new-privileges:true'], 'Init': True,

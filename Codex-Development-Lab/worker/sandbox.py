@@ -3,10 +3,12 @@ from __future__ import annotations
 
 import http.client
 import json
+import logging
 import os
 from pathlib import Path
 import shutil
 import socket
+import sqlite3
 import tempfile
 import time
 import traceback
@@ -45,6 +47,13 @@ class DockerSandbox:
 
     def api(self, method, path, body=None, *, raw=False, upload=None, download=None):
         connection = RunnerConnection(self.socket_path)
+        # Archive installation/packing and cleanup can legitimately outlast a
+        # small control-request timeout (many fsyncs on a slow Docker volume).
+        # A local transport deadline must not abandon a still-running upload
+        # and then misreport its queued cleanup as an unconfirmed writer.
+        # Execution budgets and project isolation are enforced separately.
+        if upload is not None or download is not None or method=='DELETE':
+            connection.timeout=None
         try:
             payload = json.dumps(body).encode() if body is not None else None
             headers = {'Content-Type': 'application/json'}
@@ -174,7 +183,7 @@ class DockerSandbox:
     def _copy_output(source, output_dir):
         allowed_files={'verification.json','video_capture.json','acceptance_results.json','build.log','maven.log','pytest.log','npm.log',
                        'game_tasks.log','client_gametest.log','minecraft_client_capture.mp4','ffmpeg.log','xvfb.log'}
-        allowed_dirs={'builds','screenshots','reports','test-results','crash-reports','run','acceptance'}
+        allowed_dirs={'builds','screenshots','reports','test-results','crash-reports','run','acceptance','world-fixture'}
         for path in source.rglob('*'):
             relative=path.relative_to(source)
             if (path.is_symlink() or not path.is_file() or not path.resolve().is_relative_to(source.resolve())
@@ -193,6 +202,16 @@ class DockerSandbox:
         if verification is not None:
             request={key:request[key] for key in ('project','job')}
             request.update(verification=True,**verification)
+        if record or verification is not None:
+            from common.recording_settings import DEFAULT_MAX_SECONDS, max_seconds
+            try:
+                request['capture_max_seconds'] = max_seconds()
+            except (OSError, ValueError, sqlite3.Error) as exc:
+                # Recording is optional; a configuration read must not stop tests.
+                logging.getLogger(__name__).warning(
+                    'Recording setting unavailable (%s); using %s seconds',
+                    type(exc).__name__, DEFAULT_MAX_SECONDS)
+                request['capture_max_seconds'] = DEFAULT_MAX_SECONDS
         root = Path(cwd).parent
         marker = root / '.lab-runner.json'
         token = None

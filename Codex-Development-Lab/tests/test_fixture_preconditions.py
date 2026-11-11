@@ -24,14 +24,14 @@ class FixturePreconditionTests(unittest.TestCase):
         self.sandbox.xml = self.sandbox.xml.replace(b'name="siteFound"/>',
             b'name="siteFound"><failure message="Expected platform is absent"/></testcase>')
 
-    def test_failed_fixture_leaves_product_unexecuted_and_preserves_original_failures(self):
+    def test_failed_fixture_does_not_waive_an_observed_product_failure(self):
         self.fail_fixture()
         self.sandbox.xml = self.sandbox.xml.replace(b'name="saplingPlaced"/>',
             b'name="saplingPlaced"><failure message="No block placed"/></testcase>')
         result, report = self.run_verification()
         scenario = result['scenario_results'][0]
-        self.assertEqual(scenario['status'], 'NOT_EXECUTED')
-        self.assertEqual(self.statuses(result), ['NOT_EXECUTED'] * 3)
+        self.assertEqual(scenario['status'], 'FAIL')
+        self.assertEqual(self.statuses(result), ['NOT_EXECUTED', 'FAIL', 'NOT_EXECUTED'])
         fixture = scenario['fixture_result']
         self.assertEqual(fixture['status'], 'FAIL')
         self.assertEqual(fixture['reason_code'], 'invalid_fixture')
@@ -40,7 +40,7 @@ class FixturePreconditionTests(unittest.TestCase):
         self.assertEqual(result['infrastructure_errors'], [])
         self.assertEqual(report['checks'][0]['status'], 'PASS')
         rows = condition_progress.observations(self.manifest, result)
-        self.assertEqual({r['status'] for r in rows}, {'NOT_EXECUTED'})
+        self.assertEqual({r['status'] for r in rows}, {'FAIL', 'NOT_EXECUTED'})
         failed_product = next(r for r in rows if r['condition_id'] == 'C1')
         self.assertEqual(failed_product['raw_checkpoint_status'], 'FAIL')
         self.assertEqual(failed_product['fixture_status'], 'FAIL')
@@ -130,7 +130,8 @@ class FixturePreconditionTests(unittest.TestCase):
         profiles = condition_progress.reconstruct(archive, self.catalog, result['scope'], lambda _:None)
         profile = next(p for p in profiles['conditions'] if p['condition_id'] == 'C1')
         gap = next(c for c in profile['checkpoints'] if c['scenario_id'] is None)
-        self.assertGreater(gap['unresolved_observations'], 0)
+        self.assertEqual(gap['unresolved_observations'], 0)
+        self.assertGreater(gap['unresolved_gaps'], 0)
         self.assertNotEqual(gap.get('last_status'), 'OBSERVATION_AVAILABLE')
 
     def test_missing_fixture_cannot_be_inferred_from_passing_product_cases(self):

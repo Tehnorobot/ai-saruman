@@ -62,7 +62,7 @@ def follow(nick: str) -> bool:
             False: player not found
     """
     try:
-        if nick in ["saruman-mag"]:
+        if nick in ["saruman_mag"]:
             raise Exception(f"{nick} - it is you!")
         print(f"Following player {nick}")
         return True
@@ -83,7 +83,7 @@ def kill(nick: str) -> bool:
             False: player not found
     """
     try:
-        if nick in ["saruman-mag"]:
+        if nick in ["saruman_mag"]:
             raise Exception(f"{nick} - it is you!")
         print(f"Following player {nick} to kill")
         return True
@@ -155,7 +155,7 @@ if __name__ == "__main__":
     # mc_agent.state
     OVERALL_AGENT.run(
         """
-Your game nickname is saruman-mag - it is YOU.
+Your game nickname is saruman_mag - it is YOU.
 You are low-level minecraft agent - Saruman agent.
 Доступные тебе инструменты и возможности описаны выше
 Если инструмента или функции тут не описано, значит ЕЁ НЕ СУЩЕСТВУЕТ У ТЕБЯ.

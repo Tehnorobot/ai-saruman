@@ -18,7 +18,7 @@ for _TRUSTED in (str(_IMAGE_ROOT), str(_IMAGE_ROOT / 'worker')):
     if _TRUSTED not in sys.path:
         sys.path.insert(0, _TRUSTED)
 from verification_plan import run_command, run_verification
-from video_capture import CaptureMonitor, ScenarioWindow
+from video_capture import CaptureMonitor, ScenarioWindow, configured_capture_max_seconds
 
 
 def _finish(process, graceful=signal.SIGTERM):
@@ -50,7 +50,15 @@ def recording(output, window=None):
                     raise RuntimeError('Xvfb failed to start')
                 time.sleep(0.05)
             options = {'start_when': window.ready} if window is not None else {}
-            capture = CaptureMonitor(output, display=display, **options).start()
+            capture = CaptureMonitor(output, display=display,
+                                     max_seconds=configured_capture_max_seconds(), **options)
+            try:
+                capture.start()
+            except Exception as exc:
+                # The graphical child can still use the valid Xvfb display.
+                # Optional capture setup is not a reason to skip its real checks.
+                capture.metadata.update(status='ERROR', reason='recorder_error',
+                                        detail=type(exc).__name__ + ': ' + str(exc)[:300])
             yield capture
         finally:
             try:
@@ -66,7 +74,7 @@ def recording(output, window=None):
                 _finish(xserver)
 
 
-def recorded_run(argv, cwd, logfile, timeout, *, scenario_id=None):
+def recorded_run(argv, cwd, logfile, timeout, *, scenario_id=None, env=None):
     started = time.monotonic()
     try:
         window = ScenarioWindow(logfile,scenario_id) if scenario_id is not None else None
@@ -74,6 +82,7 @@ def recorded_run(argv, cwd, logfile, timeout, *, scenario_id=None):
         with context as capture:
             remaining = max(0.01, timeout - (time.monotonic() - started))
             command_env = dict(os.environ)
+            command_env.update(env or {})
             # Loom 1.14 checks only presence: even CI='false' enables a second
             # xvfb-run display, while our recorder is watching the first one.
             command_env.pop('CI', None)

@@ -37,6 +37,23 @@ def index():
     return (Path(__file__).parent/'index.html').read_text(encoding='utf-8')
 
 
+@app.get('/api/recording-settings')
+def get_recording_settings():
+    from common.recording_settings import get_settings
+    return get_settings()
+
+
+@app.put('/api/recording-settings')
+def save_recording_settings(payload:dict=Body(...)):
+    from common.recording_settings import set_max_seconds
+    if set(payload) != {'max_seconds'}:
+        raise HTTPException(400, 'Передай только max_seconds — максимальную длину записи в секундах')
+    try:
+        return set_max_seconds(payload['max_seconds'])
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
 @app.get('/provider.js')
 def provider_script():
     return FileResponse(Path(__file__).parent/'provider.js', media_type='application/javascript')
@@ -45,6 +62,11 @@ def provider_script():
 @app.get('/dashboard.js')
 def dashboard_script():
     return FileResponse(Path(__file__).parent/'dashboard.js',media_type='application/javascript')
+
+
+@app.get('/recording-settings.js')
+def recording_settings_script():
+    return FileResponse(Path(__file__).parent/'recording-settings.js',media_type='application/javascript')
 
 
 @app.get('/dashboard.css')
@@ -121,6 +143,10 @@ def job_pipeline(jid:str):
     state=read_json(root,'pipeline/state.json') or {}
     value['operation']=state.get('operation',value.get('operation'))
     value['service_operation']=state.get('service_operation')
+    value['execution_diagnostics']=state.get('execution_diagnostics',[])
+    latest_observation=read_json(root,'pipeline/latest-result.json') or {}
+    if 'execution_diagnostics' in latest_observation:
+        value['execution_diagnostics']=latest_observation['execution_diagnostics']
     value['agent_reports']=state.get('agent_reports',value.get('agent_reports',{}))
     value['supplemental_evidence']=state.get('supplemental_evidence',value.get('supplemental_evidence',[]))
     value['preparation']=state.get('preparation',value.get('preparation'))

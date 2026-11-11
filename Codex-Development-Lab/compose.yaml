@@ -342,7 +342,6 @@ services:
       YC_S3_ENDPOINT: ${YC_S3_ENDPOINT:-https://storage.yandexcloud.net}
       YC_S3_REGION: ${YC_S3_REGION:-ru-central1}
       YC_S3_PREFIX: ${YC_S3_PREFIX:-codex-development-lab}
-      YC_VIDEO_MAX_SECONDS: ${YC_VIDEO_MAX_SECONDS:-60}
       YC_S3_PRESIGN_SECONDS: ${YC_S3_PRESIGN_SECONDS:-900}
     volumes:
       - ./artifacts:/artifacts:ro

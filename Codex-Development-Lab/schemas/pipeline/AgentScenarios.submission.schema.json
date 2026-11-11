@@ -1,6 +1,5 @@
 {
   "type": "object",
-  "description": "Кодер → ревьюер → исполнитель. Исполняемые тесты плюс явные утверждения.",
   "required": [
     "contract",
     "version",
@@ -8,6 +7,7 @@
     "notes_md"
   ],
   "additionalProperties": false,
+  "description": "Кодер → ревьюер → исполнитель. Исполняемые тесты плюс явные утверждения.",
   "properties": {
     "contract": {
       "type": "string",
@@ -70,7 +70,6 @@
         },
         "comparator": {
           "type": "string",
-          "description": "Операция сравнения: eq равно, ne не равно; lt/le/gt/ge; contains; event.",
           "enum": [
             "eq",
             "ne",
@@ -80,7 +79,8 @@
             "ge",
             "contains",
             "event"
-          ]
+          ],
+          "description": "Операция сравнения: eq равно, ne не равно; lt/le/gt/ge; contains; event."
         },
         "expected": {
           "type": [
@@ -150,8 +150,8 @@
           }
         },
         "test_file": {
-          "description": "Исполняемый тест. Текстовый сценарий сам не запускается.",
-          "$ref": "#/$defs/ArtifactRef"
+          "$ref": "#/$defs/ArtifactRef",
+          "description": "Исполняемый тест. Текстовый сценарий сам не запускается."
         },
         "runner_profile": {
           "type": "string",
@@ -159,15 +159,16 @@
         },
         "execution": {
           "type": "object",
-          "description": "Safe Gradle/JUnit binding; checkpoint status comes from these independently executed test cases.",
           "required": [
             "kind",
             "gradle_task",
             "expected_tests",
             "checkpoint_tests",
-            "precondition_tests"
+            "precondition_tests",
+            "reuse"
           ],
           "additionalProperties": false,
+          "description": "Safe Gradle/JUnit binding; checkpoint status comes from these independently executed test cases.",
           "properties": {
             "kind": {
               "type": "string",
@@ -249,6 +250,34 @@
                   }
                 }
               }
+            },
+            "reuse": {
+              "description": "Explicit reviewed consent to share identical fresh unit execution inputs. Null preserves separate runs; gameplay cannot share.",
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "object",
+                  "required": [
+                    "group",
+                    "profile",
+                    "initial_state"
+                  ],
+                  "additionalProperties": false,
+                  "properties": {
+                    "group": {
+                      "type": "string"
+                    },
+                    "profile": {
+                      "type": "string"
+                    },
+                    "initial_state": {
+                      "type": "string"
+                    }
+                  }
+                }
+              ]
             }
           }
         }

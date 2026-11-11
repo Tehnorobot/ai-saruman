@@ -214,11 +214,18 @@ def _states(value):
     return {s['task_id']:s['status'] for s in (value or [])}
 
 
+def _implementation_states(value):
+    if isinstance(value,dict):
+        return {key:row.get('implementation','unknown') if isinstance(row,dict) else 'unknown' for key,row in value.items()}
+    return {row['task_id']:row.get('implementation','unknown') for row in (value or [])}
+
+
 def validate_decision(decision, graph, catalog, task_states=None):
     """Validate an adaptive package; no group pinning or fixed action quota.
 
-    Feature work needs prerequisites verified, or scheduled earlier in this same
-    package. Diagnostics may inspect blocked tasks without pretending a feature
+    Feature work needs an available implementation, or a prerequisite scheduled
+    in this package. Existing local repairs do not reimplement every unverified
+    prerequisite. Availability is a claim, never verification. Diagnostics may inspect
     dependency is already implemented. Explicit action dependency IDs must always
     refer to an earlier action; declaring them never proves an execution result.
     """
@@ -228,6 +235,7 @@ def validate_decision(decision, graph, catalog, task_states=None):
     _same_spec(decision, catalog, errors)
     tasks = {t['id']:t for t in graph['tasks']}
     states = _states(task_states)
+    implementations=_implementation_states(task_states)
     actions = decision['actions']
     _duplicates([a['id'] for a in actions], '$.actions', errors)
     earlier_actions, earlier_tasks = set(), set()
@@ -255,9 +263,12 @@ def validate_decision(decision, graph, catalog, task_states=None):
             bundled = set(action['task_ids'])
             for task in selected:
                 for dep in task['depends_on']:
-                    if states.get(dep) != 'verified' and dep not in earlier_tasks and dep not in bundled:
+                    available=(states.get(dep)=='verified' or implementations.get(dep) in ('present_claim','buildable'))
+                    local_repair=(action['kind']=='repair' and implementations.get(task['id']) in ('present_claim','buildable')
+                                  and implementations.get(dep)!='absent')
+                    if not available and not local_repair and dep not in earlier_tasks and dep not in bundled:
                         errors.append(issue(base + '.task_ids', 'unsatisfied_dependency',
-                            'prerequisite verified or selected before/with dependent work in this package; task '+task['id']+' requires '+dep,
+                            'prerequisite implementation available or selected before/with dependent work in this package; task '+task['id']+' requires '+dep,
                             'Correct the action package: include '+dep+' before/with '+task['id']+' or select independent work. Do not erase a real graph dependency.'))
         earlier_actions.add(action['id'])
         if action['kind'] not in ('diagnose', 'manual'):

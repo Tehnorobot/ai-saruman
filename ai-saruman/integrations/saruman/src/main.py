@@ -50,6 +50,7 @@ from saruman.gradio_events import on_tool_select
 from saruman.usage import add_usage_panel
 from saruman.autonomy_panel import add_autonomy_panel
 from saruman.role_panel import add_role_panel
+from saruman.memory_reset import add_memory_reset_panel, apply_pending_reset, reset_pending
 from data_schema.ctx_structures import CtxSwarmType
 from data_schema.structure_templates import create_ctx_swarm
 from utils.format_helper import format_events_for_llm
@@ -95,6 +96,9 @@ def main_agent_need_starting():
 
 def agent_start():
     global main_agent_need_starting
+    if reset_pending():
+        print("[MEMORY] Запланирован сброс памяти: полностью перезапустите Python или отмените сброс в Control.")
+        return
     if ctx is not None and Supervisor.is_running() == False:
         print("Agent activated")
         main_agent_need_starting = lambda: True
@@ -347,6 +351,13 @@ with demo:
         add_usage_panel()
         if os.getenv("SARUMAN_AUTOMATION_MODE", "mods").lower() == "mods":
             add_role_panel(lambda: (ctx_swarm.get("game", {}), bool(ctx_swarm.get("env", {}).get("agent_enabled", False))))
+        memory_reset_panel = add_memory_reset_panel(
+            lambda: (
+                ctx_swarm.get("game", {}),
+                bool(ctx_swarm.get("env", {}).get("agent_enabled", False))
+                or bool(Supervisor and Supervisor.is_running()),
+            )
+        )
         operator_status = gr.Textbox(label="Статус отправки", interactive=False)
         ctx_chat_input = gr.Textbox(
             value="",
@@ -366,7 +377,8 @@ with demo:
 
             def control_queue_add(text: str):
                 return submit_operator_input(
-                    text, ctx_handler, ctx_swarm["internal_command_queue"]
+                    text, ctx_handler, ctx_swarm["internal_command_queue"],
+                    memory_reset=memory_reset_panel,
                 )
 
             control_queue_input.submit(
@@ -382,6 +394,8 @@ with demo:
                 > text to speak and chat print *emotion*
                 /minecraft_cmd
                 @baritone_cmd
+                !reset_game_memory
+                !cancel_memory_reset
                 ```
                 """,
                 container=True,
@@ -782,6 +796,14 @@ def main():
     for signal_type in (signal.SIGINT, signal.SIGTERM):
         signal.signal(signal_type, CompleteShutDown)
 
+    try:
+        reset_counts = apply_pending_reset()
+    except Exception as error:
+        print(f"[MEMORY] Сброс не завершён ({type(error).__name__}); запрос сохранён. Запуск остановлен.")
+        raise SystemExit(1) from None
+    if reset_counts is not None:
+        print(f"[MEMORY] Игровая память очищена: {reset_counts}")
+
     if args.no_redis:
         _log_timing("Creating Manager and ctx_swarm")
         manager = Manager()
@@ -795,6 +817,7 @@ def main():
         _log_timing("Redis ctx_swarm created")
     ctx_swarm["game"]["automation_mode"] = os.getenv("SARUMAN_AUTOMATION_MODE", "mods").lower()
     ctx_swarm["env"]["debug_print_prompt"] = True
+    ctx_swarm["env"]["runtime_pid"] = os.getpid()
     ctx_chat = ctx_swarm["ctx_chat"]
     ctx_game = ctx_swarm["game"]
     from data_flow.database import StreamerDatabase

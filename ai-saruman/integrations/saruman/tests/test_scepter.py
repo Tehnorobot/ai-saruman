@@ -94,12 +94,12 @@ class PolicyTests(unittest.TestCase):
 
     def test_native_hit_only_records_self_damage_and_rejects_stale_attacker(self):
         gateway = Mock()
-        gateway.entry_point.getUsername.return_value = "saruman-mag"
+        gateway.entry_point.getUsername.return_value = "saruman_mag"
         player = gateway.jvm.adris.altoclef.AltoClef.getInstance.return_value.getPlayer.return_value
         attacker = player.method_6065.return_value
         attacker.method_5477.return_value.getString.return_value = "Alex"
         attacker.method_5845.return_value = "alex"
-        event = {"victim": "saruman-mag", "attacker": "Alex", "amount": 2}
+        event = {"victim": "saruman_mag", "attacker": "Alex", "amount": 2}
         game = {}
         self.assertTrue(record_native_damage(gateway, game, event, now=100))
         self.assertTrue(
@@ -197,7 +197,7 @@ class StaffTests(unittest.TestCase):
         result = scepter.ensure(self.game)
         self.assertNotIn("next_action", result)
         self.entry.ChatMessage.assert_called_once_with(
-            "/experience add saruman-mag 100 points"
+            "/experience add saruman_mag 100 points"
         )
         self.assertEqual(result["status"], "equipment_preparing")
         self.assertFalse(result["completion_confirmed"])
@@ -322,7 +322,7 @@ class StaffTests(unittest.TestCase):
         self.entry = self.gateway.entry_point
         self.entry.inGame.return_value = True
         self.entry.hasActiveTask.return_value = False
-        self.entry.getUsername.return_value = "saruman-mag"
+        self.entry.getUsername.return_value = "saruman_mag"
         self.entry.closeOpenScreen.return_value = True
         self.entry.lookAt.return_value = True
         self.entry.getYaw.return_value = -90
@@ -515,7 +515,7 @@ class StaffTests(unittest.TestCase):
         commands = [call.args[0] for call in self.entry.ChatMessage.call_args_list]
         command = next(command for command in commands if scepter.ITEM in command)
         self.assertIn('scepter_contents="magicalscepter:magical"', command)
-        self.assertIn("/give saruman-mag ", command)
+        self.assertIn("/give saruman_mag ", command)
         self.assertEqual(
             scepter.ensure(self.game, now=101)["status"], "equipment_preparing"
         )

@@ -9,7 +9,7 @@ from saruman.equipment_supply import STAFF, command_capabilities, prepare
 class EquipmentSupplyTests(unittest.TestCase):
     def setUp(self):
         self.gateway = Mock()
-        self.gateway.entry_point.getUsername.return_value = "saruman-mag"
+        self.gateway.entry_point.getUsername.return_value = "saruman_mag"
         self.gateway.jvm.java.lang.System.identityHashCode.return_value = 7
         self.player = self.gateway.jvm.adris.altoclef.AltoClef.getInstance.return_value.getPlayer.return_value
         self.player.method_56992.return_value = False
@@ -56,10 +56,10 @@ class EquipmentSupplyTests(unittest.TestCase):
         self.assertEqual(
             issued,
             [
-                "/give saruman-mag minecraft:iron_sword 1",
-                "/give saruman-mag minecraft:shield 1",
-                '/give saruman-mag magicalscepter:magical_scepter[magicalscepter:scepter_contents="magicalscepter:magical"] 1',
-                "/experience add saruman-mag 100 points",
+                "/give saruman_mag minecraft:iron_sword 1",
+                "/give saruman_mag minecraft:shield 1",
+                '/give saruman_mag magicalscepter:magical_scepter[magicalscepter:scepter_contents="magicalscepter:magical"] 1',
+                "/experience add saruman_mag 100 points",
             ],
         )
         self.assertFalse(result["completion_confirmed"])
@@ -91,7 +91,7 @@ class EquipmentSupplyTests(unittest.TestCase):
         self.commands = {"give"}
         self.check()
         self.gateway.entry_point.ChatMessage.assert_called_once_with(
-            "/give saruman-mag minecraft:iron_sword 1"
+            "/give saruman_mag minecraft:iron_sword 1"
         )
         self.xp.assert_not_called()
 
@@ -116,7 +116,7 @@ class EquipmentSupplyTests(unittest.TestCase):
         result = self.check(now=101)
         self.assertTrue(result["preflight_required"])
         self.gateway.entry_point.ChatMessage.assert_called_once_with(
-            "/experience add saruman-mag 84 points"
+            "/experience add saruman_mag 84 points"
         )
 
     def test_unconfirmed_grants_back_off_and_do_not_hold_all_work_forever(self):
@@ -141,7 +141,7 @@ class EquipmentSupplyTests(unittest.TestCase):
         self.assertEqual(self.gateway.entry_point.ChatMessage.call_count, 5)
         self.assertEqual(
             self.gateway.entry_point.ChatMessage.call_args.args[0],
-            "/give saruman-mag minecraft:shield 1",
+            "/give saruman_mag minecraft:shield 1",
         )
         self.gateway.jvm.java.lang.System.identityHashCode.return_value = 8
         self.check(now=103)

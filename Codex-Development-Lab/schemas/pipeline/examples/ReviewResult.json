@@ -55,5 +55,6 @@
       "end_line": 40,
       "excerpt": "if (site != null) { moveTo(site); }"
     }
-  ]
+  ],
+  "resolved_finding_ids": []
 }

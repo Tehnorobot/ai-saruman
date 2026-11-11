@@ -1,0 +1,238 @@
+/* Image-owned adapter for an already prepared, private single-player world.
+ *
+ * This configures a launcher; it never asserts that Minecraft loaded the world,
+ * that a test fixture is ready, or that a product condition passed. The runner
+ * and the running scenario must observe those facts independently.
+ */
+import groovy.json.JsonOutput
+import groovy.json.JsonSlurper
+import java.nio.file.Files
+import java.nio.file.LinkOption
+import java.util.zip.ZipFile
+import org.gradle.api.GradleException
+import org.gradle.api.tasks.JavaExec
+
+def fixtureMode = System.getenv('LAB_WORLD_FIXTURE_MODE') ?: 'off'
+if (!(fixtureMode in ['off', 'managed', 'quickplay'])) {
+    throw new GradleException('Unsupported LAB_WORLD_FIXTURE_MODE')
+}
+
+if (fixtureMode == 'quickplay') {
+    def worldName = System.getenv('LAB_WORLD_FIXTURE_NAME') ?: ''
+    def gameDirectory = System.getenv('LAB_WORLD_FIXTURE_GAME_DIR') ?: ''
+    if (!(worldName ==~ /[a-z0-9][a-z0-9_-]{0,63}/)) {
+        throw new GradleException('Unsafe private world name')
+    }
+    def gameDir = new File(gameDirectory)
+    if (!gameDir.isAbsolute()) {
+        throw new GradleException('The private game directory must be absolute')
+    }
+    // Loom otherwise picks a random Player### for each run task. A restart
+    // scenario needs the same offline actor in every JVM sharing this private
+    // game directory, while unrelated scenario clones must remain independent.
+    def identityKey = UUID.nameUUIDFromBytes(
+        ('codex-lab-fixture:' + gameDir.toPath().toAbsolutePath().normalize().toString())
+            .getBytes('UTF-8')).toString().replace('-', '')
+    def playerName = 'Lab' + identityKey.substring(0, 13)
+    def playerUuid = UUID.nameUUIDFromBytes(('OfflinePlayer:' + playerName).getBytes('UTF-8')).toString()
+    def noLinks = { java.nio.file.Path path ->
+        def current = path.toAbsolutePath().normalize()
+        while (current != null) {
+            if (Files.isSymbolicLink(current)) {
+                throw new GradleException('A private world path contains a symlink')
+            }
+            current = current.parent
+        }
+    }
+
+    gradle.projectsEvaluated {
+        gradle.rootProject.allprojects { project ->
+            // Loom's AbstractRunTask.exec sets workingDir again after doFirst.
+            // Change the public run settings as well, before their lazy RunConfig
+            // is evaluated. A relative path works with Loom's File(parent, child).
+            def loom = project.extensions.findByName('loom')
+            if (loom != null) {
+                loom.runs.configureEach { run ->
+                    def managed = run.vmArgs.any {
+                        it == '-Dfabric.client.gametest' ||
+                            it.startsWith('-Dfabric.client.gametest=')
+                    }
+                    if (run.environment == 'client' && !managed) {
+                        run.runDir = project.projectDir.toPath().toAbsolutePath().normalize()
+                            .relativize(gameDir.toPath().toAbsolutePath().normalize()).toString()
+                    }
+                }
+            }
+            project.tasks.withType(JavaExec).configureEach { task ->
+                task.doFirst {
+                    def mainName = task.mainClass.orNull ?: ''
+                    def properties = task.systemProperties
+                    def jvmOptions = ((task.jvmArgs ?: []) + task.jvmArguments.getOrElse([]))
+                        .collect { it.toString() }
+                    task.jvmArgumentProviders.each { provider ->
+                        provider.asArguments().each { jvmOptions.add(it.toString()) }
+                    }
+                    def propertyPresent = { String name ->
+                        properties.containsKey(name) || jvmOptions.any {
+                            it == '-D' + name || it.startsWith('-D' + name + '=')
+                        }
+                    }
+                    def propertyValue = { String name ->
+                        def prefix = '-D' + name + '='
+                        def options = jvmOptions.findAll { it.startsWith(prefix) }
+                        if (!options.isEmpty()) return options.last().substring(prefix.length())
+                        return properties.containsKey(name) ? properties[name].toString() : null
+                    }
+                    def clientLauncher = mainName == 'net.minecraft.client.main.Main' ||
+                        (mainName == 'net.fabricmc.devlaunchinjector.Main' &&
+                         propertyValue('fabric.dli.env') == 'client')
+                    if (!clientLauncher) return
+
+                    // Fabric's client GameTest runner owns world lifecycle. Its
+                    // switch is presence based: even the value "false" enables it.
+                    if (propertyPresent('fabric.client.gametest')) {
+                        task.logger.lifecycle('LAB_WORLD_FIXTURE_MANAGED:' + task.path)
+                        return
+                    }
+
+                    // Optional compatibility adapters are selected from actual
+                    // launch classpath metadata. A JAR merely stored in libs,
+                    // its filename, or another project's specification is not
+                    // evidence that this client loads that dependency.
+                    def dependencies = []
+                    def runtimeEntries = new LinkedHashSet(task.classpath.files)
+                    // Loom 1.15 launches Java through an @argfile and clears
+                    // JavaExec.classpath inside exec(), before doFirst. Read
+                    // its actual launch collection rather than an empty facade.
+                    // This is image-owned compatibility code for that task API;
+                    // no project-selected method or executable is invoked.
+                    def taskType = task.getClass()
+                    while (taskType != null) {
+                        if (taskType.name == 'net.fabricmc.loom.task.AbstractRunTask') {
+                            def accessor = taskType.getDeclaredMethod('getInternalClasspath')
+                            accessor.setAccessible(true)
+                            runtimeEntries.addAll(accessor.invoke(task).files)
+                            break
+                        }
+                        taskType = taskType.superclass
+                    }
+                    // Fabric can also load explicitly supplied additional mod
+                    // JARs/directories, outside the Java classpath. Inspect only
+                    // those effective loader inputs, not arbitrary workspace
+                    // folders. Runtime Loader metadata is rechecked by helper.
+                    def extraMods = propertyValue('fabric.addMods')
+                    if (extraMods) extraMods.split(java.util.regex.Pattern.quote(File.pathSeparator)).each { path ->
+                        def extra = new File(path)
+                        runtimeEntries.add(extra.isAbsolute() ? extra : new File(gameDir, path))
+                    }
+                    runtimeEntries.collect { it.canonicalFile }.toSet().each { entry ->
+                        try {
+                            def metadata = null
+                            if (entry.isFile() && entry.name.endsWith('.jar')) {
+                                new ZipFile(entry).withCloseable { archive ->
+                                    def descriptor = archive.getEntry('fabric.mod.json')
+                                    if (descriptor != null && descriptor.size >= 0 && descriptor.size <= 65536) {
+                                        metadata = archive.getInputStream(descriptor).withCloseable {
+                                            new JsonSlurper().parseText(new String(it.readNBytes(65537), 'UTF-8'))
+                                        }
+                                    }
+                                }
+                            } else if (entry.isDirectory()) {
+                                def descriptor = new File(entry, 'fabric.mod.json')
+                                if (Files.isRegularFile(descriptor.toPath(), LinkOption.NOFOLLOW_LINKS) && descriptor.length() <= 65536) {
+                                    metadata = descriptor.withInputStream {
+                                        new JsonSlurper().parseText(new String(it.readNBytes(65537), 'UTF-8'))
+                                    }
+                                }
+                            }
+                            if (metadata instanceof Map && metadata.id == 'altoclef') {
+                                dependencies.add([mod_id: metadata.id, version: metadata.version?.toString()])
+                            }
+                        } catch (Exception problem) {
+                            // The normal loader remains authoritative for
+                            // unrelated malformed artifacts. Never guess a
+                            // dependency or execute a path from metadata.
+                            task.logger.warn('LAB_CLIENT_DEPENDENCY_METADATA:' + entry.name + ': ' + problem.toString())
+                        }
+                    }
+                    if (dependencies.size() > 1) {
+                        throw new GradleException('Duplicate altoclef runtime metadata; dependency preparation is ambiguous')
+                    }
+                    def dependency = dependencies.find { it.version == '1.21.11-0.95.61' }
+                    def launchMode = dependency == null ? 'quickplay' : 'title_first'
+                    if (dependency != null) {
+                        def helperPath = System.getenv('LAB_CLIENT_DEPENDENCY_BOOTSTRAP_JAR') ?: ''
+                        def helper = new File(helperPath)
+                        noLinks(helper.toPath())
+                        if (!helper.isAbsolute() || !Files.isRegularFile(helper.toPath(), LinkOption.NOFOLLOW_LINKS) ||
+                            Files.size(helper.toPath()) == 0) {
+                            throw new GradleException('Image-owned client dependency bootstrap is missing')
+                        }
+                        def additions = propertyValue('fabric.addMods')
+                        def setupProperties = [
+                            'fabric.addMods': additions ? additions + File.pathSeparator + helper.absolutePath : helper.absolutePath,
+                            'lab.client.setup.adapter': 'altoclef-title-1.21.11-0.95.61',
+                            'lab.client.setup.world': worldName,
+                            'lab.client.setup.output': new File(gameDir, 'client-dependency-preparation.json').absolutePath
+                        ]
+                        setupProperties.each { key, value -> task.systemProperty(key, value) }
+                        // A prior lazy JVM provider may also declare addMods.
+                        // Preserve it and put the combined value last, without
+                        // flattening or discarding unrelated JVM providers.
+                        task.jvmArgumentProviders.add({ -> setupProperties.collect { key, value -> '-D' + key + '=' + value } }
+                            as org.gradle.process.CommandLineArgumentProvider)
+                        task.logger.lifecycle('LAB_CLIENT_DEPENDENCY_PREPARATION:' + JsonOutput.toJson([
+                            status: 'CONFIGURED', mode: launchMode, dependency: dependency,
+                            provenance: 'Launch configuration; runtime initialization must still be observed.'
+                        ]))
+                    }
+
+                    def worldDir = new File(new File(gameDir, 'saves'), worldName)
+                    def levelFile = new File(worldDir, 'level.dat')
+                    noLinks(levelFile.toPath())
+                    if (!Files.isDirectory(gameDir.toPath(), LinkOption.NOFOLLOW_LINKS) ||
+                        !Files.isDirectory(worldDir.toPath(), LinkOption.NOFOLLOW_LINKS) ||
+                        !Files.isRegularFile(levelFile.toPath(), LinkOption.NOFOLLOW_LINKS) ||
+                        Files.size(levelFile.toPath()) == 0) {
+                        throw new GradleException('The prepared private world is missing')
+                    }
+
+                    // Replace existing destination/quick-play options, rather
+                    // than depending on which duplicate the option parser uses.
+                    def replaced = ['--gameDir', '--username', '--uuid', '--quickPlaySingleplayer',
+                                    '--quickPlayMultiplayer', '--quickPlayRealms', '--quickPlayPath']
+                    def original = (task.args ?: []).collect { it.toString() }
+                    task.argumentProviders.each { provider ->
+                        provider.asArguments().each { original.add(it.toString()) }
+                    }
+                    def kept = []
+                    for (int index = 0; index < original.size(); index++) {
+                        def value = original[index]
+                        def key = value.contains('=') ? value.substring(0, value.indexOf('=')) : value
+                        if (key in replaced) {
+                            if (!value.contains('=') && index + 1 < original.size() &&
+                                !original[index + 1].startsWith('--')) index++
+                        } else {
+                            kept.add(value)
+                        }
+                    }
+                    // The laboratory owns this isolated launch identity just
+                    // as it owns gameDir. Replace eager and lazy project/Loom
+                    // defaults instead of relying on duplicate option order.
+                    kept.addAll(['--username', playerName, '--uuid', playerUuid,
+                                 '--gameDir', gameDir.absolutePath])
+                    if (launchMode == 'quickplay') kept.addAll(['--quickPlaySingleplayer', worldName])
+                    task.argumentProviders.clear()
+                    task.setArgs(kept)
+                    task.setWorkingDir(gameDir)
+                    task.logger.lifecycle('LAB_WORLD_FIXTURE_LAUNCH:' + JsonOutput.toJson([
+                        task: task.path, mode: launchMode, world: worldName,
+                        game_directory: gameDir.absolutePath,
+                        player: [username: playerName, uuid: playerUuid, kind: 'offline_fixture'],
+                        provenance: 'Launcher configuration only; not world-readiness or product proof.'
+                    ]))
+                }
+            }
+        }
+    }
+}

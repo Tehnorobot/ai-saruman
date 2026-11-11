@@ -2,6 +2,106 @@
 
 Previous work: [mod implementation guides and document organization](archive/24-10-2026-before-mod-runtime-review.md).
 
+## 2026-11-07: Simplify Mage Home requirements after the Lab pipeline review
+
+### Investigate
+- User approved the specification audit. Found irreversible lifetime build/supply limits, an ambiguous completed-stage check, an undelivered adjacent dependency JAR, overly prescriptive site scanning, and unclear empty-site reservation/palette handling. Compared the requirements with current Lab input handling and prior progress/recovery failures.
+
+### Plan
+- Preserve the exact house, palette cycle, 100-block rule, durable resume and exclusive UnionClef ownership. Replace internal algorithm prescriptions with observable site requirements and recoverable operation attempts; separate current status from the house registry.
+
+### Implement
+- Updated mage-home/MAGE_HOME_SPEC.md: removed lifetime limits and fixed placement order, simplified support/site checks, defined same-record candidate replacement and palette assignment, made resume revalidate the world and start a new attempt, and excluded ready stages from no-support failures. Replaced periodic damage monitoring with explicit status/resume checks, added small JSON examples, and made the proposed implementation order advisory. Command/API starts respect foreign task ownership.
+- Updated mage-home/README.md with the actual Markdown-only Lab upload boundary and paused-project JAR staging into workspace/libs; no extra host folder mounts. Confirmed the input mod ID is altoclef.
+- Validation passed: full blueprint expansion (180 occupied/65 air/178 items), furniture support and central passage, dependency SHA-256/metadata, four JSON examples, UTF-8, local links, removed obsolete limits and whitespace. Independent read-only reviews checked recovery and pipeline compatibility. These checks validate the documents, not physical construction. No generated mod, running project, game, provider, container or Git commit/push was changed.
+
+## 2026-11-07: Specify a deterministic client-side home-building addon
+
+### Investigate
+- User requests a concise but unambiguous specification for MAS implementation: fixed-size wizard homes, persisted coordinates/state, bounded site scanning and a new variant outside 100 blocks. Read local runtime constraints, inspected the installed UnionClef artifact/hash and Task/placement/navigation ABI read-only, plus the existing addon's working dependency pins and public Fabric/UnionClef references.
+
+### Plan
+- One self-contained requirements file with a fixed coordinate blueprint, three palettes, explicit scan/distance/placement/supply rules and a persistent realm-scoped registry. Supply the exact UnionClef input artifact so the builder need not infer an incompatible upstream API. Do not require private persona/defense projects for core acceptance.
+
+### Implement
+- Added docs/mod-development/mage-home/MAGE_HOME_SPEC.md and README.md; linked from the docs index. Defined physical client-side construction, 180 occupied/65 air cells, one-item bed/door placement, bounded inventory supply, partial-state resume and actual-world verification. Copied the exact read-only installed UnionClef JAR into dependency/ as local build input (not the new addon; ignored binary, not staged).
+- Validation passed: expanded coordinate blueprint/material counts (178 items), unobstructed central passage/furniture support, 100/101 radius boundaries and return to prior house, UTF-8/Markdown/relative links, dependency SHA-256 and ABI entries, diff whitespace. These validate the specification, not actual construction. No implementation, game controls, model calls, live DB writes, restarts or Git commit/push.
+
+## 2026-11-06: Use saruman_mag consistently as the Minecraft nickname
+
+### Investigate
+- User requests the underscore nickname everywhere. Found 31 nickname references across the character configuration/aliases, HybridAgent self-message guard, experiment prompts, equipment/command fixtures, Windows instructions and an archived development note. Ignored local env/config sources were included in the search without printing secrets.
+
+### Plan
+- Update all project-controlled references while preserving existing unrelated changes and file encodings. Verify the profile, self-message guard, command parsing and equipment tests; do not rewrite historical databases/logs or change the Minecraft account.
+
+### Implement
+- Replaced the nickname in ten files, including tests and the archived note. Validation: 145 relevant profile/role/command/equipment/scepter tests passed; undefined-name and diff whitespace checks passed. Full source/config/document scan including ignored local configuration found no remaining old nickname outside generated data/caches/logs. No live game controls, database edits, provider calls, restarts or Git commit/push. Full Python runtime restart loads the new nickname; actual Minecraft login must use the same name.
+
+## 2026-11-06: Add an operator game-memory reset for a fresh initialization
+
+### Investigate
+- User requests a console action to erase information accumulated during play. Learned users/dialogs/relations and mood are in PostgreSQL; native goals and role intents are in separate SQLite stores; Redis restores tree checkpoints across normal restarts. Ordinary Stop does not stop all collectors, so deleting live rows alone can repopulate them or retain in-memory dialogue.
+
+### Plan
+- Schedule an explicit reset from Control/tool console or CLI, apply at the next full runtime startup before checkpoint restoration and collectors, and block Start until applied/cancelled. Preserve authored personality/stories/voice, model profiles, budget/usage history, credentials and activity preferences. Fail startup on partial cleanup, retaining an idempotent reset request.
+
+### Implement
+- Added memory_reset.py, a Gradio panel, local !reset_game_memory / !cancel_memory_reset commands and launcher reset-memory [--cancel]. Startup clears learned relational rows in one transaction, intents, goals/meta and only saruman-prefixed Redis keys. Normal restarts keep their existing behavior when no reset is requested. Published runtime PID and active-request checks protect against another live runtime.
+- Cancellation is available before cleanup starts; a partially applied request must finish on retry. Added isolated real SQLAlchemy/SQLite fixtures, mocked Redis, foreign-key/rollback checks, preservation of authored disabled stories/profiles/accounting, startup ordering, UI/console/CLI admission and no checkpoint resurrection. User documentation added.
+- Validation: 180 relevant regression tests passed; final 11 reset tests passed after adding UI status refresh. Ruff, undefined-name checks, AST, UTF-8, documentation links and diff whitespace passed. PostgreSQL behavior is covered with the shared SQLAlchemy models and foreign-key-enabled isolated SQLite, not a live destructive PostgreSQL run. Confirmed no live reset marker exists. No live memory erasure, provider calls, gameplay, process/container restarts or Git commit/push; full restart loads the new controls, and a separately requested subsequent startup applies reset.
+
+## 2026-11-03: Replace oversized server ritual design with a client-only minimum
+
+### Investigate
+- User explicitly requires client-only and rejects the size of the server specification. Clarified that other players need no installation when the client sends permitted vanilla particle/playsound commands; without permissions a client cannot broadcast its own local particles. Checked version-specific Fabric client-command documentation.
+
+### Plan
+- Replace the server design rather than layering a client shim onto it. Four one-shot particle clouds with at most one sound, a small public Java API, local commands and a five-second cooldown; remove server installation, animated command rings, request history and chat protocol.
+
+### Implement
+- Rewrote RITUALS_SPEC.md, README and the optional Saruman checklist; updated docs index. Defined queued versus sent, command availability checks, bounded pending work, world/death invalidation, ordinary-client observation and test logs outside source snapshots. No private integration is required for mod acceptance.
+- This supersedes the previous server specification; it does not modify the Lab's existing generated server project, running agents or installed JARs. Final spec is 105 lines instead of 235; UTF-8, Markdown, links, JSON example, four presets, client metadata, removal of server/private contracts and diff whitespace checks passed. No provider calls, gameplay, DB changes or Git commit/push.
+
+## 2026-11-02: Make ritual acceptance independent of private integration context
+
+### Investigate
+- User correctly identified that the mod-building system cannot test Auto Defense/TreeGrow without their artifacts or private runtime. The spec also mentioned the existing bridge/ActionAgent, trusted-message parsing, second-client observations and concurrent runs without clearly assigning the test environment/owner.
+
+### Plan
+- Make the single implementation spec self-contained, separate core automatic tests from actual Minecraft observations, and move Saruman-only checks to an optional owner checklist.
+
+### Implement
+- Replaced named third-party combat/tree acceptance with ordinary manual movement/use/attack tests and a source-level no-control-writes check. Specified clean Fabric/API/mod test setup, two-client visual requirements, nine-UUID unit fixtures rather than nine real accounts, and NOT_TESTED when a real game/client is unavailable.
+- Replaced private runtime implementation requirements with a generic command boundary. Added SARUMAN_INTEGRATION_CHECKLIST.md for actual JAR/bridge dependencies, message authenticity/TTS suppression, tree-result separation and graceful absence; README distinguishes the developer input from optional owner checks. Validation passed: absence of private mod/API references in the standalone spec, JSON, relative links, UTF-8, Markdown fences, acceptance count and whitespace. No code/runtime/JAR changes, model calls or Git commit/push.
+
+## 2026-11-02: Specify a small server-side cosmetic ritual mod
+
+### Investigate
+- User requests a concise implementation specification and confirms the staff mod was removed. Read project rules/progress and native integration requirements; checked official Fabric 1.21.11 tools/commands documentation and Mojang release notes.
+
+### Plan
+- Use a standalone server-side Fabric mod with vanilla particles/sounds, four bounded presets and a command/JSON contract. No client installation, movement ownership, staff dependency, model calls or changes to current gameplay.
+
+### Implement
+- Added docs/mod-development/rituals/RITUALS_SPEC.md and README.md; linked the folder from docs/README.md. Spec defines recipes, geometry/timing, actor-scoped permissions, run/request identity, duplicate/Stop behavior, load limits, lifecycle and concrete acceptance cases.
+- Clarified that server installation is required for multiplayer visibility, cosmetic completion is not tree growth or proof of client rendering, and particles already sent survive Stop until their natural expiry. Reviewed schema/lifecycle/deduplication for contradictions; UTF-8, Markdown fences, relative links, JSON/UUID example, preset/acceptance counts and diff whitespace checks passed. This is a specification, not a built/installed mod or Python integration. No runtime/DB/env/JAR changes, provider calls or Git commit/push.
+
+## 2026-11-02: Assess musical performance addon, notation formats and MiniMax implementation
+
+### Investigate
+- User requested feasibility research, existing client mods, score storage/conversion, limitations and difficulty for MiniMax coding models. Read project runtime docs and the current Lab model catalogue (MiniMax-M3.1-Flash).
+- Browsed primary publisher/repository pages: ProjectMichi NoteBot with a Fabric 1.21.11 beta release; separate GPL Nat1an Notebot; SongPlayer and its visible release compatibility; henkelmax AudioPlayer and a confirmed server-side Fabric 1.21.11 build; official NBS format, Java MIDI API, Mojang note-block description and official MiniMax model page.
+- Distinguished physical server-visible note-block interactions from client-only preview and SVC audio playback. NBS v6's added trumpet instruments target 26.1, so parser acceptance does not imply native support on 1.21.11. No installed JARs or game state changed.
+
+### Plan
+- Recommend an optional client music addon / adapter, first using a prepared scene and deterministic local playback. Reuse existing software after API/ownership verification rather than repeating fragile private-field integration. Keep audio delivery as a separate backend/alternative.
+
+### Implement
+- Added docs/mod-development/music/README.md and FEASIBILITY.md with sources, exact compatibility confidence, score pipeline, proposed JSON example, timing/pitch conversion, rendering losses, physical stage constraints, control arbitration and phased acceptance criteria. Linked from docs/README.md.
+- Documented one goal per composition, whole-intent Stop, no auto-resurrection after cancellation, optional music capability, no LLM between notes, no implicit creative/teleport, and failure isolation from follow/trees/defense.
+- This is research/design, not a mod implementation. No installs/builds/provider calls/music playback/DB changes/runtime restarts or Git commit/push. Documentation checked for UTF-8, fences, relative links and JSON example validity. Complexity ratings are engineering estimates, not benchmark claims or delivery guarantees.
+
 ## 2026-10-28: Keep uncertainty checks private instead of repeated spoken disclaimers
 
 ### Investigate
