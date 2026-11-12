@@ -24,8 +24,10 @@
 - Validation: 83 Lab tests passed, one existing Windows symlink skip; JavaScript
   syntax passed. Live read-only Doctor --live --no-filter passed against the open
   world and installed addons, without generation, gameplay or publication.
-- The character is active in preflight. Source/UI installation awaits an approved
-  Lab restart; the owner's live filter selection has not been changed.
+- After explicit owner approval, stopped the character and restarted Lab. Live
+  runtime reports the default-on checkbox and remains stopped; Telegram settings,
+  publication states and attempt IDs are unchanged. The previous preflight worker
+  acknowledged cancellation. The owner can now uncheck the filter and press Start.
 
 ## 2026-11-12: Truthful private publication commands and delivery status
 
