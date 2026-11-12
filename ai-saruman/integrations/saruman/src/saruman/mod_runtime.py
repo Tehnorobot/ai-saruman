@@ -77,8 +77,12 @@ class AutomationRuntime:
             snapshot = self.adapter.call("snapshot")
             if snapshot.get("status") != "ready":
                 raise RuntimeError(snapshot.get("reason", "Native mods unavailable"))
-            if snapshot["defense_enabled"] != bool(enabled):
-                self.call("defense", snapshot, enabled=bool(enabled))
+            # The addon latches an explicit native stop. Polling must not rearm it.
+            # A new Stop -> Start is an explicit operator request to resume.
+            manual_paused = bool(enabled and self.was_enabled and snapshot.get("manual_stop_latched"))
+            active = bool(enabled and not manual_paused)
+            if snapshot["defense_enabled"] != active:
+                self.call("defense", snapshot, enabled=active)
             if snapshot.get("manual_stop"):
                 self.store.cancel()
                 self.next_plan = now + 10
@@ -88,8 +92,8 @@ class AutomationRuntime:
             if not enabled and self.was_enabled:
                 self.store.cancel()
             self.was_enabled = enabled
-            self.reconcile(game, snapshot, enabled, tools)
-            if enabled and self.supply is not None:
+            self.reconcile(game, snapshot, active, tools)
+            if active and self.supply is not None:
                 self.supply.tick(game, snapshot)
             tree = snapshot.get("tree", {})
             marker = (tree.get("run_id"), tree.get("site"))
@@ -108,7 +112,7 @@ class AutomationRuntime:
             game["mod_runtime"] = {
                 **snapshot,
                 "updated": now,
-                "status": "running" if enabled else "stopped",
+                "status": "paused" if manual_paused else "running" if enabled else "stopped",
             }
         except Exception as error:  # noqa: BLE001 - boundary to an optional JVM plugin
             # A lost response is NOT permission to repeat a world action with a new id.

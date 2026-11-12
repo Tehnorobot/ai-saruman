@@ -8,6 +8,7 @@ import os
 import shutil
 import socket
 import sys
+import time
 from pathlib import Path
 from urllib.parse import urlparse
 from urllib.request import urlopen
@@ -25,6 +26,17 @@ def filter_is_ready(base_url: str) -> bool:
         )
     except (OSError, ValueError):
         return False
+
+
+def wait_for_filter(base_url, timeout, *, clock=time.monotonic, sleep=time.sleep):
+    """Cold model loading may outlive TCP startup; wait without generating content."""
+    deadline = clock() + timeout
+    while not filter_is_ready(base_url):
+        remaining = deadline - clock()
+        if remaining <= 0:
+            return False
+        sleep(min(2, remaining))
+    return True
 
 
 def validate_profile(root: Path) -> list[str]:
@@ -237,11 +249,12 @@ def check(live=False, no_stt=False, no_filter=False, no_redis=False) -> bool:
                 report("Minecraft: мир открыт", bool(gateway.entry_point.inGame()))
                 if os.getenv("SARUMAN_AUTOMATION_MODE", "mods").lower() == "mods":
                     try:
-                        native_status = json.loads(gateway.jvm.dev.autodefense.api.AutoDefenseApi.getStatusJson())
-                        gateway.jvm.lab.treegrow.TreeGrowClient.current()
-                        report("Minecraft: API Auto Defense и TreeGrow", isinstance(native_status, dict))
-                    except (Py4JError, ValueError, TypeError):
-                        report("Minecraft: API Auto Defense и TreeGrow", False, "Нужны совместимые JAR; см. native-runtime/IMPLEMENTATION.md")
+                        from saruman.mod_adapter import probe_native_mods
+                        artifacts = probe_native_mods(gateway)
+                        report("Minecraft: API Auto Defense и TreeGrow", True, ", ".join(artifacts.values()))
+                    except (Py4JError, ValueError, TypeError, RuntimeError, OSError) as error:
+                        detail = " ".join(str(error).split())[:500]
+                        report("Minecraft: API Auto Defense и TreeGrow", False, detail or "Нужны совместимые JAR; см. native-runtime/IMPLEMENTATION.md")
             finally:
                 gateway.close()  # Never shutdown(): the mod owns the gateway.
         except (Py4JError, OSError, ValueError, TypeError):

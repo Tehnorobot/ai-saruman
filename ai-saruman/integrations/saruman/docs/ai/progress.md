@@ -1,5 +1,14 @@
 # Progress
 
+## 2026-11-11: Startup readiness and installed Auto Defense addon API
+
+Fixed cold-filter startup grace and compatibility with the installed Auto Defense
+0.1.0 API. Preserved legacy support, native manual Stop, exact artifact checks and
+single supply ownership. 53 Python checks and the real Java harness passed;
+live read-only snapshot and full Doctor --live passed in the owner's open world.
+No game actions, LLM generation, mod installation or service restart performed.
+[Investigation, plan, implementation and validation](archive/11-11-2026-startup-readiness-addon-api.md).
+
 ## 2026-11-11: Per-role providers/models in Saruman Lab
 
 Implemented shared Lab/game model settings for chat, persona, actions, Telegram

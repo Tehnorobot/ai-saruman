@@ -11,10 +11,13 @@ public final class ModGateway implements Supplier<Map<String,Object>> {
     private final Object client;
     private final String op;
     private final Map<String,Object> args;
+    private final Class<?> defenseClient;
+    private final boolean addonApi;
     private static Object world, owned;
     private static Object commandTask;
     private static String commandRun="";
     private static String session = "", run = "";
+    private static boolean stopAcknowledged;
     private static final LinkedHashMap<String,Map<String,Object>> receipts = new LinkedHashMap<>();
     private static final Set<Class<?>> verified = new HashSet<>();
 
@@ -22,7 +25,12 @@ public final class ModGateway implements Supplier<Map<String,Object>> {
         this.client = client; this.op = op; this.args = args;
         // Constructor runs on the Py4J thread: no artifact IO on the client tick.
         verify(type("adris.altoclef.AltoClef"),"76bbb677d2f8294e6d2de98b554f81818ae15605ef8a82ff7e1d3b9b82555d1b");
-        verify(type("dev.autodefense.client.AutoDefenseClient"),"e19d47caa2ae553ab81b5b84ab4fc11179595809797cee7d122cad5f2b1db43c");
+        Class<?> dc;
+        boolean modern;
+        try { dc=type("dev.autodefense.client.AutoDefenseClient"); modern=false; }
+        catch (ClassNotFoundException absent) { dc=type("dev.autodefense.AutoDefenseClient"); modern=true; }
+        defenseClient=dc; addonApi=modern;
+        verify(dc,modern?"5e773d1e64f651943b5faf709aea3ef1458503a2a25910acd476ab6a457e25cb":"e19d47caa2ae553ab81b5b84ab4fc11179595809797cee7d122cad5f2b1db43c");
         verify(type("lab.treegrow.TreeGrowClient"),"edd7a699318d0b18f46abe67db25046502e20ca400f4751c0ac0679664e5bee9");
     }
     private Class<?> type(String name) throws Exception {
@@ -56,7 +64,7 @@ public final class ModGateway implements Supplier<Map<String,Object>> {
         // origin, not a cache whose bytes can differ after runtime remapping.
         try {
             Class<?> loader=Class.forName("net.fabricmc.loader.api.FabricLoader",true,c.getClassLoader());
-            String id=c.getName().startsWith("adris.")?"altoclef":c.getName().startsWith("lab.")?"treegrow":"auto-defense";
+            String id=c.getName().startsWith("adris.")?"altoclef":c.getName().startsWith("lab.")?"treegrow":c.getName().startsWith("dev.autodefense.client.")?"auto-defense":"auto_defense";
             Optional<?> container=(Optional<?>)call(call(loader,"getInstance"),"getModContainer",id);
             if (container.isPresent()) {
                 Collection<?> paths=(Collection<?>)call(call(container.get(),"getOrigin"),"getPaths");
@@ -92,37 +100,52 @@ public final class ModGateway implements Supplier<Map<String,Object>> {
             verify(alto,"76bbb677d2f8294e6d2de98b554f81818ae15605ef8a82ff7e1d3b9b82555d1b");
             Object mod=call(alto,"getInstance");
             Object now=call(mod,"getWorld");
-            if (now != world) { world=now; session=UUID.randomUUID().toString(); owned=null; run=""; commandTask=null; commandRun=""; receipts.clear(); }
-            Class<?> dc=type("dev.autodefense.client.AutoDefenseClient");
-            verify(dc,"e19d47caa2ae553ab81b5b84ab4fc11179595809797cee7d122cad5f2b1db43c");
+            if (now != world) { world=now; session=UUID.randomUUID().toString(); owned=null; run=""; commandTask=null; commandRun=""; receipts.clear(); stopAcknowledged=false; }
+            Class<?> dc=defenseClient;
             Class<?> tc=type("lab.treegrow.TreeGrowClient");
             verify(tc,"edd7a699318d0b18f46abe67db25046502e20ca400f4751c0ac0679664e5bee9");
-            Object runtime=call(dc,"runtime");
-            Object handover=field(runtime,"handover");
-            String handoverState=String.valueOf(call(handover,"state"));
-            boolean busy=!Set.of("IDLE","OFF").contains(handoverState);
+            Object runtime=call(dc,addonApi?"combat":"runtime");
+            Object handover=addonApi?null:field(runtime,"handover");
+            boolean busy=addonApi
+                ? Boolean.TRUE.equals(call(runtime,"ownsControls")) || Set.of("COMBAT","RETREAT","RESCUE","EAT").contains(String.valueOf(call(runtime,"action")))
+                : !Set.of("IDLE","OFF").contains(String.valueOf(call(handover,"state")));
             Object chain=call(mod,"getUserTaskChain");
             boolean nativeBusy=Boolean.TRUE.equals(call(chain,"isActive"));
-            boolean enabled=Boolean.TRUE.equals(call(runtime,"enabled"));
+            boolean enabled=Boolean.TRUE.equals(call(runtime,addonApi?"isEnabled":"enabled"));
+            boolean manualStop=addonApi?Boolean.TRUE.equals(call(runtime,"manualStop")):Boolean.TRUE.equals(field(field(runtime,"bridge"),"cancelledSinceCapture"));
+            if (!manualStop) stopAcknowledged=false;
             if ("snapshot".equals(op)) {
                 Map<String,Object> r=result("ready",null);
                 r.put("world",session); r.put("in_world",world!=null);
-                r.put("defense_json",call(type("dev.autodefense.api.AutoDefenseApi"),"getStatusJson"));
+                Class<?> api=type("dev.autodefense.api.AutoDefenseApi");
+                r.put("defense_json",addonApi?call(call(api,"get"),"state"):call(api,"getStatusJson"));
+                r.put("defense_api",addonApi?"addon-0.1":"legacy-1.0");
                 r.put("defense_busy",busy); r.put("defense_enabled",enabled);
                 r.put("native_busy",nativeBusy); r.put("tree",tree());
-                r.put("manual_stop",field(field(runtime,"bridge"),"cancelledSinceCapture"));
+                r.put("manual_stop",manualStop && !stopAcknowledged);
+                r.put("manual_stop_latched",addonApi && manualStop);
                 return r;
             }
             if ("defense".equals(op)) {
-                if (enabled != Boolean.TRUE.equals(args.get("enabled"))) call(runtime,"toggle",client);
+                if (enabled != Boolean.TRUE.equals(args.get("enabled"))) {
+                    if (addonApi) {
+                        call(runtime,Boolean.TRUE.equals(args.get("enabled"))?"enable":"disable",client);
+                        call(dc,"publishSnapshot",client);
+                    } else call(runtime,"toggle",client);
+                }
                 return result("applied",null);
             }
             if (!session.equals(args.get("world"))) return result("rejected","stale_world");
             // This coordinator owns replay. Native defense must never replay a stale @command.
-            put(field(runtime,"bridge"),"lastLine",null);
-            put(handover,"savedCommand",null);
+            if (!addonApi) {
+                put(field(runtime,"bridge"),"lastLine",null);
+                put(handover,"savedCommand",null);
+            }
             if ("maintain".equals(op)) {
-                if (Boolean.TRUE.equals(args.get("ack_manual_stop"))) put(field(runtime,"bridge"),"cancelledSinceCapture",false);
+                if (Boolean.TRUE.equals(args.get("ack_manual_stop"))) {
+                    if (addonApi) stopAcknowledged=true;
+                    else put(field(runtime,"bridge"),"cancelledSinceCapture",false);
+                }
                 // Pinned TreeGrow 0.1.0 forgets to reacquire a consumed sapling after
                 // abandoning a site. Re-enter its OWN acquisition branch, retaining
                 // search position, deadline and GrowthBudget. No Python planting AI.

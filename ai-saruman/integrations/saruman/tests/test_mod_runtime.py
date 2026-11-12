@@ -471,6 +471,40 @@ class NativeRuntimeTests(unittest.TestCase):
         supplier.tick(self.game, snap)
         gateway.entry_point.ChatMessage.assert_not_called()
 
+    def test_native_supplier_does_not_get_duplicate_python_give(self):
+        gateway = Mock()
+        supplier = ModSupply(gateway, self.store, clock=lambda: self.now)
+        snap = copy.deepcopy(self.adapter.snapshot)
+        snap["native_supply"] = True
+        snap["defense"]["missingItems"] = [{"item": "minecraft:iron_sword", "missing": 1}]
+        with patch("saruman.mod_supply.command_capabilities") as capabilities:
+            supplier.tick(self.game, snap)
+        capabilities.assert_not_called()
+        gateway.entry_point.ChatMessage.assert_not_called()
+        self.assertEqual(self.game["mod_supply"]["status"], "owned_by_addon")
+
+    def test_native_manual_stop_stays_paused_until_an_explicit_new_start(self):
+        self.tick()
+        self.adapter.calls.clear()
+        self.adapter.snapshot.update(defense_enabled=False, manual_stop=True, manual_stop_latched=True)
+        self.tick()
+        self.tick()
+        self.assertFalse(any(op == "defense" and args["enabled"] for op, args in self.adapter.calls))
+        self.assertEqual(self.game["mod_runtime"]["status"], "paused")
+        self.tick(enabled=False)
+        self.tick(enabled=True)
+        self.assertTrue(any(op == "defense" and args["enabled"] for op, args in self.adapter.calls))
+        self.assertEqual(self.game["mod_runtime"]["status"], "running")
+
+    def test_latched_native_stop_does_not_start_more_background_work(self):
+        self.tick()
+        self.adapter.calls.clear()
+        self.adapter.snapshot.update(defense_enabled=False, manual_stop=True, manual_stop_latched=True)
+        with patch.dict("os.environ", SARUMAN_AUTONOMY_ENABLED="true"), patch("saruman.mod_runtime.load_weights", return_value={"trees": 1}):
+            self.tick()
+        self.assertFalse(any(op == "tree_start" for op, _ in self.adapter.calls))
+        self.assertEqual(self.store.list(active=True), [])
+
 
 class NativeRoutingTests(unittest.TestCase):
     def setUp(self):

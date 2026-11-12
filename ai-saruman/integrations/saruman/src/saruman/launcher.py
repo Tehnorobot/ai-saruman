@@ -74,7 +74,16 @@ def main(argv=None) -> int:
                     "Сброс памяти запланирован на следующий полный запуск Python runtime."
                 )
             return 0
-        from saruman.doctor import check
+        from saruman.doctor import check, filter_is_ready, wait_for_filter
+
+        if args.command == "run" and not args.no_filter:
+            wait_seconds = float(os.getenv("SARUMAN_FILTER_STARTUP_WAIT", "180"))
+            if not 0 <= wait_seconds < float("inf"):
+                raise ValueError("SARUMAN_FILTER_STARTUP_WAIT должен быть конечным числом >= 0")
+            base = os.getenv("FILTER_BASE_URL", "http://127.0.0.1:22230")
+            if wait_seconds and not filter_is_ready(base):
+                print(f"[WAIT] Фильтр загружает модели; ожидаю готовность до {wait_seconds:g} с. SARUMAN_FILTER_STARTUP_WAIT меняет ожидание.", flush=True)
+                wait_for_filter(base, wait_seconds)
 
         # Run always validates services, but never requests a model generation.
         if not check(

@@ -20,6 +20,9 @@ class ModSupply:
         self.due = 0
 
     def tick(self, game, snapshot):
+        if snapshot.get("native_supply"):
+            game["mod_supply"] = {"status": "owned_by_addon", "needs": snapshot["defense"].get("missingItems", [])}
+            return
         now = self.clock()
         if now < self.due or snapshot["defense_busy"] or snapshot["native_busy"]:
             return

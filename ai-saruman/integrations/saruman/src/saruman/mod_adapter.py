@@ -8,6 +8,58 @@ import subprocess
 
 from saruman.mod_goals import ROOT
 
+ARTIFACTS = {
+    "altoclef": {"76bbb677d2f8294e6d2de98b554f81818ae15605ef8a82ff7e1d3b9b82555d1b"},
+    "treegrow": {"edd7a699318d0b18f46abe67db25046502e20ca400f4751c0ac0679664e5bee9"},
+    "auto-defense": {"e19d47caa2ae553ab81b5b84ab4fc11179595809797cee7d122cad5f2b1db43c"},
+    "auto_defense": {"5e773d1e64f651943b5faf709aea3ef1458503a2a25910acd476ab6a457e25cb"},
+}
+
+
+def probe_native_mods(gateway):
+    """Read actual API/contracts and origin JARs. No compilation or game commands."""
+    from pathlib import Path
+
+    loader = gateway.jvm.net.fabricmc.loader.api.FabricLoader.getInstance()
+    names = {}
+    defense_id = "auto_defense" if loader.getModContainer("auto_defense").isPresent() else "auto-defense"
+    for mod_id in ("altoclef", defense_id, "treegrow"):
+        optional = loader.getModContainer(mod_id)
+        if not optional.isPresent():
+            raise RuntimeError(f"Не загружен мод {mod_id}")
+        paths = optional.get().getOrigin().getPaths()
+        if paths.size() != 1:
+            raise RuntimeError(f"Не удалось определить JAR {mod_id}")
+        path = Path(str(paths.iterator().next().toString()))
+        digest = hashlib.sha256(path.read_bytes()).hexdigest()
+        if digest not in ARTIFACTS[mod_id]:
+            raise RuntimeError(f"Непроверенная сборка {mod_id}: {path.name}, SHA-256 {digest[:16]}; требуется проверка совместимости адаптера")
+        names[mod_id] = path.name
+    api = gateway.jvm.dev.autodefense.api.AutoDefenseApi
+    state = json.loads(api.get().state() if defense_id == "auto_defense" else api.getStatusJson())
+    if not isinstance(state, dict) or (defense_id == "auto_defense" and state.get("ok") is not True):
+        raise RuntimeError("Auto Defense API не подтвердил чтение состояния")
+    gateway.jvm.lab.treegrow.TreeGrowClient.current()  # None means idle, not missing.
+    return names
+
+
+def normalize_snapshot(result):
+    """Preserve native facts and expose the fields consumed by existing UI/supply."""
+    if result.get("status") != "ready":
+        return result
+    defense = json.loads(result.pop("defense_json"))
+    if not isinstance(defense, dict):
+        raise ValueError("Invalid Auto Defense snapshot")
+    if result.get("defense_api") == "addon-0.1":
+        if defense.get("ok") is not True:
+            raise RuntimeError("Auto Defense API failed to read state")
+        defense["missingItems"] = defense.get("needs", [])
+        defense["owner"] = "auto-defense" if result["defense_busy"] else "unionclef" if result["native_busy"] else "none"
+        # This addon owns its own supply policy. Do not run a second supplier.
+        result["native_supply"] = True
+    result["defense"] = defense
+    return result
+
 
 class NativeMods:
     def __init__(self, gateway):
@@ -77,5 +129,5 @@ class NativeMods:
         )
         result = self.convert(future.get(3, jvm.java.util.concurrent.TimeUnit.SECONDS))
         if operation == "snapshot" and result.get("status") == "ready":
-            result["defense"] = json.loads(result.pop("defense_json"))
+            result = normalize_snapshot(result)
         return result
