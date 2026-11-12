@@ -1,6 +1,7 @@
 package org.saruman.bridge;
 import java.util.*;
 import java.util.function.Supplier;
+import java.nio.file.*;
 /** Explicit local-admin request; execution is scheduled on Minecraft's own executor. */
 public final class WorldConnection implements Supplier<Map<String,Object>> {
     private final Object client;
@@ -15,18 +16,35 @@ public final class WorldConnection implements Supplier<Map<String,Object>> {
             if(world!=null)return Map.of("status","in_world");
             if(mode.equals("status"))return Map.of("status","menu");
             if(submitted.contains(id))return Map.of("status","connecting");
-            if(!mode.equals("world")||!target.matches("[^/\\\\:]{1,100}")||target.equals(".")||target.equals(".."))
-                return Map.of("status","rejected","reason","Invalid existing-world name");
+            if(!mode.equals("world")||target==null||!target.matches("[^/\\\\:]{1,100}")
+                    ||target.indexOf(0)>=0||target.equals(".")||target.equals(".."))
+                return Map.of("status","rejected","code","invalid_world_name",
+                        "reason","Укажите точное имя папки мира из saves текущего профиля Minecraft.");
             // Pinned Minecraft 1.21.11 IntegratedServerLoader: open an EXISTING save.
-            Object loader=client.getClass().getMethod("method_41735").invoke(client);
             java.io.File run=(java.io.File)client.getClass().getField("field_1697").get(client);
-            java.nio.file.Path saves=run.toPath().resolve("saves").toRealPath();
-            java.nio.file.Path save=saves.resolve(target).toRealPath();
-            if(!save.startsWith(saves)||!java.nio.file.Files.isRegularFile(save.resolve("level.dat")))
-                return Map.of("status","rejected","reason","Existing save not found");
+            Path saves=run.toPath().resolve("saves");
+            if(!Files.isDirectory(saves))return missingWorld();
+            saves=saves.toRealPath();
+            Path candidate=saves.resolve(target);
+            if(!Files.isDirectory(candidate))return missingWorld();
+            Path save=candidate.toRealPath();
+            if(!save.startsWith(saves)||!Files.isRegularFile(save.resolve("level.dat")))return missingWorld();
+            Object loader=client.getClass().getMethod("method_41735").invoke(client);
             submitted.add(id);
             loader.getClass().getMethod("method_57784",String.class,Runnable.class).invoke(loader,target,(Runnable)()->{});
             return Map.of("status","connecting");
-        }catch(Exception error){return Map.of("status","error","reason",error.getClass().getSimpleName());}
+        }catch(NoSuchFileException error){return missingWorld();}
+        catch(InvalidPathException error){return Map.of("status","rejected","code","invalid_world_name",
+                "reason","Укажите точное имя папки мира из saves текущего профиля Minecraft.");}
+        catch(Exception error){
+            submitted.remove(id);
+            return Map.of("status","error","reason","Не удалось открыть мир: "+error.getClass().getSimpleName()
+                    +". Проверьте окно Minecraft.");
+        }
+    }
+    private Map<String,Object> missingWorld() {
+        return Map.of("status","rejected","code","world_not_found",
+                "reason","Мир «"+target+"» не найден в saves текущего профиля Minecraft. "
+                        +"Укажите точное имя папки мира в Настройки → Подключение к Minecraft.");
     }
 }

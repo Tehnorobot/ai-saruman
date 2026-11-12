@@ -105,6 +105,61 @@ class ConnectionTests(unittest.TestCase):
             game.cancel();probe.terminate.assert_called_once();probe.communicate.assert_called_once()
             self.assertIsNone(game.identifier)
 
+    def test_missing_world_asks_for_exact_folder_and_does_not_retry_or_guess(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);game=GameConnection(root,Store(root/'tg.sqlite'))
+            game.configure({"mode":"world","target":"Display name","launcher":"","arguments":[]})
+            game.request()
+            probe=Mock();probe.poll.return_value=0
+            probe.communicate.return_value=(json.dumps({"status":"rejected","code":"world_not_found",
+                "reason":"Укажите точное имя папки мира в saves."},ensure_ascii=False).encode(),None)
+            game.probe=probe
+            with patch('saruman.game_connection.subprocess.Popen') as spawn:
+                game.step();game.step()
+            self.assertEqual(game.value['status'],'needs_world_name')
+            self.assertEqual(game.value['code'],'world_not_found')
+            self.assertIn('точное имя',game.value['reason'])
+            self.assertIsNone(game.identifier)
+            self.assertEqual(game.selected['target'],'Display name')
+            spawn.assert_not_called()
+
+    def test_world_join_keeps_request_marker_separate_from_cached_classloader(self):
+        from saruman.roles import load
+        import sys
+        from types import SimpleNamespace
+        # Lab has no Py4J dependency; the real RPC module is loaded with an injected gateway.
+        with patch.dict(sys.modules,{'py4j':SimpleNamespace(),
+              'py4j.java_gateway':SimpleNamespace(JavaGateway=Mock(),GatewayParameters=Mock())}):
+            module=load('connection')
+
+        class Properties(dict):
+            def putIfAbsent(self,key,value):
+                old=self.get(key)
+                if old is None:self[key]=value
+                return old
+            def put(self,key,value):
+                old=self.get(key);self[key]=value;return old
+            def remove(self,key):return self.pop(key,None)
+
+        for status in ('connecting','rejected'):
+            properties=Properties();gateway=Mock();loader=Mock()
+            gateway.new_array.side_effect=lambda _,length:[None]*length
+            gateway.jvm.java.lang.System.getProperties.return_value=properties
+            gateway.jvm.java.net.URLClassLoader.newInstance.return_value=loader
+            gateway.jvm.java.util.concurrent.CompletableFuture.supplyAsync.return_value.get.return_value={
+                'status':status,'code':'world_not_found'}
+            gateway.entry_point.inGame.side_effect=[False,True]
+            with patch('pathlib.Path.exists',return_value=True):
+                result=module.connect('world','Existing','request',gateway=gateway)
+            cached=[value for key,value in properties.items() if key.startswith('saruman.world.adapter:')]
+            self.assertEqual(cached,[loader])
+            self.assertEqual(result['status'],status)
+            if status=='connecting':
+                self.assertEqual(properties.get('saruman.connect:request'),'submitted')
+                self.assertEqual(module.connect('world','Existing','request',gateway=gateway)['status'],'in_world')
+            else:
+                self.assertNotIn('saruman.connect:request',properties)
+
     def test_world_loader_compiles_and_only_opens_an_existing_save(self):
         import shutil,subprocess
         if not shutil.which('javac') or not shutil.which('java'):self.skipTest('JDK unavailable')
@@ -112,6 +167,8 @@ class ConnectionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root=Path(directory)
             (root/'saves/Existing').mkdir(parents=True);(root/'saves/Existing/level.dat').touch()
+            (root/'saves/Мир Сарумана').mkdir();(root/'saves/Мир Сарумана/level.dat').touch()
+            (root/'saves/Incomplete').mkdir()
             harness=root/'Probe.java'
             harness.write_text('''import java.io.File; import org.saruman.bridge.WorldConnection;
 public class Probe {
@@ -121,17 +178,30 @@ public class Probe {
  static void check(boolean x){if(!x)throw new AssertionError();}
  public static void main(String[] args){Client c=new Client();c.field_1697=new File(args[0]);
   check(new WorldConnection(c,"status","","s").get().get("status").equals("menu"));
-  check(new WorldConnection(c,"world","Missing","m").get().get("status").equals("error"));
+  var missing=new WorldConnection(c,"world","Missing","m").get();
+  check(missing.get("status").equals("rejected"));
+  check(missing.get("code").equals("world_not_found"));
+  check(missing.get("reason").toString().contains("точное имя папки"));
+  check(c.loader.opened.equals(""));
+  check(new WorldConnection(c,"world","Incomplete","invalid-save").get().get("code").equals("world_not_found"));
+  check(new WorldConnection(c,"world","Display name","no-guess").get().get("code").equals("world_not_found"));
   check(c.loader.opened.equals(""));
   check(new WorldConnection(c,"world","../escape","bad").get().get("status").equals("rejected"));
   check(new WorldConnection(c,"world","Existing","one").get().get("status").equals("connecting"));
   check(c.loader.opened.equals("Existing"));c.loader.opened="";
   new WorldConnection(c,"world","Existing","one").get();check(c.loader.opened.equals(""));
+  check(new WorldConnection(c,"world","Мир Сарумана","russian").get().get("status").equals("connecting"));
+  check(c.loader.opened.equals("Мир Сарумана"));c.loader.opened="";
+  Client empty=new Client();empty.field_1697=new File(args[0],"another-profile");
+  check(new WorldConnection(empty,"world","Existing","missing-saves").get().get("code").equals("world_not_found"));
+  check(empty.loader.opened.equals(""));
   c.field_1687=new Object();check(new WorldConnection(c,"world","Existing","two").get().get("status").equals("in_world"));
   check(c.loader.opened.equals(""));System.out.println("OK");
  }}''',encoding='utf-8')
-            subprocess.run(['javac','--release','21','-encoding','UTF-8','-d',str(root),str(source),str(harness)],check=True,capture_output=True)
-            run=subprocess.run(['java','-cp',str(root),'Probe',str(root)],check=True,capture_output=True,text=True)
+            compiled=subprocess.run(['javac','--release','21','-encoding','UTF-8','-d',str(root),str(source),str(harness)],capture_output=True)
+            self.assertEqual(compiled.returncode,0,compiled.stderr.decode('utf-8',errors='replace'))
+            run=subprocess.run(['java','-cp',str(root),'Probe',str(root)],capture_output=True,text=True,encoding='utf-8')
+            self.assertEqual(run.returncode,0,run.stderr)
             self.assertIn('OK',run.stdout)
 
 if __name__=='__main__':unittest.main()

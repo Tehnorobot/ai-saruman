@@ -13,13 +13,13 @@ def connect(mode,target,identifier,gateway=None):
     g=gateway or JavaGateway(gateway_parameters=GatewayParameters(port=25333,read_timeout=5,auto_convert=True))
     try:
         props=g.jvm.java.lang.System.getProperties()
-        key="saruman.connect:"+identifier
+        request_key="saruman.connect:"+identifier
         if g.entry_point.inGame():
-            return {"status":"in_world"} if mode=="status" or props.get(key) is not None else {
+            return {"status":"in_world"} if mode=="status" or props.get(request_key) is not None else {
                 "status":"blocked","reason":"Уже открыт мир. Переключение не выполнено; для другого мира сначала выйдите в меню"}
         if mode=="server":
             # Verified UnionClef API schedules its operation on the Minecraft executor.
-            if props.putIfAbsent(key,"submitted") is None:g.entry_point.ConnectToServer(target)
+            if props.putIfAbsent(request_key,"submitted") is None:g.entry_point.ConnectToServer(target)
             return {"status":"connecting"}
         if mode=="status":return {"status":"menu"}
         root=Path(__file__).resolve().parents[2]
@@ -30,11 +30,11 @@ def connect(mode,target,identifier,gateway=None):
             subprocess.run([shutil.which("javac") or "javac","--release","21","-encoding","UTF-8","-d",str(output),str(source)],
                            check=True,capture_output=True,timeout=45)
         urls=g.new_array(g.jvm.java.net.URL,1);urls[0]=g.jvm.java.io.File(str(output)).toURI().toURL()
-        registry=g.jvm.java.lang.System.getProperties();key="saruman.world.adapter:"+output.name
-        loader=registry.get(key)
+        registry=g.jvm.java.lang.System.getProperties();loader_key="saruman.world.adapter:"+output.name
+        loader=registry.get(loader_key)
         if loader is None:
             loader=g.jvm.java.net.URLClassLoader.newInstance(urls,g.entry_point.getClass().getClassLoader())
-            registry.put(key,loader)
+            registry.put(loader_key,loader)
         cls=loader.loadClass("org.saruman.bridge.WorldConnection")
         types=g.new_array(g.jvm.java.lang.Class,4)
         types[0]=g.jvm.java.lang.Class.forName("java.lang.Object")
@@ -43,10 +43,11 @@ def connect(mode,target,identifier,gateway=None):
         values[0]=g.jvm.net.minecraft.class_310.method_1551();values[1]=mode;values[2]=target;values[3]=identifier
         # Persist intent before delivery: loading may outlive the RPC timeout while
         # the same client operation still completes. A later poll must recognize it.
-        props.putIfAbsent(key,"submitted")
+        props.putIfAbsent(request_key,"submitted")
         future=g.jvm.java.util.concurrent.CompletableFuture.supplyAsync(cls.getConstructor(types).newInstance(values),values[0])
         result=dict(future.get(5,g.jvm.java.util.concurrent.TimeUnit.SECONDS).items())
-        if result.get("status")=="connecting":props.put(key,"submitted")
+        if result.get("status")=="connecting":props.put(request_key,"submitted")
+        elif result.get("status") in {"error","rejected","blocked"}:props.remove(request_key)
         return result
     finally:
         if own:g.close()

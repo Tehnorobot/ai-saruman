@@ -71,6 +71,10 @@ class GameConnection:
             except (ValueError,TypeError):result={"status":"unavailable"}
             if result.get("status")=="in_world":
                 self.value={"status":"running","reason":"Minecraft подтвердил открытый мир"};self.identifier=None;return
+            if result.get("status")=="rejected" and result.get("code") in {"world_not_found","invalid_world_name"}:
+                self.value={"status":"needs_world_name","code":result["code"],
+                            "reason":result.get("reason","Укажите точное имя папки мира в saves.")}
+                self.identifier=None;return
             if result.get("status") in {"error","rejected","blocked"}:
                 self.value={"status":"error","reason":result.get("reason","Ошибка входа")};self.identifier=None;return
         if self.clock()>self.deadline:

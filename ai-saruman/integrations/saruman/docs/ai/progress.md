@@ -1,5 +1,31 @@
 # Progress
 
+## 2026-11-12: Exact saved-world selection and actionable name correction
+
+### Investigate
+- Existing-world lookup already used the running client's saves directory, but a
+  missing folder became a generic filesystem exception. Regression tests also
+  reproduced a separate RPC bug: the request marker overwrote the cached Java
+  classloader, so later polling could fail or reject a successful world entry.
+
+### Plan
+- Preserve exact folder selection and the current profile boundary. Ask the owner
+  for the exact folder name when no valid save matches; never choose a similar
+  world. Keep request intent and classloader caching separate.
+
+### Implement
+- Added structured missing/invalid-name results and a visible needs_world_name
+  state, with a Settings correction instruction. Rejected requests stop polling
+  until the owner corrects the target and explicitly retries.
+- Fixed the request-marker/classloader collision and cleared refused request
+  intent. Updated UI labels and the autonomy guide.
+- Validation: 57 Lab tests passed, one existing Windows symlink skip. Actual
+  Java compilation/execution checked exact and Cyrillic save names, missing saves,
+  missing level.dat, traversal rejection and duplicate-request handling. Python
+  regressions checked refusal without guessing/retrying and join confirmation.
+- No real game launch/world entry, LLM call, publication or settings edit. Lab
+  was not running on port 8765; the updated code applies on its next launch.
+
 ## 2026-11-11: Unified Lab autonomy and remaining approved steps
 
 Implemented one Start/Stop, independent scheduled Telegram, scoped DM/comment

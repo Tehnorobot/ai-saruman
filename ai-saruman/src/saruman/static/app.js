@@ -282,10 +282,10 @@ function settingsView(){
   const g=state.gameForm||state.data.runtime.game_settings;
   return modelSettingsView()+panel('Подключение к Minecraft','<form id="game-settings" class="panel-body role-selectors">'+
     '<label>Тип<select id="game-mode"><option value="server" '+(g.mode==='server'?'selected':'')+'>Сервер</option><option value="world" '+(g.mode==='world'?'selected':'')+'>Существующий одиночный мир</option></select></label>'+
-    '<label>Адрес сервера или имя папки сохранения<input id="game-target" value="'+e(g.target)+'" required></label>'+
+    '<label>Адрес сервера или точное имя папки в saves<input id="game-target" value="'+e(g.target)+'" required></label>'+
     '<label>Лаунчер .exe (необязательно)<input id="game-launcher" value="'+e(g.launcher)+'"></label>'+
     '<label>Аргументы лаунчера — JSON-массив<textarea id="game-arguments">'+e(JSON.stringify(g.arguments))+'</textarea></label>'+
-    '<p class="tiny">Minecraft 1.21.11 с UnionClef. Лаунчер должен уметь запускать выбранный профиль с вашими аргументами. Без настройки лаунчера сначала откройте клиент вручную. Вход подтверждается игрой; авторизация и предупреждения игры требуют вашего участия.</p>'+
+    '<p class="tiny">Для одиночного мира укажите имя его папки в saves запущенного профиля. Если совпадения нет, Lab попросит точное имя; другой мир автоматически не выбирается. Minecraft 1.21.11 с UnionClef. Лаунчер должен уметь запускать выбранный профиль с вашими аргументами. Без настройки лаунчера сначала откройте клиент вручную. Вход подтверждается игрой; авторизация и предупреждения игры требуют вашего участия.</p>'+
     '<button class="button primary">Сохранить подключение</button></form>');
 }
 function controlView(){
