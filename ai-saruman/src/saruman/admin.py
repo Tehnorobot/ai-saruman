@@ -80,7 +80,10 @@ class Admin:
 
     def history(self):
         with self.store.db() as db:
-            return [self.current_message(dict(r),db) for r in db.execute("SELECT * FROM admin_messages ORDER BY created DESC LIMIT 50")]
+            # The local clock can move backwards (or a maintenance record can
+            # carry a later timestamp). Durable insertion order keeps newly
+            # submitted commands visible without rewriting their recorded dates.
+            return [self.current_message(dict(r),db) for r in db.execute("SELECT * FROM admin_messages ORDER BY rowid DESC LIMIT 50")]
 
     def current_message(self,row,db):
         """Keep the original command durable; show the linked publication's current result."""

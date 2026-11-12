@@ -10,6 +10,72 @@ from saruman.bridge_health import BridgeHealth, close_bridge, native_runtime_sta
 from saruman.mod_goals import GoalStore
 from saruman.mod_runtime import AutomationRuntime
 from tests.test_mod_runtime import FakeMods
+from data_flow.redis_collections import RedisDict
+
+
+class BridgeRedisContractTests(unittest.TestCase):
+    """Use the production RedisDict and nested proxies, not a permissive dict."""
+    def setUp(self):
+        self.data = {}
+        transport = Mock()
+        transport.pipeline.return_value = transport
+        transport.hset.side_effect = lambda key, field, value: self.data.__setitem__((key, field), value)
+        transport.hget.side_effect = lambda key, field: self.data.get((key, field))
+        self.transport = patch("data_flow.redis_collections._r", return_value=transport)
+        self.transport.start()
+        self.addCleanup(self.transport.stop)
+        self.game = RedisDict("bridge-health-contract")
+        self.game["mod_goals"] = [{"completed": 2}]
+        self.game["mod_runtime"] = {"status": "running", "in_world": True, "updated": 100}
+        self.health = BridgeHealth(self.game, clock=lambda: 120)
+
+    def test_disconnect_updates_real_redis_proxy_and_preserves_goals(self):
+        self.health.unavailable(ConnectionResetError("closed"))
+        self.assertFalse(self.game["ingame"])
+        self.assertFalse(self.game["mc_started"])
+        self.assertIsNone(self.game["alive"])
+        self.assertEqual(self.game["mod_goals"], [{"completed": 2}])
+        self.assertEqual(self.game["mod_runtime"]["last_observation"], 100)
+        self.assertEqual(self.game["bridge_health"]["status"], "recovering")
+        self.assertFalse(native_runtime_status(self.game, True, clock=lambda: 120)["native_fresh"])
+
+    def test_title_screen_then_world_recovers_using_real_redis_proxy(self):
+        entry = Mock()
+        entry.inGame.side_effect = [False, True, ConnectionResetError("closed")]
+        self.assertFalse(self.health.in_world(entry))
+        self.assertTrue(self.game["mc_started"])
+        self.assertFalse(self.game["ingame"])
+        self.assertTrue(self.health.in_world(entry))
+        self.assertTrue(self.game["ingame"])
+        with self.assertLogs(level="ERROR"):
+            self.health.run(lambda: self.health.in_world(entry), lambda: True)
+        self.assertEqual(self.game["bridge_health"]["status"], "recovering")
+
+
+class DispatcherLeaseTests(unittest.TestCase):
+    def setUp(self):
+        self.directory = tempfile.TemporaryDirectory()
+        self.addCleanup(self.directory.cleanup)
+        self.store = GoalStore(Path(self.directory.name)/"goals.sqlite")
+        self.goal = self.store.submit("trees", source="operator")
+
+    def test_dead_owner_after_clock_rollback_does_not_hide_pending_goal(self):
+        self.assertTrue(self.store.lease("old", 20_000))
+        with patch("saruman.mod_goals.pid_alive", return_value=False):
+            self.assertTrue(self.store.lease("new", 100))
+        self.assertEqual(self.store.list()[0], self.goal)
+        with patch("saruman.mod_goals.pid_alive", return_value=True):
+            self.assertFalse(self.store.lease("old", 100))
+
+    def test_live_owner_is_not_replaced_after_clock_rollback(self):
+        self.assertTrue(self.store.lease("old", 20_000))
+        with patch("saruman.mod_goals.pid_alive", return_value=True):
+            self.assertFalse(self.store.lease("new", 100))
+
+    def test_legacy_owner_without_process_identity_is_not_assumed_dead(self):
+        self.store.set_meta("runtime_lease", {"owner": "legacy", "until": 20_005})
+        self.assertFalse(self.store.lease("new", 100))
+        self.assertTrue(self.store.lease("new", 20_006))
 
 
 class BridgeHealthTests(unittest.TestCase):

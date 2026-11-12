@@ -25,6 +25,42 @@ class FakeGame:
     def step(self): self.value = {"status": "unavailable" if self.active else "stopped", "reason": "game offline"}
 
 
+class AtomicIpcTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.path = Path(self.temp.name) / 'command.json'
+        atomic_json(self.path, {'revision': 1})
+
+    def test_windows_sharing_conflict_retries_same_write_and_preserves_old_json(self):
+        managed = load('managed')
+        original = managed.os.replace
+        calls = []
+        def replace(source, target):
+            calls.append((source, target))
+            if len(calls) < 3:
+                self.assertEqual(json.loads(self.path.read_text()), {'revision': 1})
+                error = PermissionError('Reader holds the previous file')
+                error.winerror = 32 if len(calls) == 1 else 5
+                raise error
+            return original(source, target)
+        with patch.object(managed.os, 'replace', side_effect=replace), patch.object(managed.time, 'sleep'):
+            atomic_json(self.path, {'revision': 2, 'directive': {'id': 'same-command'}})
+        self.assertEqual(json.loads(self.path.read_text()), {'revision': 2, 'directive': {'id': 'same-command'}})
+        self.assertEqual(len({str(source) for source, _ in calls}), 1)
+        self.assertEqual(list(self.path.parent.glob('*.tmp')), [])
+
+    def test_real_permission_error_surfaces_without_destroying_previous_command(self):
+        managed = load('managed')
+        with patch.object(managed.os, 'replace', side_effect=PermissionError('Denied')) as replace, patch.object(managed.time, 'sleep') as sleep:
+            with self.assertRaises(PermissionError):
+                atomic_json(self.path, {'revision': 2})
+        replace.assert_called_once()
+        sleep.assert_not_called()
+        self.assertEqual(json.loads(self.path.read_text()), {'revision': 1})
+        self.assertEqual(list(self.path.parent.glob('*.tmp')), [])
+
+
 class LifecycleTests(unittest.TestCase):
     def test_busy_journal_cannot_prevent_game_heartbeat(self):
         now=[1000.0];self.runtime.clock=lambda:now[0]

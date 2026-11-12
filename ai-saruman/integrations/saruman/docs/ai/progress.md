@@ -1,5 +1,39 @@
 # Progress
 
+## 2026-11-12: Restore private workflow visibility and the Minecraft dispatcher
+
+### Investigate
+- MineBridge died before entering its reconnect handler: BridgeHealth passed keyword
+  arguments to RedisDict.update, which accepts a mapping. Dictionary-only tests
+  missed the production collection contract; the accepted tree goal stayed queued.
+- Maintenance timestamps were later than new commands after wall-clock rollback.
+  Sorting the private chat by timestamps hid the current five-step workflow.
+- One previous attempt failed on a Windows sharing conflict during command.json
+  replacement. A historical native dispatcher lease also remained valid five hours
+  into the local future, preventing a new dispatcher from observing any goals.
+
+### Plan
+- Test with the real Redis collection and nested proxies; preserve chronological
+  insertion order, exact command identities, atomic files and cancelled outcomes.
+- Reclaim only a proven dead process's dispatcher lease; retain live and legacy
+  unknown owners. Never rewrite a failed/cancelled goal as success or replay it.
+
+### Implement
+- Fixed Redis updates, added insertion-order private history and brief retries for
+  Windows sharing errors only. Original timestamps, old JSON and task IDs remain.
+- Dispatcher leases now record their process ID and reuse the existing read-only
+  process check to recover a dead owner after clock rollback without stealing a
+  live owner's lease. Legacy leases remain conservative.
+- Validation: 63 bridge/dispatcher checks passed; 121 Lab checks passed and one
+  existing Windows symlink check skipped. Includes clock rollback, real RedisDict,
+  live/dead/unknown lease owners and transient/permanent file permission failures.
+- Installed with project-local SQLite backups and no model/Telegram send in flight.
+  Removed only the unchanged legacy orphan lease verified against its backup.
+  The bridge resumed fresh observations. The old workflow subsequently recorded a
+  cancelled game action; its result and remaining unexecuted publication are kept,
+  not replayed. At the last probe Minecraft had no open world/player observation.
+- Maintenance evidence: .saruman/audit/control-workflow-recovery-2026-11-12/.
+
 ## 2026-11-12: Standalone Mage Home finalization handoff
 
 ### Investigate

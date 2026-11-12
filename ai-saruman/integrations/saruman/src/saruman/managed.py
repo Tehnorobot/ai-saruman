@@ -46,7 +46,19 @@ def atomic_json(path, value):
     temporary = path.with_name(path.name + "." + uuid.uuid4().hex + ".tmp")
     try:
         temporary.write_text(json.dumps(value, ensure_ascii=False), encoding="utf-8")
-        os.replace(temporary, path)
+        # Windows readers/antivirus may briefly deny replace while the old file
+        # is open. Retry the same atomic write; never unlink the destination or
+        # publish half a JSON document. Real permission errors still surface.
+        delays = (0, .01, .02, .04, .08, .16, .2, .25)
+        for index, delay in enumerate(delays):
+            if delay:
+                time.sleep(delay)
+            try:
+                os.replace(temporary, path)
+                break
+            except PermissionError as error:
+                if getattr(error, "winerror", None) not in {5, 32, 33} or index == len(delays)-1:
+                    raise
     finally:
         temporary.unlink(missing_ok=True)
 

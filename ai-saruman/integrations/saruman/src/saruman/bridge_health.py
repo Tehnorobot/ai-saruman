@@ -15,7 +15,8 @@ class BridgeHealth:
         previous = dict(self.game.get("mod_runtime", {}).items())
         last = previous.get("last_observation", previous.get("updated"))
         reason = f"{type(error).__name__}: {error}"
-        self.game.update(ingame=False, mc_started=False, alive=None)
+        # RedisDict intentionally accepts a mapping, not dict.update keywords.
+        self.game.update({"ingame": False, "mc_started": False, "alive": None})
         self.game["mod_runtime"] = {**previous, "status": "unavailable", "in_world": False,
                                     "error": reason, "updated": now,
                                     "last_observation": last, "stale": True}
@@ -29,7 +30,7 @@ class BridgeHealth:
         # new gateway, callback registration and native guard, not an endless
         # wait inside the old JVM connection.
         value = bool(entry.inGame())
-        self.game.update(ingame=value, mc_started=True)
+        self.game.update({"ingame": value, "mc_started": True})
         self.observed()
         return value
 

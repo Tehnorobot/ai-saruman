@@ -9,6 +9,8 @@ import uuid
 from contextlib import contextmanager
 from pathlib import Path
 
+from saruman.role_settings import pid_alive
+
 ROOT = Path(__file__).resolve().parents[2]
 TERMINAL = {"completed", "failed", "cancelled", "uncertain"}
 LEGACY_MOD_TOOLS = frozenset(
@@ -186,10 +188,15 @@ class GoalStore:
             ).fetchone()
             previous = json.loads(row[0]) if row else {}
             if previous.get("until", 0) > now and previous.get("owner") != owner:
-                return False
+                # Wall-clock rollback must not leave a dead dispatcher holding
+                # the queue for hours. Reuse the read-only process check; retain
+                # legacy/unknown owners and live owners until their lease expires.
+                pid = previous.get("pid")
+                if type(pid) is not int or pid <= 0 or pid_alive(pid):
+                    return False
             db.execute(
                 "INSERT OR REPLACE INTO meta VALUES ('runtime_lease',?)",
-                (json.dumps({"owner": owner, "until": now + ttl}),),
+                (json.dumps({"owner": owner, "pid": os.getpid(), "until": now + ttl}),),
             )
             return True
 

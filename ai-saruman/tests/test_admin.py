@@ -12,6 +12,21 @@ from test_runtime import FakeGame
 
 
 class AdminTests(unittest.TestCase):
+    def test_new_commands_remain_visible_after_clock_moves_backwards(self):
+        future = 4_000_000_000
+        with self.store.db() as db:
+            for number in range(55):
+                db.execute("INSERT INTO admin_messages VALUES (?,?,?,'accepted',?)",
+                           (f"maintenance-{number}", "Earlier maintenance", json.dumps({'detail': 'Paused'}), future))
+        self.command('Новое поручение', 'new-command', operation='status')
+        history = self.admin.history()
+        self.assertEqual(history[0]['id'], 'new-command')
+        self.assertEqual(len(history), 50)
+        self.command('Новое поручение', 'new-command', operation='status')
+        with self.store.db() as db:
+            self.assertEqual(db.execute("SELECT count(*) FROM admin_messages WHERE id='new-command'").fetchone()[0], 1)
+            self.assertEqual(db.execute("SELECT count(*) FROM admin_messages WHERE created=?", (future,)).fetchone()[0], 55)
+
     def setUp(self):
         self.temp=tempfile.TemporaryDirectory();self.addCleanup(self.temp.cleanup)
         self.root=Path(self.temp.name);self.store=Store(self.root/'telegram.sqlite')
