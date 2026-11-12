@@ -8,10 +8,26 @@ import unittest
 from unittest.mock import Mock, patch
 
 from saruman.doctor import wait_for_filter
-from saruman.mod_adapter import normalize_snapshot, probe_native_mods
+from saruman.mod_adapter import normalize_snapshot, probe_native_mods,NativeMods
+from py4j.protocol import Py4JError
 
 
 class PreflightTests(unittest.TestCase):
+    def test_snapshot_rebinds_stale_java_handles_before_read_retry(self):
+        adapter=NativeMods.__new__(NativeMods)
+        adapter._invoke=Mock(side_effect=[Py4JError('Target Object ID does not exist'),{'status':'ready'}])
+        adapter._bind=Mock()
+        self.assertEqual(adapter.call('snapshot'),{'status':'ready'})
+        adapter._bind.assert_called_once()
+        self.assertEqual(adapter._invoke.call_count,2)
+
+    def test_uncertain_mutation_is_not_replayed_during_reconnect(self):
+        adapter=NativeMods.__new__(NativeMods)
+        adapter._invoke=Mock(side_effect=Py4JError('connection interrupted'))
+        adapter._bind=Mock()
+        with self.assertRaises(Py4JError):adapter.call('tree_start',run_id='original-run')
+        adapter._bind.assert_not_called();adapter._invoke.assert_called_once_with('tree_start',run_id='original-run')
+
     def test_filter_waits_for_models_with_a_finite_operator_grace(self):
         now = [0]
         def sleep(seconds): now[0] += seconds

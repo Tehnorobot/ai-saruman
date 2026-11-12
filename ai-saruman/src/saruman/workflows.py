@@ -56,6 +56,20 @@ class Workflows:
             value={**value,'status':'waiting_start','detail':'Цепочка сохранена; нажмите Start для продолжения'}
         return value
 
+    def context(self):
+        with self.store.db() as db:rows=db.execute('SELECT body FROM workflows ORDER BY created').fetchall()
+        values=[json.loads(row[0]) for row in rows]
+        return [{'id':v['id'],'status':v['status'],'steps':[
+            {'operation':s['operation'],'text':s['text'],'status':s['status'],'observed_status':s['result'].get('status')}
+            for s in v['steps']]} for v in values if v['status'] in {'queued','running'}]
+
+    def resume(self,identifier):
+        value=self.get(identifier)
+        if not value or value['status'] not in {'queued','running','waiting_start'}:
+            raise ValueError('Эта цепочка не ожидает продолжения. Повторное выполнение требует нового поручения.')
+        self.start()
+        return {'workflow_id':identifier,'detail':'Продолжается сохранённая цепочка; выполненные этапы не повторяются.'}
+
     def save(self,value):
         with self.store.db() as db:db.execute('UPDATE workflows SET body=? WHERE id=?',(json.dumps(value,ensure_ascii=False),value['id']))
 

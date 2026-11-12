@@ -163,6 +163,15 @@ class LifecycleTests(unittest.TestCase):
         self.assertGreater(command["revision"],4)
         self.assertEqual(game.value["status"],"stopping")
 
+    def test_unavailable_native_api_is_not_reported_as_a_closed_world(self):
+        game=MinecraftProcess(self.root)
+        atomic_json(game.directory/'command.json',{'worker_id':'owned','revision':1})
+        atomic_json(game.directory/'status.json',{'worker_id':'owned','updated':time.time(),'phase':'ready',
+            'agent_running':True,'world_ready':False,'native_status':'unavailable','native_error':'stale Java object'})
+        game.request(True);game.step()
+        self.assertEqual(game.value['status'],'unavailable')
+        self.assertIn('stale Java object',game.value['reason'])
+
 
 class ManagedGameTests(unittest.TestCase):
     def setUp(self):

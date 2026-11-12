@@ -97,6 +97,13 @@ class NativeMods:
                 capture_output=True,
                 timeout=45,
             )
+        self.target=target
+        self._bind()
+
+    def _bind(self):
+        """Refresh JVM object IDs after the game/gateway was restarted."""
+        gateway=self.gateway
+        target=self.target
         jvm = gateway.jvm
         urls = gateway.new_array(jvm.java.net.URL, 1)
         urls[0] = jvm.java.io.File(str(target)).toURI().toURL()
@@ -119,6 +126,16 @@ class NativeMods:
         self.client = jvm.net.minecraft.class_310.method_1551()
 
     def call(self, operation, **args):
+        from py4j.protocol import Py4JError
+        try:return self._invoke(operation,**args)
+        except (Py4JError,OSError):
+            if operation!='snapshot':raise
+            # Only a read may be retried here. Mutations retain their receipt ID
+            # and are reconciled by AutomationRuntime, never blindly resubmitted.
+            self._bind()
+            return self._invoke(operation,**args)
+
+    def _invoke(self, operation, **args):
         gateway, jvm = self.gateway, self.gateway.jvm
         values = jvm.java.util.HashMap()
         for key, value in args.items():

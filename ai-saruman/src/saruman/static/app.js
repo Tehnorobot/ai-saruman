@@ -290,6 +290,16 @@ function settingsView(){
     '<p class="tiny">Для одиночного мира укажите имя его папки в saves запущенного профиля. Если совпадения нет, Lab попросит точное имя; другой мир автоматически не выбирается. Minecraft 1.21.11 с UnionClef. Лаунчер должен уметь запускать выбранный профиль с вашими аргументами. Без настройки лаунчера сначала откройте клиент вручную. Вход подтверждается игрой; авторизация и предупреждения игры требуют вашего участия.</p>'+
     '<button class="button primary">Сохранить подключение</button></form>');
 }
+function controlResultDetail(result){
+  const goals=result?.facts?.goals;
+  if(Array.isArray(goals)){
+    const reasons=goals.filter(g=>['failed','cancelled','uncertain'].includes(g.state)&&g.reason).map(g=>g.reason);
+    if(reasons.length)return [...new Set(reasons)].join('; ');
+  }
+  const failed=Array.isArray(result?.steps)?result.steps.find(s=>s.status==='failed'):null;
+  if(failed){const reason=controlResultDetail(failed.result);if(reason)return reason;}
+  return result?.detail||result?.error||result?.reason||'';
+}
 function controlView(){
   const d=state.admin||{messages:[],game_result:{}};
   const labels={accepted:'Принято',answered:'Ответ',interpreting:'Разбирает команду',needs_input:'Нужно уточнение',
@@ -300,10 +310,10 @@ function controlView(){
   const messages=d.messages.slice().reverse().map(m=>{
     let result={};try{const parsed=JSON.parse(m.result);if(parsed&&typeof parsed==='object'&&!Array.isArray(parsed))result=parsed;}catch(error){}
     return '<article class="panel-body"><strong>Вы</strong><p class="bubble">'+e(m.input)+'</p><strong>Управление · '+e(labels[m.status]||m.status)+
-      '</strong><pre class="note-preview" data-control-scroll="result-'+e(m.id)+'">'+e(result.detail||result.error||m.result)+'</pre>'+
+      '</strong><pre class="note-preview" data-control-scroll="result-'+e(m.id)+'">'+e(controlResultDetail(result)||m.result)+'</pre>'+
       (result.steps?'<ol class="workflow-steps">'+result.steps.map(s=>'<li><strong>'+e(steps[s.operation]||s.operation)+'</strong> · '+e(labels[s.status]||s.status)+
         (s.text?'<p class="tiny">'+e(s.text)+'</p>':'')+
-        (s.result?.error||s.result?.reason||s.result?.detail?'<p class="tiny">'+e(s.result.error||s.result.reason||s.result.detail)+'</p>':'')+
+        (controlResultDetail(s.result)?'<p class="tiny">'+e(controlResultDetail(s.result))+'</p>':'')+
         (s.operation==='screenshot'&&s.result?.sha256?'<a href="/api/media/'+e(s.result.sha256)+'" target="_blank" rel="noreferrer"><img class="workflow-photo" width="'+e(s.result.width)+'" height="'+e(s.result.height)+'" src="/api/media/'+e(s.result.sha256)+'" alt="Снимок Minecraft"></a>':'')+
         (s.result?.message_id?'<p class="tiny">Telegram: сообщение '+e(s.result.message_id)+'</p>':'')+'</li>').join('')+'</ol>':'')+
       (result.operation==='publish'&&m.status==='needs_input'?'<a href="#telegram">Выбрать пост в Telegram</a>':'')+'</article>';

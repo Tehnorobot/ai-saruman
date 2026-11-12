@@ -1,5 +1,41 @@
 # Progress
 
+## 2026-11-12: Rebind stale Minecraft handles and resume existing commands
+
+### Investigate
+- Private history showed an accepted two-tree workflow, a statement "already in
+  the world" misread as connect, and another queued copy of the planting request.
+- Fresh read-only probes confirmed Minecraft was in-world with working addon APIs.
+  Redis mod_runtime identified the old worker's exact error: Py4J Target Object ID
+  does not exist while calling the cached Java constructor. Lab showed a generic
+  waiting_world instead of this adapter failure.
+
+### Plan
+- Rebind stale JVM handles for snapshot reads, never retry uncertain mutations.
+  Expose adapter errors, pass pending workflow summaries to the private interpreter
+  and add resume without another join or duplicated gameplay.
+
+### Implement
+- NativeMods recreates its loader/class/client/constructor handles on a failed
+  snapshot and retries that read once. Shared JVM receipts remain in their existing
+  registry. Mutation errors still propagate for receipt-based reconciliation.
+- Native errors reach Lab status; an unavailable API no longer means "world closed".
+  Added resume and current workflow context to admin interpretation. Failed/completed
+  tasks cannot be silently reopened; a continuation retains step and publication IDs.
+- Installed with the game itself open. The original native task was confirmed
+  queued, 0/2, no run_id/world before pausing. Archived both original command plans
+  and the interrupted attempt; linked the owner's duplicate clarification to the
+  original workflow, retained its publication steps and resumed one two-tree attempt.
+  Full local maintenance record: .saruman/audit/world-queue-recovery-2026-11-12.json.
+- Live result: world/API recovered, a new native run started and reported failure
+  "sapling not found within 64 blocks", 0/2. No success publication was queued.
+  The UI now extracts exact failed-goal reasons from saved evidence. Native manual
+  pause remains respected; no saplings were supplied and no native stop was bypassed.
+- Validation: 114 Lab checks passed, one existing Windows skip; 53 native preflight/
+  runtime checks passed. A live snapshot recovered from an intentionally stale local
+  Java proxy. Isolated Chrome showed the exact fixture failure and retained scroll
+  offsets over three auto-refreshes without JavaScript errors.
+
 ## 2026-11-12: Preserve scrolling in private control
 
 ### Investigate

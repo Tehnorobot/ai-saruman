@@ -1031,6 +1031,7 @@ def main():
             return {"agent_running": bool(Supervisor and Supervisor.is_running()),
                     "world_ready": bool(native.get("in_world")),
                     "native_status": native.get("status", "connecting"),
+                    "native_error": native.get('error'),
                     "manual_stop_latched": bool(native.get("manual_stop_latched"))}
 
         def lab_directive(text,identifier):

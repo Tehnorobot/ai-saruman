@@ -112,6 +112,28 @@ class WorkflowTests(unittest.TestCase):
         self.assertIsNone(named_world('Войди в мир test_3 и посади дерево'))
         self.assertEqual(named_world('Войди в мир «Мир и лес»'),'Мир и лес')
 
+    def test_resume_keeps_one_existing_workflow_and_completed_steps(self):
+        value=self.chain();self.complete_game();self.flow.step()
+        self.runtime.workflows=self.flow;self.runtime.start=Mock();self.runtime.snapshot=Mock(return_value={})
+        interpret=Mock(return_value={'operation':'resume','text':value['id'],'steps':[]})
+        admin=Admin(self.store,self.runtime,interpret)
+        admin.execute({'request_id':'followup','text':'Я уже в мире, приступай к задаче'})
+        payload=interpret.call_args.args[0]
+        self.assertEqual(payload['pending_workflows'][0]['steps'][0]['status'],'completed')
+        self.assertEqual(payload['pending_workflows'][0]['id'],value['id'])
+        self.assertEqual(self.flow.get(value['id'])['steps'][0]['status'],'completed')
+        self.assertEqual(self.flow.get(value['id'])['steps'][0]['id'],value['steps'][0]['id'])
+        self.assertEqual(self.flow.context()[0]['id'],value['id'])
+        with self.store.db() as db:self.assertEqual(db.execute('SELECT COUNT(*) FROM workflows').fetchone()[0],1)
+        self.game.heartbeat.assert_not_called()
+        self.runtime.connection.request.assert_not_called()
+        self.assertEqual(json.loads(admin.history()[0]['result'])['workflow_id'],value['id'])
+
+    def test_resume_never_reopens_a_failed_or_completed_workflow(self):
+        value=self.chain();value['status']='failed';self.flow.save(value)
+        with self.assertRaises(ValueError):self.flow.resume(value['id'])
+        self.assertEqual(self.flow.context(),[])
+
     def test_admin_compound_command_is_idempotent_and_history_tracks_steps(self):
         self.runtime.workflows=self.flow;self.runtime.start=Mock();self.runtime.snapshot=Mock(return_value={'options':{'minecraft':True}})
         interpret=Mock(return_value={'operation':'workflow','text':'','steps':[{'operation':'screenshot','text':''}]})

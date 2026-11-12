@@ -112,6 +112,8 @@ class MinecraftProcess:
                 self.value = {"status": status.get("phase", "starting"), "reason": status.get("reason", "Запуск")}
             elif status.get("manual_stop_latched"):
                 self.value = {"status": "paused", "reason": "Игровые действия приостановлены; состояние модов требует проверки в игровом интерфейсе"}
+            elif status.get('native_status')=='unavailable':
+                self.value={'status':'unavailable','reason':'Нет связи с игровым API: '+(status.get('native_error') or 'ожидание восстановления адаптера')}
             elif not status.get("agent_running"):
                 self.value = {"status": "paused", "reason": "Игровой агент остановлен; нажмите Start для явного возобновления"}
             else:
