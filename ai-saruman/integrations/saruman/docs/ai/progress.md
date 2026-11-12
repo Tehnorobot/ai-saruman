@@ -1,5 +1,32 @@
 # Progress
 
+## 2026-11-12: Explicit Lab checkbox for game text filtering
+
+### Investigate
+- The game launcher already supported --no-filter, but Lab could not select it.
+  Reusing an existing stopped worker also meant a new Start alone would not apply
+  a changed CLI mode. Cold-filter preflight ignored Stop while waiting for models.
+
+### Plan
+- Persist an authenticated, default-on filter checkbox beside Start/Stop. Reuse
+  the existing flag and dummy-filter path. Require Stop before changing the mode
+  and gracefully replace only the owned game Python worker when necessary.
+
+### Implement
+- Added filter_enabled to Lab runtime options and UI; strict booleans/CSRF remain
+  enforced. Saved legacy options default to enabled. Private commands preserve the
+  owner's selection, with no .env edits or implicit disabling.
+- Track actual worker mode and shut down an owned mismatched worker before relaunch.
+  Exited worker IDs cannot be re-adopted from stale IPC snapshots. A Stop during
+  replacement prevents relaunch. Minecraft itself and Telegram settings stay separate.
+- Preflight cancellation now observes matching negative owner commands during
+  model readiness waits. Default filtering and the remaining Doctor checks remain.
+- Validation: 83 Lab tests passed, one existing Windows symlink skip; JavaScript
+  syntax passed. Live read-only Doctor --live --no-filter passed against the open
+  world and installed addons, without generation, gameplay or publication.
+- The character is active in preflight. Source/UI installation awaits an approved
+  Lab restart; the owner's live filter selection has not been changed.
+
 ## 2026-11-12: Truthful private publication commands and delivery status
 
 ### Investigate

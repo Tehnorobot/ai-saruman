@@ -5,7 +5,8 @@ import tempfile
 import time
 import threading
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, MagicMock, patch
+from types import SimpleNamespace
 
 from saruman.runtime import CharacterRuntime, MinecraftProcess, atomic_json
 from saruman.telegram import Director, Store
@@ -70,9 +71,32 @@ class LifecycleTests(unittest.TestCase):
         self.assertTrue(self.store.meta("character_runtime")["active"])
 
     def test_input_does_not_accept_commands_or_paths(self):
-        for payload in ({"minecraft":"true"},{"command":"powershell"},{"path":"C:/elsewhere"}):
+        for payload in ({"minecraft":"true"},{"filter_enabled":"false"},{"filter_enabled":0},{"command":"powershell"},{"path":"C:/elsewhere"}):
             with self.assertRaises(ValueError):self.runtime.start(payload)
         self.director.start.assert_not_called()
+
+    def test_filter_defaults_on_and_explicit_choice_survives_stop_start(self):
+        self.assertTrue(self.runtime.snapshot()['options']['filter_enabled'])
+        self.runtime.start({'minecraft':False,'filter_enabled':False})
+        self.assertFalse(self.game.filter_enabled)
+        self.runtime.stop();self.runtime.start()
+        self.assertFalse(self.runtime.snapshot()['options']['filter_enabled'])
+        self.assertFalse(self.game.filter_enabled)
+        self.runtime.stop();self.runtime.start({'filter_enabled':True})
+        self.assertTrue(self.game.filter_enabled)
+
+    def test_live_filter_change_requires_stop_without_mutating_saved_options(self):
+        self.runtime.start({'minecraft':False})
+        before=self.store.meta('runtime_options');epoch=self.runtime.epoch
+        with self.assertRaisesRegex(BlockingIOError,'Stop'):
+            self.runtime.start({'filter_enabled':False})
+        self.assertEqual(self.store.meta('runtime_options'),before)
+        self.assertEqual(self.runtime.epoch,epoch)
+
+    def test_old_saved_options_keep_filter_enabled(self):
+        self.store.set_meta('runtime_options',{'minecraft':False})
+        self.runtime.start()
+        self.assertTrue(self.game.filter_enabled)
 
     def test_adopt_existing_managed_game_and_stop_by_revision(self):
         game=MinecraftProcess(self.root)
@@ -135,6 +159,18 @@ class ManagedGameTests(unittest.TestCase):
         self.assertTrue(state["owner_connected"])
         self.assertEqual(list(self.root.glob("*.tmp")),[])
 
+    def test_startup_stop_and_shutdown_cancel_only_the_matching_worker(self):
+        self.assertFalse(self.control.startup_cancelled())
+        self.command();self.assertFalse(self.control.startup_cancelled())
+        self.command(active=False);self.assertTrue(self.control.startup_cancelled())
+        self.command(active=False,worker_id='other');self.assertFalse(self.control.startup_cancelled())
+        self.command(shutdown=True);self.assertTrue(self.control.startup_cancelled())
+
+    def test_status_reports_applied_filter_mode(self):
+        self.control.filter_enabled=False
+        self.command();self.control.step()
+        self.assertFalse(json.loads((self.root/'status.json').read_text())['filter_enabled'])
+
     def test_persisted_shutdown_is_safe_even_after_owner_expired(self):
         shutdown=Mock()
         self.control.bind(lambda:None,lambda:None,lambda:{},shutdown)
@@ -158,5 +194,81 @@ class ManagedGameTests(unittest.TestCase):
             self.assertEqual(state['revision'],2)
         finally:release.set();worker.thread.join(1)
 
+
+class FilterProcessTests(unittest.TestCase):
+    def setUp(self):
+        self.temp=tempfile.TemporaryDirectory();self.addCleanup(self.temp.cleanup)
+        self.root=Path(self.temp.name);self.now=1000
+        self.game=MinecraftProcess(self.root,clock=lambda:self.now)
+
+    def ready(self,filter_enabled=True):
+        self.game.worker_id='owned';self.game.requested=True
+        self.game.process=Mock();self.game.process.poll.return_value=None
+        atomic_json(self.game.directory/'status.json',{'worker_id':'owned','phase':'ready',
+                    'updated':self.now,'filter_enabled':filter_enabled})
+
+    def test_filter_change_gracefully_restarts_owned_worker_before_new_launch(self):
+        self.ready();self.game.filter_enabled=False
+        with patch('saruman.runtime.subprocess.Popen') as spawn:
+            self.game.step()
+            command=self.game.read('command.json')
+            self.assertFalse(command['active']);self.assertTrue(command['shutdown'])
+            self.assertEqual(self.game.value['status'],'restarting')
+            spawn.assert_not_called()
+            self.game.process.poll.return_value=0
+            self.game.step()
+            self.assertIsNone(self.game.process)
+            self.assertFalse(self.game.restarting)
+            self.assertEqual(self.game.retry_at,self.now)
+            spawn.assert_not_called()
+
+    def test_stop_during_restart_never_relaunches(self):
+        self.ready();self.game.filter_enabled=False;self.game.step()
+        self.game.request(False)
+        self.assertTrue(self.game.shutdown_requested)
+        self.game.process.poll.return_value=0;self.game.step()
+        with patch('saruman.runtime.subprocess.Popen') as spawn:self.game.step()
+        spawn.assert_not_called();self.assertEqual(self.game.value['status'],'stopped')
+
+    def test_disabled_filter_adds_cli_flag_only_after_explicit_selection(self):
+        game_root=self.root/'integrations/saruman'
+        python=game_root/'.venv/Scripts/python.exe';python.parent.mkdir(parents=True);python.touch()
+        (game_root/'.env.saruman').touch()
+        def connect(address,**kwargs):
+            if address[1]==22228:raise OSError('no external runtime')
+            return MagicMock()
+        for enabled in (True,False):
+            game=MinecraftProcess(self.root,clock=lambda:self.now);game.filter_enabled=enabled;game.request(True)
+            with patch('saruman.runtime.os',SimpleNamespace(name='nt',environ={})),patch('saruman.runtime.socket.create_connection',side_effect=connect),patch('saruman.runtime.subprocess.Popen') as spawn:
+                game.step()
+            self.assertEqual('--no-filter' in spawn.call_args.args[0],not enabled)
+            self.assertEqual(game.applied_filter_enabled,enabled)
+
+    def test_adoption_reads_actual_mode_before_deciding_to_restart(self):
+        atomic_json(self.game.directory/'command.json',{'worker_id':'owned','revision':1,'active':False,'updated':self.now})
+        atomic_json(self.game.directory/'status.json',{'worker_id':'owned','updated':self.now,
+                    'phase':'ready','agent_running':False,'filter_enabled':False})
+        self.game.filter_enabled=False;self.game.request(True)
+        with patch('saruman.runtime.subprocess.Popen') as spawn:self.game.step()
+        self.assertFalse(self.game.restarting)
+        self.assertFalse(self.game.applied_filter_enabled)
+        self.assertFalse(self.game.read('command.json')['shutdown'])
+        spawn.assert_not_called()
+
+    def test_filter_startup_wait_can_be_cancelled_without_a_network_probe(self):
+        doctor=load('doctor')
+        with patch.object(doctor,'filter_is_ready') as probe:
+            self.assertFalse(doctor.wait_for_filter('http://unused',180,cancelled=lambda:True))
+        probe.assert_not_called()
+        with patch.object(doctor,'filter_is_ready',return_value=False) as probe,patch.object(doctor.time,'sleep') as sleep:
+            self.assertFalse(doctor.wait_for_filter('http://unused',180,sleep=sleep,
+                             cancelled=Mock(side_effect=[False,True])))
+        self.assertEqual(probe.call_count,1)
+        sleep.assert_called_once()
+
+    def test_cli_mode_reaches_main_runtime_arguments(self):
+        launcher=load('launcher')
+        args=SimpleNamespace(auto_start=False,with_social=False,no_stt=False,no_filter=True,no_redis=False)
+        self.assertIn('--no-filter',launcher.runtime_args(args))
 
 if __name__=="__main__":unittest.main()

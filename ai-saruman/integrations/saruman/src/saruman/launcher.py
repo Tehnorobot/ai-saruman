@@ -71,6 +71,7 @@ def main(argv=None) -> int:
             instance.acquire()
         managed = configure(ROOT) if args.command == "run" else None
         if managed:
+            managed.filter_enabled = not args.no_filter
             # Check the configured port before imports can initialize/flush shared Redis.
             # An independently launched game process is never adopted or terminated blindly.
             port = int(os.getenv("GRADIO_SERVER_PORT", "22228"))
@@ -95,6 +96,15 @@ def main(argv=None) -> int:
             return 0
         from saruman.doctor import check, filter_is_ready, wait_for_filter
 
+        def cancelled():
+            if managed and managed.startup_cancelled():
+                managed.phase_changed("stopped","Запуск игрового обработчика отменён")
+                managed.step()
+                return True
+            return False
+
+        if cancelled():return 0
+
         if args.command == "run" and not args.no_filter:
             wait_seconds = float(os.getenv("SARUMAN_FILTER_STARTUP_WAIT", "180"))
             if not 0 <= wait_seconds < float("inf"):
@@ -102,15 +112,19 @@ def main(argv=None) -> int:
             base = os.getenv("FILTER_BASE_URL", "http://127.0.0.1:22230")
             if wait_seconds and not filter_is_ready(base):
                 print(f"[WAIT] Фильтр загружает модели; ожидаю готовность до {wait_seconds:g} с. SARUMAN_FILTER_STARTUP_WAIT меняет ожидание.", flush=True)
-                wait_for_filter(base, wait_seconds)
+                wait_for_filter(base, wait_seconds, cancelled=cancelled)
+
+        if cancelled():return 0
 
         # Run always validates services, but never requests a model generation.
-        if not check(
+        healthy = check(
             live=args.live or args.command == "run",
             no_stt=args.no_stt,
             no_filter=args.no_filter,
             no_redis=args.no_redis,
-        ):
+        )
+        if cancelled():return 0
+        if not healthy:
             if managed:
                 managed.phase_changed("waiting_services", "Игровая проверка не пройдена; проверьте Doctor и службы")
                 managed.step()

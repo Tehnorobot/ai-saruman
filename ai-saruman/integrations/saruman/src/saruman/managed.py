@@ -79,6 +79,14 @@ class ManagedControl:
         self.had_owner = False
         self.stop_event = threading.Event()
         self.thread = None
+        self.filter_enabled = True
+
+    def startup_cancelled(self):
+        """Negative owner commands also cancel preflight before runtime callbacks exist."""
+        try:command=json.loads((self.directory/"command.json").read_text(encoding="utf-8"))
+        except (OSError,ValueError):return False
+        return (command.get("worker_id")==self.worker_id
+                and (command.get("shutdown") is True or command.get("active") is False))
 
     def phase_changed(self, phase, reason):
         with self.lock:
@@ -138,6 +146,7 @@ class ManagedControl:
                 "worker_id": self.worker_id, "pid": os.getpid(), "updated": self.clock(),
                 "phase": self.phase, "reason": self.reason, "revision": self.revision,
                 "owner_connected": owned, **details,
+                "filter_enabled": self.filter_enabled,
             })
 
     def start(self):

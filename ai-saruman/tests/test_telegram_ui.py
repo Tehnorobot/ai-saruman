@@ -68,6 +68,22 @@ class TelegramHttpTests(Fixture):
         self.assertEqual(error.exception.code,400)
         error.exception.close()
 
+    def test_filter_checkbox_setting_is_authenticated_persisted_and_requires_stop(self):
+        self.app.runtime.game=FakeGame();self.app.director.start=Mock()
+        with self.assertRaises(HTTPError) as error:
+            self.post('/api/runtime/start',{'minecraft':False,'filter_enabled':False},token=False)
+        self.assertEqual(error.exception.code,403);error.exception.close()
+        started=self.post('/api/runtime/start',{'minecraft':False,'filter_enabled':False})
+        self.assertFalse(started['options']['filter_enabled'])
+        self.assertFalse(self.app.runtime.game.filter_enabled)
+        with self.assertRaises(HTTPError) as error:
+            self.post('/api/runtime/start',{'filter_enabled':True})
+        self.assertEqual(error.exception.code,409);error.exception.close()
+        self.post('/api/runtime/stop',{})
+        self.assertFalse(self.post('/api/runtime/start',{})['options']['filter_enabled'])
+        self.post('/api/runtime/stop',{})
+        self.assertTrue(self.post('/api/runtime/start',{'filter_enabled':True})['options']['filter_enabled'])
+
     def test_manual_draft_queue_cancel_and_persistence(self):
         identifier = self.post("/api/telegram/draft", {"text": "Проверка UI"})["id"]
         self.assertEqual(self.snapshot()["posts"][0]["status"], "draft")

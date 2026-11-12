@@ -13,6 +13,7 @@ from .game_connection import GameConnection
 
 atomic_json = load("managed").atomic_json
 OwnerLock = load("managed").FileOwnerLock
+RUNTIME_DEFAULTS = {"minecraft": True, "filter_enabled": True}
 
 
 class MinecraftProcess:
@@ -21,9 +22,13 @@ class MinecraftProcess:
         self.directory = project / ".saruman/runtime/minecraft"
         self.process = None
         self.worker_id = None
+        self.finished_workers = set()
         self.revision = 0
         self.requested = False
         self.shutdown_requested = False
+        self.filter_enabled = True
+        self.applied_filter_enabled = True
+        self.restarting = False
         self.directive = None
         self.retry_at = 0
         self.value = {"status": "stopped", "reason": "Minecraft не запрошен"}
@@ -36,7 +41,7 @@ class MinecraftProcess:
 
     def request(self, active):
         self.requested = active
-        self.shutdown_requested = False
+        if not self.restarting:self.shutdown_requested = False
         self.revision += 1
 
     def shutdown(self):
@@ -49,7 +54,7 @@ class MinecraftProcess:
         if self.worker_id:
             atomic_json(self.directory / "command.json", {
                 "worker_id": self.worker_id, "revision": self.revision,
-                "active": self.requested, "updated": self.clock(),
+                "active": self.requested and not self.restarting, "updated": self.clock(),
                 "shutdown": self.shutdown_requested,
                 "directive": self.directive,
             })
@@ -58,21 +63,46 @@ class MinecraftProcess:
         now, status = self.clock(), self.read("status.json")
         if self.worker_id is None:
             command = self.read("command.json")
-            if (status.get("worker_id") and status.get("worker_id") == command.get("worker_id")
+            if (status.get("worker_id") and status.get("worker_id") not in self.finished_workers
+                    and status.get("worker_id") == command.get("worker_id")
                     and 0 <= now-status.get("updated", 0)<3):
                 self.worker_id = status["worker_id"]
                 self.revision = max(self.revision, command.get("revision", 0)+1)
+                self.applied_filter_enabled = status.get("filter_enabled", True)
+        if (self.requested and self.worker_id and not self.restarting
+                and self.filter_enabled != self.applied_filter_enabled):
+            # An owned worker must exit before its CLI-only filter mode can change.
+            self.restarting = True
+            self.shutdown_requested = True
+            self.revision += 1
         self.heartbeat()
         if self.process is not None and self.process.poll() is not None:
             code = self.process.returncode
             reason = status.get("reason") if status.get("worker_id") == self.worker_id else None
+            self.finished_workers.add(self.worker_id)
             self.process = None
             self.worker_id = None
+            if self.restarting or not self.requested:
+                self.restarting = self.shutdown_requested = False
+                self.retry_at = now
+                self.value = {"status":"starting" if self.requested else "stopped",
+                              "reason":"Применяем настройку фильтра" if self.requested else "Игровые действия остановлены"}
+                return
             self.retry_at = now + 30
             self.value = {"status": "retrying", "reason": (reason or f"Игровой процесс завершился: код {code}")+". Повтор проверки через 30 с."}
             return
         live = (self.worker_id and status.get("worker_id") == self.worker_id
                 and 0 <= now-status.get("updated", 0)<3)
+        if self.restarting:
+            if self.process is not None or live:
+                self.value={"status":"restarting","reason":"Перезапуск игрового обработчика для изменения фильтра"}
+                return
+            # Adopted workers have no Popen handle. The runtime instance lock still protects
+            # against a duplicate if a closing worker outlives its final heartbeat.
+            self.finished_workers.add(self.worker_id)
+            self.worker_id = None
+            self.restarting = self.shutdown_requested = False
+            self.retry_at = now
         if live:
             if not self.requested:
                 phase = "stopped" if status.get("revision") == self.revision and not status.get("agent_running") else "stopping"
@@ -118,12 +148,15 @@ class MinecraftProcess:
             self.value={"status":"waiting_world","reason":"Ожидание Minecraft с UnionClef. Вход в мир — в разделе «Управление»"}
             return
         self.worker_id = uuid.uuid4().hex
+        self.applied_filter_enabled = self.filter_enabled
         self.heartbeat()
         env = {**os.environ, "PYTHONPATH": str(game / "src"), "PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1",
                "SARUMAN_LAB_CONTROL_DIR": str(self.directory), "SARUMAN_LAB_WORKER_ID": self.worker_id}
         self.directory.mkdir(parents=True, exist_ok=True)
+        argv=[str(python), "-m", "saruman.launcher", "run", "--env-file", ".env.saruman"]
+        if not self.filter_enabled:argv.append("--no-filter")
         with (self.directory / "minecraft.log").open("ab") as log:
-            self.process = subprocess.Popen([str(python), "-m", "saruman.launcher", "run", "--env-file", ".env.saruman"],
+            self.process = subprocess.Popen(argv,
                 cwd=game, env=env, stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT,
                 creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
         self.value = {"status": "starting", "reason": "Запуск и проверка игрового окружения"}
@@ -149,16 +182,20 @@ class CharacterRuntime:
                              "owner": self.identity, "epoch": self.epoch})
 
     def start(self, payload=None):
-        payload = payload or {}
-        if set(payload)-{"minecraft"} or ("minecraft" in payload and type(payload["minecraft"]) is not bool):
-            raise ValueError("Ожидается переключатель Minecraft")
+        payload = {} if payload is None else payload
+        if (not isinstance(payload,dict) or set(payload)-set(RUNTIME_DEFAULTS)
+                or any(type(value) is not bool for value in payload.values())):
+            raise ValueError("Переключатели Minecraft и фильтра должны быть true или false")
         with self.lock:
+            options = {**RUNTIME_DEFAULTS, **self.store.meta("runtime_options", {})}
+            if self.active and payload.get("filter_enabled",options["filter_enabled"]) != options["filter_enabled"]:
+                raise BlockingIOError("Нажмите Stop перед изменением фильтра текста")
             self.owner.acquire()
-            options = self.store.meta("runtime_options", {"minecraft": True})
             options.update(payload)
             self.store.set_meta("runtime_options", options)
             self.active = True; self.epoch += 1
             self.publish()
+            self.game.filter_enabled = options["filter_enabled"]
             self.game.request(options["minecraft"])
             self.director.start()
             if self.replies:self.replies.start()
@@ -209,7 +246,7 @@ class CharacterRuntime:
             elif settings["enabled"] and draft.get("error"):
                 telegram = {"status": "retrying", "reason": "Подготовка поста: " + draft["error"]}
         return {"active": self.active, "components": {"minecraft": dict(self.game.value), "telegram": telegram},
-                "options": self.store.meta("runtime_options", {"minecraft": True}), "error": self.error,
+                "options": {**RUNTIME_DEFAULTS, **self.store.meta("runtime_options", {})}, "error": self.error,
                 "next_draft": self.store.meta("next_draft"), "auto_post": settings["auto_post"],
                 "connection":self.connection.value,"game_settings":self.store.meta("game_connection",{"mode":"server","target":"","launcher":"","arguments":[]})}
 

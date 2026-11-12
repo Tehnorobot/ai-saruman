@@ -39,6 +39,7 @@ state.telegramPage = 0;
 state.telegramDraft = "";
 state.runtimeBusy = false;
 state.minecraftChoice = null;
+state.filterChoice = null;
 state.admin = null;state.adminDraft='';state.adminBusy=false;state.dialogues=null;state.gameForm=null;
 function toast(text) {
   $("#toast").textContent = text;
@@ -308,17 +309,20 @@ function controlView(){
 }
 function runtimeControls() {
   const runtime=state.data.runtime||{active:false,components:{},options:{minecraft:true}};
-  const names={running:'Работает',stopped:'Остановлен',stopping:'Останавливается',starting:'Запуск',checking:'Проверка',ready:'Готов',
+  const names={running:'Работает',stopped:'Остановлен',stopping:'Останавливается',starting:'Запуск',restarting:'Перезапуск',checking:'Проверка',ready:'Готов',
     waiting_world:'Ожидает мир',waiting_services:'Ожидает службы',paused:'Пауза',retrying:'Повтор подключения',
     disabled:'Выключен',unavailable:'Недоступен',not_configured:'Нужна настройка',external:'Отдельный процесс'};
   const minecraft=state.minecraftChoice===null?runtime.options.minecraft:state.minecraftChoice;
+  const filter=state.filterChoice===null?runtime.options.filter_enabled!==false:state.filterChoice;
   const cards=Object.entries(runtime.components).map(([key,item])=>'<div class="runtime-component"><strong>'+e(key==='minecraft'?'Minecraft':'Telegram')+
     ' <span class="tag">'+e(names[item.status]||item.status)+'</span></strong><small>'+e(item.reason||'')+'</small></div>').join('');
   return '<section id="runtime-controls" class="runtime-controls" aria-label="Управление персонажем"><div class="runtime-actions"><strong>Персонаж</strong>'+
     '<label class="check-label"><input id="runtime-minecraft" type="checkbox" '+(minecraft?'checked':'')+'> Minecraft</label>'+
+    '<label class="check-label"><input id="runtime-filter" type="checkbox" '+(filter?'checked':'')+' '+(runtime.active?'disabled':'')+'> Фильтр речи и игрового чата</label>'+
     '<button class="button primary" data-action="runtime-start" '+(state.runtimeBusy?'disabled':'')+'>Start</button>'+
     '<button class="button" data-action="runtime-stop" '+(state.runtimeBusy?'disabled':'')+'>Stop</button>'+
     '<small>'+e(runtime.active?'Запущен из Lab':'Остановлен')+'</small></div><div class="runtime-components">'+cards+'</div>'+
+    '<small>Фильтр применяется при Start. Для изменения нажмите Stop. При выключении речь и игровой чат проходят без модерации.</small>'+
     (runtime.error?'<div class="alert error">'+e(runtime.error)+'</div>':'')+'</section>';
 }
 function telegramView() {
@@ -529,10 +533,12 @@ document.addEventListener("click",async(event)=>{
     if(action==='runtime-start'||action==='runtime-stop'){
       if(state.runtimeBusy)return;
       const choice=state.minecraftChoice===null?state.data.runtime.options.minecraft:state.minecraftChoice;
+      const filter=state.filterChoice===null?state.data.runtime.options.filter_enabled!==false:state.filterChoice;
       state.runtimeBusy=true;render();
       try{
-        state.data.runtime=await api('/api/runtime/'+(action==='runtime-start'?'start':'stop'),action==='runtime-start'?{minecraft:choice}:{});
+        state.data.runtime=await api('/api/runtime/'+(action==='runtime-start'?'start':'stop'),action==='runtime-start'?{minecraft:choice,filter_enabled:filter}:{});
         state.minecraftChoice=null;
+        state.filterChoice=null;
         toast(action==='runtime-start'?'Запуск персонажа запрошен. Состояния компонентов показаны сверху.':'Остановка запрошена. Очередь Telegram сохранена.');
       }finally{state.runtimeBusy=false;render();}
       return;
@@ -572,6 +578,7 @@ setInterval(async()=>{
 },5000);
 document.addEventListener('change',event=>{
   if(event.target.id==='runtime-minecraft')state.minecraftChoice=event.target.checked;
+  if(event.target.id==='runtime-filter')state.filterChoice=event.target.checked;
 });
 document.addEventListener('input',event=>{
   if(event.target.id==='admin-text')state.adminDraft=event.target.value;

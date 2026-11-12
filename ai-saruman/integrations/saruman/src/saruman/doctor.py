@@ -28,15 +28,16 @@ def filter_is_ready(base_url: str) -> bool:
         return False
 
 
-def wait_for_filter(base_url, timeout, *, clock=time.monotonic, sleep=time.sleep):
+def wait_for_filter(base_url, timeout, *, clock=time.monotonic, sleep=time.sleep, cancelled=lambda:False):
     """Cold model loading may outlive TCP startup; wait without generating content."""
     deadline = clock() + timeout
-    while not filter_is_ready(base_url):
+    while not cancelled():
+        if filter_is_ready(base_url):return True
         remaining = deadline - clock()
         if remaining <= 0:
             return False
         sleep(min(2, remaining))
-    return True
+    return False
 
 
 def validate_profile(root: Path) -> list[str]:
