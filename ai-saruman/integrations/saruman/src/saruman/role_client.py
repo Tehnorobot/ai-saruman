@@ -1,6 +1,7 @@
 """Role-scoped structured inference. No provider may execute local tools itself."""
 
 import json
+import time
 
 import httpx
 import jsonschema
@@ -16,6 +17,14 @@ class RoleRequestError(RuntimeError):
     """Sanitized role failure suitable for operator diagnostics."""
 
 
+def output_issue(error):
+    """Describe the trusted schema, never echo a provider response into logs."""
+    if isinstance(error, jsonschema.ValidationError):
+        return {"schema_path": list(error.absolute_schema_path),
+                "rule": error.validator, "expected": error.validator_value}
+    return {"rule": "complete_structured_result"}
+
+
 class RoleClient:
     def __init__(self, store, role, session, transport=None):
         self.store, self.role, self.session = store, role, session
@@ -28,12 +37,35 @@ class RoleClient:
 
     def complete(self, instructions, payload, schema, images=None):
         profile = self.store.profiles()[self.role]
-        trace = {}
         if self.blocked_revision == profile["revision"]:
             raise RoleRequestError(
                 "Роль приостановлена после ошибки; проверьте настройки и нажмите Stop → Start"
             )
         serialized = json.dumps(payload, ensure_ascii=False)
+        # Persona has no tools or side effects. Correct one invalid response with
+        # the exact schema issue; each paid attempt gets its own usage record.
+        attempts = 2 if self.role == "persona" else 1
+        deadline = time.monotonic() + profile["timeout"]
+        for attempt in range(attempts):
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise RoleRequestError("Истекло настроенное время ответа роли; новое сообщение можно обработать отдельно")
+            try:
+                return self._complete_attempt({**profile, "timeout": remaining}, instructions, serialized, schema, images)
+            except RoleRequestError as error:
+                if not getattr(error, "output_issue", None) or attempt + 1 == attempts:
+                    raise
+                serialized = json.dumps({"original_input": payload,
+                    "output_correction": {"issue": error.output_issue,
+                        "previous_output": error.previous_output}}, ensure_ascii=False)
+                instructions += ("\nYour previous result was rejected before any publication. "
+                    "Correct only its output contract using output_correction. Preserve the "
+                    "answer's meaning. Do not repeat the player's message as an answer. "
+                    "Return submit_role_result exactly once, matching this JSON Schema:\n"
+                    + json.dumps(schema, ensure_ascii=False))
+
+    def _complete_attempt(self, profile, instructions, serialized, schema, images):
+        trace, value = {}, None
         # UTF-8 bytes are a deliberately conservative preflight, not billed usage.
         reserve = (
             len((instructions + serialized + json.dumps(schema)).encode("utf-8"))
@@ -71,14 +103,23 @@ class RoleClient:
                 value, usage = self.transport(profile, instructions, serialized, schema, images) if images else self.transport(profile, instructions, serialized, schema)
             jsonschema.validate(value, schema)
         except Exception as error:  # noqa: BLE001 - provider boundary; never leak exception text/credentials
-            self.blocked_revision = profile["revision"]
+            invalid_output = isinstance(error, (jsonschema.ValidationError, ProviderOutputError))
+            transient = isinstance(error, httpx.TransportError) or (
+                isinstance(error, httpx.HTTPStatusError)
+                and (error.response.status_code == 429 or error.response.status_code >= 500))
+            # A bad utterance/network interruption must not silence all later
+            # conversations. Unknown/configuration/auth failures still need review.
+            self.blocked_revision = None if invalid_output or transient else profile["revision"]
             usage = getattr(error, "usage", usage)
             code = (
                 f" HTTP {error.response.status_code}"
                 if isinstance(error, httpx.HTTPStatusError)
                 else ""
             )
+            issue = output_issue(error) if invalid_output else None
             detail = (
+                "Неверный формат ответа: " + json.dumps(issue, ensure_ascii=False)
+                if invalid_output else
                 str(error)
                 if isinstance(error, ProviderConfigurationError)
                 else (
@@ -90,7 +131,11 @@ class RoleClient:
                 usage,
                 reason=detail,
             )
-            raise RoleRequestError(f"Ошибка роли {self.role} ({profile['provider']} / {profile['model']}): {detail}") from None
+            failure = RoleRequestError(f"Ошибка роли {self.role} ({profile['provider']} / {profile['model']}): {detail}")
+            if invalid_output:
+                failure.output_issue = issue
+                failure.previous_output = value
+            raise failure from None
         self.store.finish(identifier, usage, model=trace.get("model"))
         self.last_trace = {"provider": profile["provider"], "model": trace.get("model", profile["model"]),
                            "role": self.role, "usage": usage}

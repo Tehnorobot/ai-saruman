@@ -291,6 +291,7 @@ class HybridAgent:
         )
         self.running, self.generation = False, 0
         self.requests = {}
+        self.role_errors = {}
         self.loop_lock = threading.Lock()
         self.seen = set()
         self.since = time.time_ns()
@@ -581,11 +582,23 @@ class HybridAgent:
             )
             if not request or not self.active(request):
                 continue
+            if role == "persona":
+                if item["revision"] != request.get("speech_revision") or self.clock() > item.get("deadline", item["created"] + 45):
+                    continue
+                expected_world = item.get("world", {}).get("world_session")
+                actual_world = self.ctx_swarm["game"].get("mod_runtime", {}).get("world")
+                if expected_world and expected_world != actual_world:
+                    continue
             if error:
-                request["state"] = "error"
-                self.ctx_swarm["game"]["role_error"] = (
-                    f"Ошибка {role}: {error}; автоматического повтора нет"
-                )
+                # Speech is independent from an already accepted game goal.
+                # A failed utterance cannot orphan its completion observation.
+                if role == "action" or request["state"] == "conversation":
+                    request["state"] = "error"
+                else:
+                    request["speech_error"] = error
+                self.role_errors[role] = error
+                self.ctx_swarm["game"]["role_error"] = "; ".join(
+                    f"Ошибка {name}: {reason}" for name, reason in self.role_errors.items())
                 if role == "action":
                     self.speak(
                         request,
@@ -597,17 +610,12 @@ class HybridAgent:
                     )
                 self.store.save_intent(request)
                 continue
+            if role in self.role_errors:
+                self.role_errors.pop(role)
+                request.pop("speech_error", None)
+                self.ctx_swarm["game"]["role_error"] = "; ".join(
+                    f"Ошибка {name}: {reason}" for name, reason in self.role_errors.items()) or None
             if role == "persona":
-                if item["revision"] != request.get(
-                    "speech_revision"
-                ) or self.clock() > item.get("deadline", item["created"] + 45):
-                    continue
-                expected_world = item.get("world", {}).get("world_session")
-                actual_world = (
-                    self.ctx_swarm["game"].get("mod_runtime", {}).get("world")
-                )
-                if expected_world and expected_world != actual_world:
-                    continue
                 if value["needs_action"] and request["source"] == "ambient":
                     request["state"] = "finished"
                     continue  # Self-expression never authorizes a game plan.
@@ -871,6 +879,7 @@ class HybridAgent:
         for client in self.clients.values():
             client.resume()
         self.running = True
+        self.role_errors.clear()
         self.ctx_swarm["game"]["role_error"] = None
         # Resume observation, never replay an in-flight tool/model call after restart.
         for saved in self.store.intents():

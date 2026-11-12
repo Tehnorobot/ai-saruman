@@ -466,6 +466,63 @@ class ProviderTests(Fixtures):
         with self.assertRaises(RuntimeError):
             client.complete("test", {}, PERSONA_SCHEMA)
 
+    def test_persona_corrects_exact_schema_issue_and_accounts_for_both_attempts(self):
+        self.profile()
+        invalid = persona_output(chat="x" * 81)
+        transport = Mock(side_effect=[(invalid, {"total_tokens": 12}),
+                                      (persona_output(), {"total_tokens": 7})])
+        client = RoleClient(self.store, "persona", "test", transport)
+        with patch('saruman.role_client.time', Mock(monotonic=Mock(side_effect=[100, 100, 102]))):
+            self.assertEqual(client.complete("persona", {"question": "Привет"}, PERSONA_SCHEMA), persona_output())
+        self.assertEqual(transport.call_count, 2)
+        self.assertEqual(transport.call_args_list[0].args[0]['timeout']-transport.call_args_list[1].args[0]['timeout'], 2)
+        repair = json.loads(transport.call_args.args[2])
+        self.assertEqual(repair['original_input'], {'question': 'Привет'})
+        self.assertEqual(repair['output_correction']['issue'], {
+            'schema_path': ['properties', 'chat_text', 'maxLength'],
+            'rule': 'maxLength', 'expected': 80})
+        self.assertEqual(repair['output_correction']['previous_output'], invalid)
+        rows = self.store.history()
+        self.assertEqual(sum(row['usage']['total_tokens'] for row in rows), 19)
+        self.assertEqual(sorted(row['state'] for row in rows), ['completed', 'error'])
+        self.assertIsNone(client.blocked_revision)
+
+    def test_format_correction_uses_remaining_configured_time_not_a_new_full_timeout(self):
+        profile = self.profile()
+        transport = Mock(return_value=(persona_output(chat='x'*81), {'total_tokens': 12}))
+        client = RoleClient(self.store, 'persona', 'test', transport)
+        with patch('saruman.role_client.time', Mock(monotonic=Mock(side_effect=[100, 100, 101+profile['timeout']]))):
+            with self.assertRaisesRegex(RuntimeError, 'Истекло настроенное время'):
+                client.complete('persona', {}, PERSONA_SCHEMA)
+        transport.assert_called_once()
+        self.assertEqual(len(self.store.history()), 1)
+        self.assertEqual(self.store.history()[0]['usage']['total_tokens'], 12)
+        self.assertIsNone(client.blocked_revision)
+
+    def test_rejected_persona_output_does_not_block_a_new_player_message(self):
+        self.profile()
+        invalid = {**persona_output(), 'tool_calls': [{'command': 'private-secret'}]}
+        transport = Mock(side_effect=[(invalid, {}), (invalid, {}), (persona_output(), {})])
+        client = RoleClient(self.store, 'persona', 'test', transport)
+        with self.assertRaisesRegex(RuntimeError, 'additionalProperties'):
+            client.complete('persona', {'question': 'one'}, PERSONA_SCHEMA)
+        self.assertNotIn('private-secret', str(self.store.history()))
+        self.assertIsNone(client.blocked_revision)
+        self.assertEqual(client.complete('persona', {'question': 'two'}, PERSONA_SCHEMA), persona_output())
+        self.assertEqual(transport.call_count, 3)
+
+    def test_transient_provider_failure_allows_next_request_without_replaying_old_one(self):
+        self.profile()
+        response = httpx.Response(502, request=httpx.Request('POST', 'https://example.test'))
+        transport = Mock(side_effect=[httpx.HTTPStatusError('private-secret', request=response.request, response=response),
+                                      (persona_output(), {})])
+        client = RoleClient(self.store, 'persona', 'test', transport)
+        with self.assertRaisesRegex(RuntimeError, 'HTTP 502'):
+            client.complete('persona', {'question': 'one'}, PERSONA_SCHEMA)
+        transport.assert_called_once()
+        self.assertIsNone(client.blocked_revision)
+        self.assertEqual(client.complete('persona', {'question': 'two'}, PERSONA_SCHEMA), persona_output())
+
     def test_codex_role_uses_its_profile_and_records_tokens(self):
         client = RoleClient(self.store, "persona", "test")
         with patch(
@@ -694,6 +751,62 @@ class HybridTests(Fixtures):
         self.agent.results.put(("persona", job, persona_output(), None))
         self.agent.handle_results()
         self.assertEqual(len(self.ctx["tts_queue"]), 1)
+
+    def test_new_player_reply_recovers_after_a_failed_persona_response(self):
+        self.agent.submit(self.event("привет"))
+        job = self.agent.persona_queue.get_nowait()
+        self.agent.results.put(("persona", job, None, "Invalid response"))
+        self.agent.handle_results()
+        self.assertEqual(self.ctx['tts_queue'], [])
+        self.assertIn('persona', self.ctx['game']['role_error'])
+        self.agent.submit(self.event("как дела", identifier=2))
+        job = self.agent.persona_queue.get_nowait()
+        self.agent.results.put(("persona", job, persona_output(), None))
+        self.agent.handle_results()
+        self.assertEqual(len(self.ctx['tts_queue']), 1)
+        self.assertEqual(self.ctx['chat_queue'], ['Слушаю.'])
+        self.assertIsNone(self.ctx['game']['role_error'])
+
+    def test_failed_speech_does_not_orphan_an_accepted_tree_goal(self):
+        request = self.submit_action()
+        request = self.agent.requests[request['id']]
+        goal = GoalStore().submit('trees', source='player')
+        request.update(state='waiting', goal_ids=[goal['id']], after_goal='finish')
+        self.agent.speak(request, 'accepted', {'decision': 'accepted'})
+        job = self.agent.persona_queue.get_nowait()
+        self.agent.results.put(('persona', job, None, 'Invalid response'))
+        self.agent.handle_results()
+        self.assertEqual(request['state'], 'waiting')
+        self.assertEqual(GoalStore().list()[0]['state'], 'queued')
+        GoalStore().update(goal, state='completed', completed=1)
+        self.agent.poll_goals()
+        self.assertEqual(request['state'], 'finished')
+        self.assertEqual(self.agent.persona_queue.get_nowait()['phase'], 'completed')
+
+    def test_old_speech_error_cannot_replace_the_newer_reply_state(self):
+        self.agent.submit(self.event('привет'))
+        request = self.agent.requests['1']
+        old = self.agent.persona_queue.get_nowait()
+        self.agent.speak(request, 'conversation', {})
+        self.agent.results.put(('persona', old, None, 'Old output failure'))
+        self.agent.handle_results()
+        self.assertEqual(request['state'], 'conversation')
+        self.assertIsNone(self.ctx['game'].get('role_error'))
+        self.agent.results.put(('persona', self.agent.persona_queue.get_nowait(), persona_output(), None))
+        self.agent.handle_results()
+        self.assertEqual(len(self.ctx['tts_queue']), 1)
+
+    def test_recovered_persona_does_not_hide_an_unresolved_action_error(self):
+        request = self.submit_action()
+        self.agent.results.put(('action', request, None, 'Action unavailable'))
+        self.agent.handle_results()
+        self.agent.results.put(('persona', self.agent.persona_queue.get_nowait(), None, 'Output invalid'))
+        self.agent.handle_results()
+        self.agent.submit(self.event('привет', identifier=2))
+        self.agent.results.put(('persona', self.agent.persona_queue.get_nowait(), persona_output(), None))
+        self.agent.handle_results()
+        self.assertIn('Action unavailable', self.ctx['game']['role_error'])
+        self.assertNotIn('Output invalid', self.ctx['game']['role_error'])
 
     def test_waiting_for_action_does_not_start_speculative_speech_request(self):
         self.submit_action()

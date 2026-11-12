@@ -1,5 +1,43 @@
 # Progress
 
+## 2026-11-12: Recover player replies and separate voice-chat playback from the microphone
+
+### Investigate
+- STT recorded the nearby player's speech, while the persona MiniMax request failed
+  schema validation. RoleClient then blocked every later request at that profile
+  revision. ActionAgent continued independently, explaining movement without replies.
+- The installed voice-chat client used CABLE Input as its speaker and CABLE Output
+  as its microphone. Received player audio therefore entered the cable intended for
+  Saruman's TTS and could be transmitted back as echo. The actual default speaker
+  is Headphones (WH-1000XM4); the last generated TTS clip had played to CABLE Input.
+- A persona worker error also marked the whole request as error, losing observation
+  of an already accepted native goal. Successful replies did not clear the error.
+
+### Plan
+- Correct a failed persona output once with its exact schema issue and previous
+  output. Account for each paid attempt, without executing tools or publishing it.
+- Let new requests recover after format/transport failures; keep configuration/auth
+  failures explicit. Retain goal observation and reject obsolete speech outcomes.
+- Move only received voice-chat audio to the headphones after the owner closes
+  Minecraft; retain the TTS-to-CABLE-to-microphone route.
+
+### Implement
+- Added sanitized schema-path/rule diagnostics and one targeted persona correction.
+  Invalid outputs and transient HTTP/network errors do not latch the role forever;
+  no blind replay of game tools, old player requests or public messages occurs.
+- Failed speech no longer orphans accepted goals. Track role failures separately,
+  clear only the recovered role and discard stale failures as well as stale replies.
+- Validation: 71 role/voice checks passed, including usage on both correction calls,
+  recovery on the next message, hidden unexpected tool fields, independent game
+  completion, obsolete errors and preservation of an unresolved other-role error.
+- The correction shares the configured per-response monotonic time budget; it does
+  not silently double it and cause a valid late reply to be discarded downstream.
+- Real MiniMax synthetic UTF-8 probe returned valid chat/voice JSON on the configured
+  high profile; 1854 tokens recorded. It was not published or played. An earlier
+  shell-encoding probe passed format only and is not treated as a semantic check.
+- Deployment and the speaker change are prepared, not yet applied to the active
+  game process. Evidence: .saruman/audit/voice-recovery-2026-11-12/.
+
 ## 2026-11-12: Restore private workflow visibility and the Minecraft dispatcher
 
 ### Investigate
