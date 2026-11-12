@@ -84,13 +84,13 @@ class AutomationRuntime:
             if snapshot["defense_enabled"] != active:
                 self.call("defense", snapshot, enabled=active)
             if snapshot.get("manual_stop"):
-                self.store.cancel()
+                self.store.cancel(reason="Native task stop")
                 self.next_plan = now + 10
             self.call(
                 "maintain", snapshot, ack_manual_stop=bool(snapshot.get("manual_stop"))
             )
             if not enabled and self.was_enabled:
-                self.store.cancel()
+                self.store.cancel(reason="Automation stopped")
             self.was_enabled = enabled
             self.reconcile(game, snapshot, active, tools)
             if active and self.supply is not None:
@@ -172,7 +172,9 @@ class AutomationRuntime:
                     goal,
                     state="cancelled",
                     completed=completed,
-                    reason="Player priority" if player_waiting else "Stopped",
+                    reason=(goal.get("reason") or "Stopped")
+                    if goal["state"] == "cancel_requested"
+                    else "Player priority",
                 )
                 continue
             if goal["state"] in {"running", "starting", "interrupted", "resuming"}:

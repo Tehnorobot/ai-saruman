@@ -1,5 +1,15 @@
 # Progress
 
+## 2026-11-11: TreeGrow falsely cancelled after defense handover
+
+Confirmed ordinary UnionClef task completion was mistaken for manual Stop because
+combat retained a borrowed-runner claim. Fixed both normal/rescue handovers and
+preserved actual Stop/safety. Two regressions reproduced the issue; all 61 Gradle
+checks/remapJar and 51 Python runtime/preflight checks passed, plus the Java shim
+contract. Paused Lab history preserved. New JAR is built; installation/gameplay
+retest awaits the owner's game shutdown.
+[Investigation, implementation and evidence](archive/11-11-2026-treegrow-false-stop.md).
+
 ## 2026-11-11: Auto Defense target-free handover
 
 Diagnosed unsafe-target cycling and priority-60 grace rearming in the installed

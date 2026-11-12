@@ -180,6 +180,7 @@ class NativeRuntimeTests(unittest.TestCase):
         self.tick()
         self.assertEqual(self.read(background)["state"], "cancelled")
         self.assertEqual(self.read(background)["completed"], 1)
+        self.assertEqual(self.read(background)["reason"], "Player priority")
 
     def test_player_priority_before_background_even_when_submitted_later(self):
         self.goal("planner")
@@ -200,6 +201,7 @@ class NativeRuntimeTests(unittest.TestCase):
         self.assertEqual(self.read(goal)["run_id"], run)
         self.assertEqual(self.read(goal)["state"], "running")
         self.assertEqual(sum(op == "tree_start" for op, _ in self.adapter.calls), 1)
+        self.assertFalse(any(op == "cancel" for op, _ in self.adapter.calls))
 
     def test_lost_resume_reply_and_second_interruption_keep_original_run(self):
         goal = self.goal()
@@ -315,6 +317,7 @@ class NativeRuntimeTests(unittest.TestCase):
         self.tick()
         self.tick(False)
         self.assertEqual(self.read(goal)["state"], "cancelled")
+        self.assertEqual(self.read(goal)["reason"], "Automation stopped")
         self.assertFalse(self.adapter.snapshot["defense_enabled"])
 
     def test_native_manual_stop_cancels_instead_of_resuming(self):
@@ -323,7 +326,21 @@ class NativeRuntimeTests(unittest.TestCase):
         self.adapter.snapshot["manual_stop"] = True
         self.tick()
         self.assertEqual(self.read(goal)["state"], "cancelled")
+        self.assertEqual(self.read(goal)["reason"], "Native task stop")
         self.assertFalse(any(op == "tree_resume" for op, _ in self.adapter.calls))
+
+    def test_cancel_reason_survives_defense_and_another_player_goal(self):
+        goal = self.goal()
+        self.tick()
+        self.adapter.snapshot["defense_busy"] = True
+        self.store.cancel(goal["id"], reason="Explicit operator cancellation")
+        self.goal("player")
+        self.tick()
+        self.assertEqual(self.read(goal)["state"], "cancel_requested")
+        self.adapter.snapshot["defense_busy"] = False
+        self.tick()
+        self.assertEqual(self.read(goal)["state"], "cancelled")
+        self.assertEqual(self.read(goal)["reason"], "Explicit operator cancellation")
 
     def test_native_speech_uses_database_edits_and_publishes_recent_lines(self):
         self.goal()

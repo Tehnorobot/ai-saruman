@@ -13,7 +13,8 @@ ARTIFACTS = {
     "treegrow": {"edd7a699318d0b18f46abe67db25046502e20ca400f4751c0ac0679664e5bee9"},
     "auto-defense": {"e19d47caa2ae553ab81b5b84ab4fc11179595809797cee7d122cad5f2b1db43c"},
     "auto_defense": {"5e773d1e64f651943b5faf709aea3ef1458503a2a25910acd476ab6a457e25cb",
-                     "6943228ddd690a24b5aad2e98bccb36e798c15b96c0a57a419979e42eeabe4ce"},
+                     "6943228ddd690a24b5aad2e98bccb36e798c15b96c0a57a419979e42eeabe4ce",
+                     "15af6beddd33e4388812a4502f629fdf08d73dd711017c3950612658bb094385"},
 }
 
 

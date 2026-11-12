@@ -145,7 +145,7 @@ class GoalStore:
             )
         return body
 
-    def cancel(self, goal_id=None, source=None):
+    def cancel(self, goal_id=None, source=None, *, reason="Cancelled by operator/player"):
         for goal in self.list(active=True, limit=-1):
             if (goal_id is None or goal["id"] == goal_id) and (
                 source is None or goal["source"] == source
@@ -153,7 +153,7 @@ class GoalStore:
                 self.update(
                     goal,
                     state="cancel_requested",
-                    reason="Cancelled by operator/player",
+                    reason=reason,
                 )
 
     def set_meta(self, key, value):
