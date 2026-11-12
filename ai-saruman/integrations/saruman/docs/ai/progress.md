@@ -6,8 +6,9 @@ Confirmed ordinary UnionClef task completion was mistaken for manual Stop becaus
 combat retained a borrowed-runner claim. Fixed both normal/rescue handovers and
 preserved actual Stop/safety. Two regressions reproduced the issue; all 61 Gradle
 checks/remapJar and 51 Python runtime/preflight checks passed, plus the Java shim
-contract. Paused Lab history preserved. New JAR is built; installation/gameplay
-retest awaits the owner's game shutdown.
+contract. Paused Lab history preserved. After the owner closed Minecraft,
+installed the new JAR with a verified backup; real planting/resumption retest
+remains pending.
 [Investigation, implementation and evidence](archive/11-11-2026-treegrow-false-stop.md).
 
 ## 2026-11-11: Auto Defense target-free handover

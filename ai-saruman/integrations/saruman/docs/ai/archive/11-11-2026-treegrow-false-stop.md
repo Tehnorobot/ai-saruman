@@ -44,9 +44,13 @@ automatic replay of cancelled user work. Build only in the restricted runner.
 
 ## Validation boundary
 
-The game is still using the previous JAR. Installation awaits the owner closing
-Minecraft with the world saved. No game commands, LLM requests, service restarts,
-world modifications or automatic goal replay were performed. Physical resumption
-of the same planting run and actual Stop must be retested after replacement and
-Saruman restart. Mage Home remains disabled. A brief safety preemption on initial
-selection of an unsafe target can still occur before that target is excluded.
+The owner authorized replacement after closing Minecraft. Verified saved-world
+shutdown, closed gateway and an exclusive JAR handle, then atomically replaced
+only .minecraft/mods/auto-defense-0.1.0.jar. Verified new and backup SHA-256 hashes.
+The prior 6943228d artifact is retained in the audit directory as
+installed-auto-defense-before-tree-resume.jar; installation.json records the
+operation. No game commands, LLM requests, service restarts, world modifications
+or automatic goal replay were performed. Physical planting/resumption and actual
+Stop still need a real-client retest after Minecraft/Saruman restart. Mage Home
+remains disabled. Brief safety preemption on initial selection of an unsafe
+target can still occur before that target is excluded.
