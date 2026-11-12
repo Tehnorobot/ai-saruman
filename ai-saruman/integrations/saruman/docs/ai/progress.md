@@ -6,7 +6,9 @@ Implemented one Start/Stop, independent scheduled Telegram, scoped DM/comment
 replies, private administrative commands and configured Minecraft connection.
 Reused durable queues/roles and separate environments; preserved native safety
 and the user's unrelated changes. Gateway API v3 update and physical game/Telegram
-checks remain owner-operated. [Implementation and validation](archive/11-11-2026-unified-autonomy.md).
+checks remain owner-operated. Updated local Lab is running on 8765 with the
+character stopped; 228 relevant checks passed, one Windows skip, browser smoke
+and read-only live endpoints passed. [Implementation and validation](archive/11-11-2026-unified-autonomy.md).
 Full use/test guide: [Autonomy](../../../../docs/AUTONOMY_RU.md).
 
 ## 2026-11-11: TreeGrow falsely cancelled after defense handover

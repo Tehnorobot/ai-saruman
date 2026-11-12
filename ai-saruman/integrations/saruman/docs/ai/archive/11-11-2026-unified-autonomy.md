@@ -70,3 +70,11 @@ They were not relaxed or changed to claim success. Relevant role/mod suites pass
 
 User guide and manual verification: [docs/AUTONOMY_RU.md](../../../../../docs/AUTONOMY_RU.md).
 Local diagnostics/screenshots: .saruman/audit/runtime-ui (ignored).
+
+## Local installation
+
+Confirmed no active model requests or sending/preparing posts, then restarted only
+the old local Lab Python process. The new 8765 server responds to overview, runtime,
+admin and dialogue inspection; both components remain stopped until the owner's
+Start. Existing credentials/settings/history preserved. No VPS deployment, real
+publication, game launch, world entry or private/public message was performed.
