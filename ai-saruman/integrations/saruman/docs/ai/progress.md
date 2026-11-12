@@ -1,5 +1,15 @@
 # Progress
 
+## 2026-11-11: Auto Defense target-free handover
+
+Diagnosed unsafe-target cycling and priority-60 grace rearming in the installed
+addon. Fixed source, passed 52 isolated Gradle tests/remapJar, retained native
+safety/handover settings, and updated Saruman artifact compatibility. After the
+owner closed Minecraft, installed the new JAR with an old-JAR backup and verified
+hashes. Paused Lab source/memory updated without changing acceptance history.
+Real gameplay handover retest remains pending.
+[Investigation, implementation and evidence](archive/11-11-2026-target-free-handover.md).
+
 ## 2026-11-11: Startup readiness and installed Auto Defense addon API
 
 Fixed cold-filter startup grace and compatibility with the installed Auto Defense

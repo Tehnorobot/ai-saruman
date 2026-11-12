@@ -30,7 +30,9 @@ public final class ModGateway implements Supplier<Map<String,Object>> {
         try { dc=type("dev.autodefense.client.AutoDefenseClient"); modern=false; }
         catch (ClassNotFoundException absent) { dc=type("dev.autodefense.AutoDefenseClient"); modern=true; }
         defenseClient=dc; addonApi=modern;
-        verify(dc,modern?"5e773d1e64f651943b5faf709aea3ef1458503a2a25910acd476ab6a457e25cb":"e19d47caa2ae553ab81b5b84ab4fc11179595809797cee7d122cad5f2b1db43c");
+        if (modern) verify(dc,"5e773d1e64f651943b5faf709aea3ef1458503a2a25910acd476ab6a457e25cb",
+                              "6943228ddd690a24b5aad2e98bccb36e798c15b96c0a57a419979e42eeabe4ce");
+        else verify(dc,"e19d47caa2ae553ab81b5b84ab4fc11179595809797cee7d122cad5f2b1db43c");
         verify(type("lab.treegrow.TreeGrowClient"),"edd7a699318d0b18f46abe67db25046502e20ca400f4751c0ac0679664e5bee9");
     }
     private Class<?> type(String name) throws Exception {
@@ -57,7 +59,7 @@ public final class ModGateway implements Supplier<Map<String,Object>> {
     private static void put(Object o, String name, Object value) throws Exception {
         Field f=o.getClass().getDeclaredField(name); f.setAccessible(true); f.set(o,value);
     }
-    private static synchronized void verify(Class<?> c, String hash) throws Exception {
+    private static synchronized void verify(Class<?> c, String... hashes) throws Exception {
         if (verified.contains(c)) return;
         Path jar=Paths.get(c.getProtectionDomain().getCodeSource().getLocation().toURI());
         // Fabric may execute a remapped cache JAR. Pin the installed container's
@@ -72,7 +74,7 @@ public final class ModGateway implements Supplier<Map<String,Object>> {
             }
         } catch (ReflectiveOperationException ignored) { /* code-source fallback */ }
         String actual=HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(jar)));
-        if (!hash.equals(actual)) throw new IllegalStateException("Unsupported artifact: "+jar.getFileName());
+        if (!Arrays.asList(hashes).contains(actual)) throw new IllegalStateException("Unsupported artifact: "+jar.getFileName());
         verified.add(c);
     }
     private static Map<String,Object> result(String status, String reason) {
