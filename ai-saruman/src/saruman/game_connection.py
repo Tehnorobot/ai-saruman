@@ -33,12 +33,22 @@ class GameConnection:
     def configure(self,value):
         self.store.set_meta("game_connection",validate(value));return value
 
-    def request(self):
-        value=validate(self.store.meta("game_connection",{}))
-        self.selected={**value,"arguments":list(value["arguments"])}
+    def configuration(self,*,world=None):
+        value=self.store.meta("game_connection",{})
+        if world is not None:
+            value={"mode":"world","target":world,"launcher":value.get("launcher",""),
+                   "arguments":value.get("arguments",[])}
+        elif not value.get("target"):
+            raise ValueError('Укажите цель в Настройки → Подключение к Minecraft или напишите: Войди в мир «имя папки в saves».')
+        return validate(value)
+
+    def request(self,*,world=None):
+        value=self.configuration(world=world)
         if self.probe and self.probe.poll() is None:raise RuntimeError("Проверка подключения ещё выполняется")
+        self.selected={**value,"arguments":list(value["arguments"])}
         self.identifier=uuid.uuid4().hex;self.deadline=self.clock()+180
-        self.value={"status":"starting","reason":"Ожидание Minecraft и подключение к выбранному миру"}
+        self.value={"status":"starting","reason":'Ожидание Minecraft и вход в мир «'+value['target']+'»'
+                    if value['mode']=='world' else "Ожидание Minecraft и подключение к выбранному серверу"}
         # Launching is an explicit authenticated operator action, using a saved executable
         # and argument array. No shell, credentials or launch arguments are invented by LLM.
         if value["launcher"] and not self._port_open():

@@ -63,8 +63,69 @@ class AdminTests(unittest.TestCase):
         self.assertEqual(self.runtime.game.directive['text'],'посади дерево')
         self.assertEqual(self.store.snapshot()['events'],[])
 
+    def test_named_world_command_uses_local_save_without_config_or_model(self):
+        self.interpret.side_effect=AssertionError('Explicit named-world command must not call a model')
+        with patch.object(self.runtime,'start') as start,patch.object(self.runtime.connection,'request',return_value={'status':'starting'}) as request:
+            value=self.command('зайди в мир test_3\n')
+            self.command('зайди в мир test_3\n')
+        self.assertEqual(value['status'],'accepted')
+        start.assert_called_once_with({'minecraft':True})
+        request.assert_called_once_with(world='test_3')
+        self.interpret.assert_not_called()
+        self.assertEqual(self.store.snapshot()['events'],[])
+        self.assertEqual(self.store.meta('game_connection',{}),{})
+
+    def test_quoted_world_name_and_explicit_connect_argument_are_preserved(self):
+        for number,(text,extra,name) in enumerate([
+            ('Войди в мир «Мир Сарумана»',{},'Мир Сарумана'),
+            ('Открой одиночный мир "test_3"',{},'test_3'),
+            ('Войти в мир',{'operation':'connect','argument':'test_3'},'test_3')]):
+            with patch.object(self.runtime,'start'),patch.object(self.runtime.connection,'request',return_value={'status':'starting'}) as request:
+                value=self.command(text,str(number),**extra)
+            self.assertEqual(value['status'],'accepted')
+            request.assert_called_once_with(world=name)
+
+    def test_invalid_world_and_unconfigured_button_do_not_start_character(self):
+        for identifier,text,extra in [('invalid','Зайди в мир ../other',{}),
+                                       ('no-config','Войти в настроенный мир',{'operation':'connect'})]:
+            with patch.object(self.runtime,'start') as start,patch.object(self.runtime.connection,'request') as request:
+                result=self.command(text,identifier,**extra)
+            self.assertEqual(result['status'],'error')
+            start.assert_not_called();request.assert_not_called()
+
+    def test_empty_named_world_cannot_fall_back_to_a_configured_server(self):
+        self.runtime.connection.configure({'mode':'server','target':'example.com','launcher':'','arguments':[]})
+        with patch.object(self.runtime,'start') as start,patch.object(self.runtime.connection,'request') as request:
+            result=self.command('Войди в мир ""')
+        self.assertEqual(result['status'],'error')
+        start.assert_not_called();request.assert_not_called()
+
+    def test_negation_is_not_a_direct_join_and_model_cannot_invent_world_name(self):
+        self.interpret.return_value={'operation':'answer','text':'Не захожу.'}
+        result=self.command('Не заходи в мир test_3')
+        self.assertEqual(result['status'],'accepted')
+        self.assertFalse(self.runtime.active)
+        self.interpret.assert_called_once()
+        self.interpret.return_value={'operation':'connect','text':'other_world'}
+        with patch.object(self.runtime,'start') as start,patch.object(self.runtime.connection,'request') as request:
+            result=self.command('Открой выбранное сохранение','invented')
+        self.assertEqual(result['status'],'error')
+        start.assert_not_called();request.assert_not_called()
+
 
 class ConnectionTests(unittest.TestCase):
+    def test_explicit_world_works_without_saved_server_and_does_not_rewrite_settings(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);store=Store(root/'tg.sqlite');game=GameConnection(root,store)
+            for settings in ({},{'mode':'server','target':'example.com','launcher':'','arguments':[]}):
+                if settings:game.configure(settings)
+                with patch.object(game,'_port_open',return_value=True),patch('saruman.game_connection.subprocess.Popen') as spawn:
+                    result=game.request(world='test_3')
+                self.assertEqual(result['status'],'starting')
+                self.assertEqual(game.selected,{'mode':'world','target':'test_3','launcher':'','arguments':[]})
+                self.assertEqual(store.meta('game_connection',{}),settings)
+                spawn.assert_not_called()
+
     def test_target_validation_rejects_paths_and_shell_launcher(self):
         base={"mode":"server","target":"localhost:25565","launcher":"","arguments":[]}
         self.assertEqual(validate(base),base)
@@ -97,6 +158,15 @@ class ConnectionTests(unittest.TestCase):
             game.configure({"mode":"server","target":"second.example","launcher":"","arguments":[]})
             self.assertEqual(game.selected['target'],'first.example')
             self.assertEqual(store.meta('game_connection')['target'],'second.example')
+
+    def test_busy_probe_cannot_be_retargeted_by_another_named_world_request(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);game=GameConnection(root,Store(root/'tg.sqlite'))
+            game.request(world='first');identifier=game.identifier
+            game.probe=Mock();game.probe.poll.return_value=None
+            with self.assertRaisesRegex(RuntimeError,'ещё выполняется'):game.request(world='second')
+            self.assertEqual(game.selected['target'],'first')
+            self.assertEqual(game.identifier,identifier)
 
     def test_cancel_stops_only_its_probe_and_never_closes_the_world(self):
         with tempfile.TemporaryDirectory() as directory:

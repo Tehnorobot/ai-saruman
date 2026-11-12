@@ -1,5 +1,30 @@
 # Progress
 
+## 2026-11-12: Named singleplayer command bypasses empty saved-server configuration
+
+### Investigate
+- Read-only live inspection reproduced the owner's case: the private admin model
+  answered that test_3 needed a server address; no join was submitted. The saved
+  connection target was empty. The named folder in the chat never reached the
+  existing singleplayer loader.
+
+### Plan
+- Reuse connect for literal authenticated named-world commands and select world
+  mode for that request. Preserve saved server settings and private/public boundaries.
+  Validate before Start; do not activate the character on an invalid request.
+
+### Implement
+- Added direct handling of named local-world commands, including quoted names and
+  Cyrillic. Models cannot invent another folder. Explicit local names work without
+  preset connection settings; failures still ask for an exact saves folder.
+- Empty names cannot fall back to a configured server. A refused concurrent join
+  cannot retarget the in-flight probe. Existing request idempotency is preserved.
+- Regressions reproduced the missing routing and premature Start. Full Lab suite:
+  64 tests passed, one existing Windows symlink privilege skip. No real join,
+  publication, LLM call or settings change was made by these checks.
+- Application to the running Lab requires an approved restart: the character is
+  active, so its current in-memory admin handler must not be replaced silently.
+
 ## 2026-11-12: Exact saved-world selection and actionable name correction
 
 ### Investigate
