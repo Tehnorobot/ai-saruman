@@ -290,7 +290,15 @@ function settingsView(){
 }
 function controlView(){
   const d=state.admin||{messages:[],game_result:{}};
-  const messages=d.messages.slice().reverse().map(m=>'<article class="panel-body"><strong>Вы</strong><p class="bubble">'+e(m.input)+'</p><strong>Управление · '+e(m.status)+'</strong><pre class="note-preview">'+e(m.result)+'</pre></article>').join('');
+  const labels={accepted:'Принято',answered:'Ответ',interpreting:'Разбирает команду',needs_input:'Нужно уточнение',
+    no_draft:'Нет готового поста',draft:'Готов к публикации',waiting_start:'Ожидает Start',queued:'В очереди',preparing:'Готовится',sending:'Отправляется',
+    sent:'Опубликовано',already_sent:'Уже опубликовано',failed:'Ошибка отправки',error:'Ошибка',unknown:'Проверьте доставку',cancelled:'Отменено'};
+  const messages=d.messages.slice().reverse().map(m=>{
+    let result={};try{const parsed=JSON.parse(m.result);if(parsed&&typeof parsed==='object'&&!Array.isArray(parsed))result=parsed;}catch(error){}
+    return '<article class="panel-body"><strong>Вы</strong><p class="bubble">'+e(m.input)+'</p><strong>Управление · '+e(labels[m.status]||m.status)+
+      '</strong><pre class="note-preview">'+e(result.detail||result.error||m.result)+'</pre>'+
+      (result.operation==='publish'&&m.status==='needs_input'?'<a href="#telegram">Выбрать пост в Telegram</a>':'')+'</article>';
+  }).join('');
   return panel('Приватный административный чат','<div class="panel-body tiny">Этот чат управляет доступными операциями. Он отделён от публичных диалогов и памяти персонажа. Принятие поручения ещё не означает его выполнение.</div>'+
     '<div class="admin-messages">'+(messages||'<div class="empty">Попросите проверить состояние, подготовить пост или выполнить игровое поручение.</div>')+'</div>'+
     '<form id="admin-form" class="composer"><textarea id="admin-text" placeholder="Приватная команда" maxlength="12000">'+e(state.adminDraft)+'</textarea><button class="button primary" '+(state.adminBusy?'disabled':'')+'>'+(state.adminBusy?'Обрабатываем…':'Отправить')+'</button></form>',

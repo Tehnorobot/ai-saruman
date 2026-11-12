@@ -42,8 +42,65 @@ class AdminTests(unittest.TestCase):
         rejected=self.command('Опубликуй что-нибудь')
         self.assertEqual(rejected['status'],'error')
         value=self.command('Опубликуй '+post,'publish')
-        self.assertEqual(json.loads(value['result'])['status'],'queued')
+        self.assertEqual(json.loads(value['result'])['status'],'waiting_start')
         self.assertEqual(self.store.snapshot()['posts'][0]['status'],'queued')
+
+    def test_general_publish_queues_single_draft_without_id_or_model(self):
+        post=self.store.manual('Public draft')
+        self.interpret.side_effect=AssertionError('Simple publish must not call a model')
+        result=self.command('опубликуй пост в канале\n')
+        self.assertEqual(result['status'],'waiting_start')
+        self.assertEqual(json.loads(result['result'])['post_id'],post)
+        self.assertEqual(self.store.snapshot()['posts'][0]['status'],'queued')
+        self.assertFalse(self.runtime.active)
+        self.interpret.assert_not_called()
+        self.assertEqual(self.store.snapshot()['events'],[])
+
+    def test_no_draft_reports_prior_publication_without_resending_it(self):
+        post=self.store.manual('Earlier scheduled post')
+        with self.store.db() as db:db.execute("UPDATE posts SET status='sent',message_id=7 WHERE id=?",(post,))
+        result=self.command('опубликуй пост в канале')
+        self.assertEqual(result['status'],'no_draft')
+        self.assertEqual(json.loads(result['result'])['last_sent']['message_id'],7)
+        self.assertEqual(self.store.snapshot()['posts'][0]['status'],'sent')
+        self.assertEqual(self.store.snapshot()['attempts'],[])
+        self.interpret.assert_not_called()
+
+    def test_ambiguous_publish_requests_a_choice_without_queuing_anything(self):
+        self.store.manual('First');self.store.manual('Second')
+        result=self.command('Опубликуй пост')
+        self.assertEqual(result['status'],'needs_input')
+        self.assertEqual([p['status'] for p in self.store.snapshot()['posts']],['draft','draft'])
+
+    def test_delivery_state_updates_history_and_idempotent_command_result(self):
+        post=self.store.manual('One post')
+        self.command('Опубликуй пост')
+        with self.store.db() as db:db.execute("UPDATE posts SET status='sent',message_id=12 WHERE id=?",(post,))
+        history=self.admin.history()[0]
+        self.assertEqual(history['status'],'sent')
+        self.assertEqual(history['recorded_status'],'waiting_start')
+        self.assertEqual(json.loads(history['result'])['message_id'],12)
+        replay=self.command('Опубликуй пост')
+        self.assertEqual(replay['status'],'sent')
+        self.assertEqual(len(self.store.snapshot()['attempts']),1)
+
+    def test_explicit_already_sent_or_unknown_post_cannot_be_requeued(self):
+        for status in ('sent','unknown'):
+            post=self.store.manual('Existing post')
+            with self.store.db() as db:db.execute("UPDATE posts SET status=? WHERE id=?",(status,post))
+            result=self.command('Опубликуй '+post,status,operation='publish',argument=post)
+            self.assertEqual(result['status'],'already_sent' if status=='sent' else 'unknown')
+            with self.store.db() as db:self.assertEqual(db.execute('SELECT status FROM posts WHERE id=?',(post,)).fetchone()[0],status)
+
+    def test_explanatory_and_legacy_detail_answers_are_not_action_acceptance(self):
+        self.interpret.return_value={'operation':'answer','text':'Нужно уточнение.'}
+        result=self.command('Что нужно уточнить?')
+        self.assertEqual(result['status'],'answered')
+        with self.store.db() as db:
+            db.execute("INSERT INTO admin_messages VALUES ('old','old command',?,'accepted',0)",
+                       (json.dumps({'detail':'Old clarification'}),))
+        self.assertEqual([r for r in self.admin.history() if r['id']=='old'][0]['status'],'answered')
+        with self.store.db() as db:self.assertEqual(db.execute("SELECT status FROM admin_messages WHERE id='old'").fetchone()[0],'accepted')
 
     def test_only_explicit_public_topic_enters_post_events(self):
         self.interpret.return_value={"operation":"draft","text":"Размышление о деревьях"}
@@ -103,7 +160,7 @@ class AdminTests(unittest.TestCase):
     def test_negation_is_not_a_direct_join_and_model_cannot_invent_world_name(self):
         self.interpret.return_value={'operation':'answer','text':'Не захожу.'}
         result=self.command('Не заходи в мир test_3')
-        self.assertEqual(result['status'],'accepted')
+        self.assertEqual(result['status'],'answered')
         self.assertFalse(self.runtime.active)
         self.interpret.assert_called_once()
         self.interpret.return_value={'operation':'connect','text':'other_world'}

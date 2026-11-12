@@ -48,6 +48,42 @@ class Fixture(unittest.TestCase):
                                              "event_ids": [p["events"][0]["id"]]}), self.store)
 
 
+class AdminPublicationTests(Fixture):
+    def test_repeated_and_concurrent_commands_queue_a_draft_only_once(self):
+        identifier=self.store.manual('Existing draft')
+        barrier=threading.Barrier(2);results=[];errors=[]
+        def run(request_id):
+            try:
+                barrier.wait(timeout=3)
+                results.append(self.store.queue_for_admin(request_id))
+            except Exception as error:errors.append(error)
+        workers=[threading.Thread(target=run,args=(str(i),)) for i in range(2)]
+        for thread in workers:thread.start()
+        for thread in workers:thread.join(5)
+        self.assertFalse(any(thread.is_alive() for thread in workers))
+        self.assertEqual(errors,[])
+        self.assertEqual([r['post_id'] for r in results],[identifier,identifier])
+        self.assertEqual([r['status'] for r in results],['queued','queued'])
+        attempts=self.store.snapshot()['attempts']
+        self.assertEqual(len(attempts),1)
+        self.assertEqual(attempts[0]['stage'],'admin_queue')
+
+    def test_unknown_and_failed_delivery_need_explicit_resolution(self):
+        identifier=self.store.manual('Not confirmed')
+        for status in ('failed','unknown'):
+            with self.store.db() as db:db.execute('UPDATE posts SET status=? WHERE id=?',(status,identifier))
+            self.assertEqual(self.store.queue_for_admin('request')['status'],status)
+        self.assertEqual(self.store.queue_for_admin('explicit',identifier)['status'],'unknown')
+        with self.store.db() as db:db.execute("UPDATE posts SET status='failed' WHERE id=?",(identifier,))
+        self.assertEqual(self.store.queue_for_admin('retry',identifier)['status'],'queued')
+
+    def test_only_existing_draft_is_used_and_no_post_is_generated(self):
+        self.assertEqual(self.store.queue_for_admin('empty')['status'],'no_draft')
+        self.assertEqual(self.store.snapshot()['posts'],[])
+        self.store.manual('A');self.store.manual('B')
+        self.assertEqual(self.store.queue_for_admin('ambiguous')['status'],'needs_input')
+        self.assertEqual(self.store.snapshot()['counts'],{'draft':2})
+
 class ManagedDraftTests(Fixture):
     def managed(self, draft=None):
         self.store.configure({"enabled":True,"auto_post":True,"interval_seconds":120})
@@ -322,6 +358,17 @@ class EndToEndTests(Fixture):
         Control(self.store, self.env).step()
         self.assertEqual(self.telegram.sends, 1)
         self.assertEqual(self.store.snapshot()["posts"][0]["status"], "sent")
+
+    def test_admin_queue_repeated_before_and_after_delivery_sends_once(self):
+        identifier=self.store.manual('One explicit publication')
+        self.assertEqual(self.store.queue_for_admin('first')['post_id'],identifier)
+        self.assertEqual(self.store.queue_for_admin('repeat')['post_id'],identifier)
+        self.control.step()
+        self.assertEqual(self.store.snapshot()['posts'][0]['status'],'sent')
+        self.assertEqual(self.store.queue_for_admin('explicit-again',identifier)['status'],'already_sent')
+        self.assertEqual(self.store.queue_for_admin('general-again')['status'],'no_draft')
+        self.control.step()
+        self.assertEqual(self.telegram.sends,1)
 
     def test_unreachable_gateway_retries_same_id(self):
         identifier = self.queue()

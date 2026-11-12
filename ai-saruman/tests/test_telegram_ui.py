@@ -85,3 +85,17 @@ class TelegramHttpTests(Fixture):
             second = json.load(response)
         self.assertEqual(len(first["events"]) + len(second["events"]), 35)
         self.assertNotIn("GATEWAY_API_KEY", json.dumps(first))
+
+    def test_private_publish_requires_csrf_and_tracks_actual_delivery(self):
+        identifier=self.app.telegram.store.manual('Ready post')
+        command={'text':'опубликуй пост в канале','request_id':'publish-ui'}
+        with self.assertRaises(HTTPError) as error:self.post('/api/admin',command,token=False)
+        self.assertEqual(error.exception.code,403);error.exception.close()
+        self.assertEqual(self.snapshot()['posts'][0]['status'],'draft')
+        result=self.post('/api/admin',command)
+        self.assertEqual(result['status'],'waiting_start')
+        with self.app.telegram.store.db() as db:
+            db.execute("UPDATE posts SET status='sent',message_id=7 WHERE id=?",(identifier,))
+        with urlopen(self.base+'/api/admin') as response:history=json.load(response)['messages']
+        self.assertEqual(history[0]['status'],'sent')
+        self.assertEqual(json.loads(history[0]['result'])['message_id'],7)

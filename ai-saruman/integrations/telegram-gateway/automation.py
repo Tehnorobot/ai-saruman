@@ -168,6 +168,58 @@ class Store:
             else:
                 raise ValueError("This action is unavailable for the current post state")
 
+    @staticmethod
+    def publication_result(row):
+        """Observed outbox state for the private UI; never a claim based on a command alone."""
+        details={"draft":"Пост готов к публикации; повторите команду публикации.","preparing":"Пост ещё готовится. Повторите команду, когда черновик будет готов.",
+                 "queued":"Пост в очереди; доставка ещё не подтверждена.","sending":"Пост отправляется; подтверждение ещё не получено.",
+                 "sent":"Публикация подтверждена Telegram.","failed":"Ошибка отправки. Проверьте пост в разделе Telegram.",
+                 "unknown":"Доставка неизвестна. Проверьте канал; повторная отправка автоматически не выполняется.",
+                 "cancelled":"Публикация отменена."}
+        return {"status":row["status"],"post_id":row["id"],"message_id":row["message_id"],
+                "updated":row["updated"],"detail":details.get(row["status"],"Состояние публикации уточняется.")}
+
+    def queue_for_admin(self, request_id, identifier=None):
+        """Queue one unambiguous existing draft atomically. No generation, network or resend."""
+        with self.db() as db:
+            db.execute("BEGIN IMMEDIATE")
+            if identifier:
+                row=db.execute("SELECT * FROM posts WHERE id=?",(identifier,)).fetchone()
+                if row is None:raise ValueError("Post not found")
+            else:
+                rows=db.execute("SELECT * FROM posts WHERE status IN "
+                    "('draft','preparing','queued','sending','failed','unknown') ORDER BY created").fetchall()
+                if len(rows)>1:
+                    return {"status":"needs_input","detail":"Есть несколько неотправленных постов. "
+                            "Выберите нужный в разделе Telegram или укажите его ID.",
+                            "choices":[{"post_id":r['id'],"status":r['status']} for r in rows]}
+                if not rows:
+                    last=db.execute("SELECT * FROM posts WHERE status='sent' ORDER BY updated DESC LIMIT 1").fetchone()
+                    result={"status":"no_draft","detail":"Готовых черновиков для публикации нет."}
+                    if last:
+                        result["last_sent"]={"post_id":last['id'],"message_id":last['message_id'],"updated":last['updated']}
+                        result["detail"]+=" Последний пост уже опубликован; повторная отправка не выполнена."
+                    else:result['detail']+=" Сначала подготовьте пост в разделе Telegram или задайте тему в чате."
+                    return result
+                row=rows[0]
+            if row['status']=='draft' or (identifier and row['status']=='failed'):
+                db.execute("UPDATE posts SET status='queued',next_try=0,error=NULL,updated=? WHERE id=?",
+                           (self.clock(),row['id']))
+                db.execute("INSERT INTO attempts (post_id,stage,created,result) VALUES (?,?,?,?)",
+                           (row['id'],'admin_queue',self.clock(),json.dumps({'request_id':request_id})))
+                row=db.execute("SELECT * FROM posts WHERE id=?",(row['id'],)).fetchone()
+            result=self.publication_result(row)
+            if row['status']=='sent':
+                result['status']='already_sent'
+                result['detail']='Этот пост уже опубликован. Повторная отправка не выполнена.'
+            return result
+
+    def publication_context(self):
+        with self.db() as db:
+            counts={r[0]:r[1] for r in db.execute("SELECT status,COUNT(*) FROM posts GROUP BY status")}
+            last=db.execute("SELECT * FROM posts WHERE status='sent' ORDER BY updated DESC LIMIT 1").fetchone()
+        return {"counts":counts,"last_sent":self.publication_result(last) if last else None}
+
     def snapshot(self, page=0, size=30):
         if type(page) is not int or page < 0:
             raise ValueError("Invalid page")

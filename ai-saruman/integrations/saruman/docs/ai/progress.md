@@ -1,5 +1,35 @@
 # Progress
 
+## 2026-11-12: Truthful private publication commands and delivery status
+
+### Investigate
+- Live metadata showed the last channel post was confirmed sent 124 seconds before
+  the owner's general publish command. Automatic posting was enabled. The admin
+  model requested a draft ID, while the UI labelled that clarification accepted.
+  Admin commands also lacked a current publication summary and delivery tracking.
+
+### Plan
+- Resolve an unambiguous existing draft without requiring the operator to copy its
+  ID. Never create or resend a post implicitly. Separate informational answers,
+  queue acceptance and confirmed delivery, preserving original command records.
+
+### Implement
+- Added atomic draft selection/queueing and command-linked audit records. Ambiguous
+  candidates require selection; sent/unknown states never requeue automatically.
+- Private history observes the linked outbox result, including duplicate request
+  lookups. Existing detail-only answers display as answered without rewriting the
+  original log. Added readable Russian UI statuses and concise result text.
+- Models receive counts/last-sent metadata rather than full post/event history.
+  Simple publication commands bypass the model. Publication queues remain subject
+  to the existing Telegram enable and character Start controls.
+- Validation: 71 Lab checks passed (one existing Windows symlink skip) and 71
+  Telegram checks passed; an additional focused fake-gateway integration verifies
+  repeated commands result in one send. JavaScript syntax checked offline in Node.
+- With the character confirmed stopped, restarted only Lab. Live read-only checks
+  verified the original clarification now displays as answered. Publication rows,
+  attempt IDs, command IDs and Telegram settings were unchanged. The character
+  remains stopped; no real post, LLM call or settings edit was performed.
+
 ## 2026-11-12: Named singleplayer command bypasses empty saved-server configuration
 
 ### Investigate
