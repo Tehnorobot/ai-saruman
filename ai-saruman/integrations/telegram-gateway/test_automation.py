@@ -5,7 +5,7 @@ import sys
 import tempfile
 import threading
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 folder = Path(__file__).resolve().parent
 if "_saruman_telegram" not in sys.modules:
@@ -46,6 +46,91 @@ class Fixture(unittest.TestCase):
     def director(self, draft=None):
         return Director(draft or (lambda p: {"text": "Я вырастил дерево.",
                                              "event_ids": [p["events"][0]["id"]]}), self.store)
+
+
+class ManagedDraftTests(Fixture):
+    def managed(self, draft=None):
+        self.store.configure({"enabled":True,"auto_post":True,"interval_seconds":120})
+        self.owner()
+        return Director(draft or (lambda p:{"text":"Размышление Сарумана.","event_ids":[p["events"][0]["id"]]}),self.store,managed=True)
+
+    def owner(self,active=True,epoch=1):
+        self.store.set_meta("character_runtime",{"active":active,"updated":self.clock(),"owner":"lab","epoch":epoch})
+
+    def test_without_minecraft_first_start_waits_for_schedule(self):
+        director=self.managed()
+        director.step()
+        self.assertEqual(self.store.snapshot()["posts"],[])
+        due=self.store.meta("next_draft")
+        self.assertEqual(due,self.clock()+120)
+        self.clock.now=due;self.owner()
+        director.step()
+        post=self.store.snapshot()["posts"][0]
+        self.assertEqual(post["status"],"queued")
+        event=self.store.snapshot()["events"][0]
+        self.assertEqual(event["kind"],"scheduled_reflection")
+        self.assertNotIn("tree_grown",str(event))
+
+    def test_saving_unchanged_settings_preserves_schedule(self):
+        director=self.managed();director.step()
+        due=self.store.meta("next_draft")
+        self.clock.now+=10
+        self.store.configure(self.store.settings())
+        self.assertEqual(self.store.meta("next_draft"),due)
+
+    def test_stop_and_start_do_not_reset_schedule_or_duplicate_draft(self):
+        director=self.managed()
+        director.step();due=self.store.meta("next_draft")
+        self.owner(False,2);director.step()
+        self.owner(True,3);director.step()
+        self.assertEqual(self.store.meta("next_draft"),due)
+        self.clock.now=due;self.owner(True,3)
+        director.step();director.step()
+        self.assertEqual(len(self.store.snapshot()["posts"]),1)
+
+    def test_explicit_interval_edit_changes_due_date_without_a_restart(self):
+        director=self.managed();director.step()
+        self.clock.now+=10
+        self.store.configure({"interval_seconds":30})
+        self.assertEqual(self.store.meta("next_draft"),self.clock()+30)
+        self.owner();director.step()
+        self.assertEqual(self.store.snapshot()["posts"],[])
+
+    def test_pending_review_keeps_full_events_without_more_model_calls(self):
+        draft=Mock(return_value={"text":"Мысль.","event_ids":["event-1"]})
+        director=self.managed(draft)
+        self.store.configure({"auto_post":False})
+        self.event();self.store.set_meta("next_draft",0)
+        director.step()
+        self.clock.now+=121;self.owner()
+        director.step()
+        self.assertEqual(draft.call_count,1)
+        self.assertEqual(self.store.snapshot()["posts"][0]["status"],"draft")
+
+    def test_stop_start_during_generation_cannot_autopublish_stale_result(self):
+        def draft(payload):
+            self.owner(False,2);self.owner(True,3)
+            return {"text":"Мысль.","event_ids":[payload["events"][0]["id"]]}
+        director=self.managed(draft)
+        self.event();self.store.set_meta("next_draft",0)
+        director.step()
+        self.assertEqual(self.store.snapshot()["posts"][0]["status"],"draft")
+
+    def test_expired_owner_blocks_model_and_delivery(self):
+        director=self.managed(Mock(side_effect=AssertionError("stale owner")))
+        self.event();self.store.set_meta("next_draft",0)
+        self.clock.now+=16
+        director.step()
+        control=Control(self.store,managed=True)
+        with patch.object(control,"config",side_effect=AssertionError("delivery after shutdown")):
+            control.step()
+        self.assertEqual(self.store.snapshot()["posts"],[])
+
+    def test_legacy_game_cannot_compete_with_lab_owner(self):
+        self.managed();self.active();self.event()
+        director=self.director(Mock(side_effect=AssertionError("duplicate generator")))
+        director.step()
+        self.assertEqual(self.store.snapshot()["posts"],[])
 
 
 class DraftTests(Fixture):

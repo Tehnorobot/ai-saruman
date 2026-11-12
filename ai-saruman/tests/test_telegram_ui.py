@@ -6,6 +6,8 @@ from urllib.request import Request, urlopen
 
 from test_lab import Fixture, FakeProvider
 from saruman.web import Application, make_server
+from unittest.mock import Mock
+from test_runtime import FakeGame
 
 
 class TelegramHttpTests(Fixture):
@@ -18,6 +20,7 @@ class TelegramHttpTests(Fixture):
         self.base = "http://127.0.0.1:" + str(self.server.server_port)
 
     def tearDown(self):
+        self.app.runtime.close()
         self.server.shutdown()
         self.server.server_close()
         self.thread.join()
@@ -45,6 +48,25 @@ class TelegramHttpTests(Fixture):
             self.assertEqual(error.exception.code, 400)
             error.exception.close()
         self.assertFalse(self.snapshot()["settings"]["enabled"])
+
+    def test_runtime_routes_start_stop_and_reject_untrusted_controls(self):
+        self.app.runtime.game=FakeGame()
+        self.app.director.start=Mock()  # No model/network worker in an HTTP fixture.
+        with self.assertRaises(HTTPError) as error:
+            self.post("/api/runtime/start",{"minecraft":False},token=False)
+        self.assertEqual(error.exception.code,403)
+        error.exception.close()
+        started=self.post("/api/runtime/start",{"minecraft":False})
+        self.assertTrue(started["active"])
+        self.assertFalse(started["options"]["minecraft"])
+        with urlopen(self.base+"/api/runtime") as response:
+            self.assertTrue(json.load(response)["active"])
+        stopped=self.post("/api/runtime/stop",{})
+        self.assertFalse(stopped["active"])
+        with self.assertRaises(HTTPError) as error:
+            self.post("/api/runtime/start",{"executable":"cmd.exe"})
+        self.assertEqual(error.exception.code,400)
+        error.exception.close()
 
     def test_manual_draft_queue_cancel_and_persistence(self):
         identifier = self.post("/api/telegram/draft", {"text": "Проверка UI"})["id"]

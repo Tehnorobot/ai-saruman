@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import multiprocessing
 import os
+import socket
 import sys
 from pathlib import Path
 
@@ -60,8 +61,26 @@ def main(argv=None) -> int:
     args = parser.parse_args(argv)
     env_path = args.env_file.resolve()
     os.chdir(ROOT)
+    managed = None
+    instance = None
     try:
         load_environment(env_path)
+        from saruman.managed import configure, FileOwnerLock
+        if args.command == "run":
+            instance = FileOwnerLock(ROOT / "data/minecraft-runtime.lock")
+            instance.acquire()
+        managed = configure(ROOT) if args.command == "run" else None
+        if managed:
+            # Check the configured port before imports can initialize/flush shared Redis.
+            # An independently launched game process is never adopted or terminated blindly.
+            port = int(os.getenv("GRADIO_SERVER_PORT", "22228"))
+            try:
+                with socket.create_connection(("127.0.0.1", port), timeout=0.2):
+                    managed.phase_changed("external", "Игровой процесс уже запущен отдельно; закройте его перед запуском из Lab")
+                    managed.step()
+                    return 1
+            except OSError:
+                pass
         if args.command == "reset-memory":
             from saruman.memory_reset import cancel_reset, request_reset
 
@@ -92,6 +111,9 @@ def main(argv=None) -> int:
             no_filter=args.no_filter,
             no_redis=args.no_redis,
         ):
+            if managed:
+                managed.phase_changed("waiting_services", "Игровая проверка не пройдена; проверьте Doctor и службы")
+                managed.step()
             return 1
         if args.command == "doctor":
             return 0
@@ -103,13 +125,24 @@ def main(argv=None) -> int:
         multiprocessing.freeze_support()
         multiprocessing.set_start_method("spawn", force=True)
         sys.argv = runtime_args(args)
+        if managed:
+            # The Lab owns Start/Stop. The legacy automatic loop also stops the supervisor
+            # periodically and must not run alongside the explicit lifecycle bridge.
+            if "--stop-auto" not in sys.argv:
+                sys.argv.append("--stop-auto")
+            managed.phase_changed("starting", "Запуск игрового обработчика")
         from main import main as saruman_main
 
         saruman_main()
         return 0
-    except (ValueError, ImportError) as error:
+    except (ValueError, ImportError, RuntimeError) as error:
         print(f"[FAIL] {error}")
         return 1
+    finally:
+        if managed:
+            managed.close()
+        if instance:
+            instance.close()
 
 
 if __name__ == "__main__":

@@ -107,23 +107,27 @@ def api_complete(profile, instructions, prompt, schema):
 
 
 class LabRoleProvider:
-    def __init__(self, models, codex):
+    def __init__(self, models, codex, *, role="lab_chat", schema=OUTPUT_SCHEMA):
         self.models, self.codex = models, codex
+        self.role, self.schema = role, schema
 
     def complete(self, instructions, prompt, model, trace):
-        profile = self.models.store.profiles()["lab_chat"]
+        profile = self.models.store.profiles()[self.role]
         trace.update(model=profile["model"], provider=profile["provider"], reasoning=profile["reasoning"])
-        reserve = len((instructions + prompt + json.dumps(OUTPUT_SCHEMA)).encode()) + profile["max_output"]
-        identifier = self.models.store.begin("lab_chat", trace["session_id"], profile, reserve)
+        reserve = len((instructions + prompt + json.dumps(self.schema)).encode()) + profile["max_output"]
+        identifier = self.models.store.begin(self.role, trace["session_id"], profile, reserve)
         started, usage = time.monotonic(), {}
         try:
             if profile["provider"] == "codex":
                 value = self.codex.complete(instructions, prompt, profile["model"], trace,
-                                            reasoning=profile["reasoning"], timeout=profile["timeout"])
+                                            reasoning=profile["reasoning"], timeout=profile["timeout"],
+                                            **({"output_schema": self.schema} if self.role != "lab_chat" else {}))
                 usage = protocol.normalize_usage("codex", trace.get("usage"))
             else:
-                value, usage = api_complete(profile, instructions, prompt, OUTPUT_SCHEMA)
-            if not isinstance(value, dict) or set(value) != {"reply", "memories"} or not isinstance(value["reply"], str) or not isinstance(value["memories"], list):
+                value, usage = api_complete(profile, instructions, prompt, self.schema)
+            if not isinstance(value, dict):
+                raise ValueError("Ответ модели не содержит JSON-объект.")
+            if self.role == "lab_chat" and (set(value) != {"reply", "memories"} or not isinstance(value["reply"], str) or not isinstance(value["memories"], list)):
                 raise ValueError("Ответ модели не содержит корректные reply и memories.")
             self.models.store.finish(identifier, usage, model=trace.get("model"))
             return value

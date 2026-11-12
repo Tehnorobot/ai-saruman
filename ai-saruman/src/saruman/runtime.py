@@ -1,0 +1,225 @@
+"""One local lifecycle owner; Telegram and the optional game process fail independently."""
+import json
+import os
+from pathlib import Path
+import socket
+import subprocess
+import threading
+import time
+import uuid
+
+from .roles import load
+from .game_connection import GameConnection
+
+atomic_json = load("managed").atomic_json
+OwnerLock = load("managed").FileOwnerLock
+
+
+class MinecraftProcess:
+    def __init__(self, project, clock=time.time):
+        self.project, self.clock = project, clock
+        self.directory = project / ".saruman/runtime/minecraft"
+        self.process = None
+        self.worker_id = None
+        self.revision = 0
+        self.requested = False
+        self.shutdown_requested = False
+        self.directive = None
+        self.retry_at = 0
+        self.value = {"status": "stopped", "reason": "Minecraft не запрошен"}
+
+    def read(self, name):
+        try:
+            return json.loads((self.directory / name).read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return {}
+
+    def request(self, active):
+        self.requested = active
+        self.shutdown_requested = False
+        self.revision += 1
+
+    def shutdown(self):
+        self.requested = False
+        self.shutdown_requested = True
+        self.revision += 1
+        self.heartbeat()
+
+    def heartbeat(self):
+        if self.worker_id:
+            atomic_json(self.directory / "command.json", {
+                "worker_id": self.worker_id, "revision": self.revision,
+                "active": self.requested, "updated": self.clock(),
+                "shutdown": self.shutdown_requested,
+                "directive": self.directive,
+            })
+
+    def step(self):
+        now, status = self.clock(), self.read("status.json")
+        if self.worker_id is None:
+            command = self.read("command.json")
+            if (status.get("worker_id") and status.get("worker_id") == command.get("worker_id")
+                    and 0 <= now-status.get("updated", 0)<3):
+                self.worker_id = status["worker_id"]
+                self.revision = max(self.revision, command.get("revision", 0)+1)
+        self.heartbeat()
+        if self.process is not None and self.process.poll() is not None:
+            code = self.process.returncode
+            reason = status.get("reason") if status.get("worker_id") == self.worker_id else None
+            self.process = None
+            self.worker_id = None
+            self.retry_at = now + 30
+            self.value = {"status": "retrying", "reason": (reason or f"Игровой процесс завершился: код {code}")+". Повтор проверки через 30 с."}
+            return
+        live = (self.worker_id and status.get("worker_id") == self.worker_id
+                and 0 <= now-status.get("updated", 0)<3)
+        if live:
+            if not self.requested:
+                phase = "stopped" if status.get("revision") == self.revision and not status.get("agent_running") else "stopping"
+                self.value = {"status": phase, "reason": "Игровые действия остановлены" if phase=="stopped" else "Останавливаем игровые действия"}
+            elif status.get("phase") != "ready":
+                self.value = {"status": status.get("phase", "starting"), "reason": status.get("reason", "Запуск")}
+            elif status.get("manual_stop_latched"):
+                self.value = {"status": "paused", "reason": "Игровые действия приостановлены; состояние модов требует проверки в игровом интерфейсе"}
+            elif not status.get("agent_running"):
+                self.value = {"status": "paused", "reason": "Игровой агент остановлен; нажмите Start для явного возобновления"}
+            else:
+                self.value = {"status": "running" if status.get("world_ready") else "waiting_world",
+                              "reason": "Персонаж в мире" if status.get("world_ready") else "Ожидание открытого мира Minecraft"}
+            return
+        if not self.requested:
+            if self.value.get("status")=="external":
+                self.value={"status":"external","reason":"Отдельный игровой процесс не управляется Lab; остановите его в его интерфейсе"}
+            else:
+                self.value = {"status": "stopped", "reason": "Игровые действия выключены"}
+            return
+        if self.process is not None:
+            self.value = {"status": "starting", "reason": "Запуск и проверка игрового окружения"}
+            return
+        if now < self.retry_at:
+            return
+        if os.name != "nt":
+            self.value = {"status": "unavailable", "reason": "Игровой runtime требует Windows; Telegram продолжает работу"}
+            return
+        game = self.project / "integrations/saruman"
+        python = game / ".venv/Scripts/python.exe"
+        if not python.is_file() or not (game / ".env.saruman").is_file():
+            self.value = {"status": "not_configured", "reason": "Подготовьте игровую .venv и .env.saruman; см. инструкцию Windows"}
+            return
+        try:
+            with socket.create_connection(("127.0.0.1", 22228), timeout=0.2):
+                self.value = {"status": "external", "reason": "Игровой процесс запущен отдельно. Закройте его перед запуском из Lab."}
+                return
+        except OSError:
+            pass
+        try:
+            with socket.create_connection(("127.0.0.1",25333),timeout=.2):pass
+        except OSError:
+            self.value={"status":"waiting_world","reason":"Ожидание Minecraft с UnionClef. Вход в мир — в разделе «Управление»"}
+            return
+        self.worker_id = uuid.uuid4().hex
+        self.heartbeat()
+        env = {**os.environ, "PYTHONPATH": str(game / "src"), "PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1",
+               "SARUMAN_LAB_CONTROL_DIR": str(self.directory), "SARUMAN_LAB_WORKER_ID": self.worker_id}
+        self.directory.mkdir(parents=True, exist_ok=True)
+        with (self.directory / "minecraft.log").open("ab") as log:
+            self.process = subprocess.Popen([str(python), "-m", "saruman.launcher", "run", "--env-file", ".env.saruman"],
+                cwd=game, env=env, stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        self.value = {"status": "starting", "reason": "Запуск и проверка игрового окружения"}
+
+
+class CharacterRuntime:
+    def __init__(self, project, store, director, *, game=None, clock=time.time):
+        self.store, self.director, self.clock = store, director, clock
+        self.game = game or MinecraftProcess(project, clock)
+        self.lock = threading.RLock()
+        self.owner = OwnerLock(project / ".saruman/runtime/owner.lock")
+        self.identity = uuid.uuid4().hex
+        self.active = False
+        self.epoch = 0
+        self.thread = None
+        self.closed = threading.Event()
+        self.error = None
+        self.connection = GameConnection(project,store,clock)
+        self.replies = None
+
+    def publish(self):
+        self.store.set_meta("character_runtime", {"active": self.active, "updated": self.clock(),
+                             "owner": self.identity, "epoch": self.epoch})
+
+    def start(self, payload=None):
+        payload = payload or {}
+        if set(payload)-{"minecraft"} or ("minecraft" in payload and type(payload["minecraft"]) is not bool):
+            raise ValueError("Ожидается переключатель Minecraft")
+        with self.lock:
+            self.owner.acquire()
+            options = self.store.meta("runtime_options", {"minecraft": True})
+            options.update(payload)
+            self.store.set_meta("runtime_options", options)
+            self.active = True; self.epoch += 1
+            self.publish()
+            self.game.request(options["minecraft"])
+            self.director.start()
+            if self.replies:self.replies.start()
+            if not self.thread:
+                self.thread = threading.Thread(target=self.loop, name="character-lifecycle", daemon=True)
+                self.thread.start()
+        return self.snapshot()
+
+    def stop(self):
+        with self.lock:
+            if self.owner.file:
+                self.active = False; self.epoch += 1
+                self.publish()
+                self.game.directive=None
+                self.game.request(False)
+                self.game.heartbeat()
+                self.connection.cancel()
+        return self.snapshot()
+
+    def step(self):
+        with self.lock:
+            self.publish()
+            try:
+                self.game.step()
+                self.connection.step()
+                self.error = None
+            except (OSError, ValueError, RuntimeError):
+                self.error = "Не удалось обновить игровой процесс; Telegram продолжает работу"
+
+    def loop(self):
+        while not self.closed.is_set():
+            try:
+                self.step()
+            except (OSError, ValueError):
+                self.error = "Не удалось обновить журнал состояния"
+            self.closed.wait(2)
+
+    def snapshot(self):
+        settings = self.store.settings()
+        draft = self.store.meta("draft_status", {})
+        connection = self.store.meta("connection", {})
+        telegram = {"status": "stopped", "reason": "Персонаж остановлен; очередь сохранена"}
+        if self.active:
+            telegram = {"status": "running", "reason": "Расписание и очередь работают независимо от Minecraft"} if settings["enabled"] else {
+                "status": "disabled", "reason": "Включите Telegram в его настройках"}
+            if settings["enabled"] and connection.get("error"):
+                telegram = {"status": "retrying", "reason": connection["error"]}
+            elif settings["enabled"] and draft.get("error"):
+                telegram = {"status": "retrying", "reason": "Подготовка поста: " + draft["error"]}
+        return {"active": self.active, "components": {"minecraft": dict(self.game.value), "telegram": telegram},
+                "options": self.store.meta("runtime_options", {"minecraft": True}), "error": self.error,
+                "next_draft": self.store.meta("next_draft"), "auto_post": settings["auto_post"],
+                "connection":self.connection.value,"game_settings":self.store.meta("game_connection",{"mode":"server","target":"","launcher":"","arguments":[]})}
+
+    def close(self):
+        self.stop()
+        if self.owner.file:
+            self.game.shutdown()
+        self.closed.set()
+        if self.thread:
+            self.thread.join(3)
+        self.director.close()
+        if self.replies:self.replies.close()
+        self.owner.close()

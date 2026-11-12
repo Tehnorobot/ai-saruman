@@ -22,7 +22,12 @@ class Fixture(unittest.TestCase):
         self.root = Path(self.temporary.name)
         target = self.root / "agent-workplace/agent/saruman"
         target.parent.mkdir(parents=True)
-        shutil.copytree(PROJECT / "agent-workplace/agent/saruman", target)
+        # Never copy the owner's live conversations/person records into a test fixture.
+        shutil.copytree(PROJECT / "agent-workplace/agent/saruman", target,
+                        ignore=shutil.ignore_patterns("memory"))
+        (target / "memory/entities").mkdir(parents=True)
+        (target / "memory/MEMORY.md").write_text("# Memory\n", encoding="utf-8")
+        (target / "memory/state.md").write_text("# State\nUnknown\n", encoding="utf-8")
         self.workplace = Workplace(self.root)
 
     def tearDown(self):

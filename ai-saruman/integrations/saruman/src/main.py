@@ -1018,6 +1018,28 @@ def main():
     )
     _log_timing("Gradio interface launched")  # 5s!!
 
+    from saruman.managed import control as lab_control, BackgroundAgent
+    if lab_control is not None:
+        lab_agent_worker=BackgroundAgent(agent_start,lambda:bool(Supervisor and Supervisor.is_running()))
+        def lab_start():
+            activate_agent(True)
+            return lab_agent_worker.start()
+
+        def lab_status():
+            game = ctx_swarm.get("game", {})
+            native = dict(game.get("mod_runtime", {}).items())
+            return {"agent_running": bool(Supervisor and Supervisor.is_running()),
+                    "world_ready": bool(native.get("in_world")),
+                    "native_status": native.get("status", "connecting"),
+                    "manual_stop_latched": bool(native.get("manual_stop_latched"))}
+
+        def lab_directive(text,identifier):
+            if not hasattr(Supervisor,"submit_admin"):
+                return {"status":"unavailable","reason":"Включите модовый runtime с административным входом"}
+            return Supervisor.submit_admin(text,identifier)
+
+        lab_control.bind(lab_start, lambda: activate_agent(False), lab_status, CompleteShutDown,lab_directive)
+
     print("== main.py CODEBLOCK AFTER GRADIO LAUNCH ==")
     # starting agent NOW
     _log_timing("Entering agent control loop")

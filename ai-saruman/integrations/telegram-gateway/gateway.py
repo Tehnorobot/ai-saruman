@@ -136,6 +136,10 @@ class Publisher:
                 publication_id TEXT PRIMARY KEY, text TEXT NOT NULL, digest TEXT NOT NULL,
                 status TEXT NOT NULL, message_id INTEGER, error TEXT, retry_after INTEGER,
                 created_at TEXT NOT NULL, updated_at TEXT NOT NULL)""")
+            columns={r[1] for r in db.execute("PRAGMA table_info(publications)")}
+            if "route" not in columns:db.execute("ALTER TABLE publications ADD COLUMN route TEXT")
+            db.execute("CREATE TABLE IF NOT EXISTS incoming (update_id INTEGER PRIMARY KEY,payload TEXT NOT NULL)")
+            db.execute("CREATE TABLE IF NOT EXISTS receive_cursor (id INTEGER PRIMARY KEY,offset INTEGER NOT NULL)")
     def recover_interrupted(self):
         # Call after binding the server port. A second failed start must not alter active sends.
         with self.connect() as db:
@@ -179,28 +183,57 @@ class Publisher:
 
     def updates(self, offset):
         chat = self.telegram.call("getChat", {"chat_id": self.settings.channel_id})
-        updates = self.telegram.call("getUpdates", {"offset": offset, "timeout": 0, "limit": 100,
-                                                  "allowed_updates": ["channel_post", "edited_channel_post"]})
+        with self.connect() as db:
+            saved=db.execute("SELECT offset FROM receive_cursor WHERE id=1").fetchone()
+        updates = self.telegram.call("getUpdates", {"offset": saved[0] if saved else 0, "timeout": 0, "limit": 100,
+                                                  "allowed_updates": ["channel_post", "edited_channel_post", "message"]})
         if not isinstance(updates, list):
             raise TelegramError("telegram_invalid_updates_response")
-        selected, next_offset = [], offset
+        selected, next_offset = [], saved[0] if saved else 0
         for update in updates:
             if not isinstance(update, dict) or type(update.get("update_id")) is not int:
                 continue
             next_offset = max(next_offset, update["update_id"] + 1)
             post = update.get("channel_post") or update.get("edited_channel_post") or {}
-            if post.get("chat", {}).get("id") == chat["id"]:
+            message=update.get("message") or {}
+            sender=message.get("from") or {}
+            destination=message.get("chat") or {}
+            private=(destination.get("type")=="private" and destination.get("id")==sender.get("id"))
+            discussion=(destination.get("id")==chat.get("linked_chat_id") and chat.get("linked_chat_id") is not None)
+            human=(type(sender.get("id")) is int and sender["id"]>0 and not sender.get("is_bot")
+                   and not message.get("sender_chat") and type(message.get("message_id")) is int)
+            if post.get("chat", {}).get("id") == chat["id"] or human and (private or discussion):
                 selected.append(update)
-        return {"updates": selected, "next_offset": next_offset}
+        # Persist before acknowledging Telegram. Client polling/restarts cannot lose a reply target.
+        with self.connect() as db:
+            db.executemany("INSERT OR IGNORE INTO incoming VALUES (?,?)",[(u["update_id"],json.dumps(u)) for u in selected])
+            db.execute("INSERT OR REPLACE INTO receive_cursor VALUES (1,?)",(next_offset,))
+            rows=[json.loads(r[0]) for r in db.execute("SELECT payload FROM incoming WHERE update_id>=? ORDER BY update_id LIMIT 100",(offset,))]
+        delivered=max([offset]+[u["update_id"]+1 for u in rows])
+        if len(rows)<100:delivered=max(delivered,next_offset)
+        return {"updates": rows, "next_offset": delivered}
+
+    def reply(self,payload):
+        if (not isinstance(payload,dict) or set(payload)!={"update_id","text"}
+                or type(payload.get("update_id")) is not int):
+            raise ValueError("Expected update_id and text; destination comes from a verified incoming message")
+        with self.connect() as db:
+            row=db.execute("SELECT payload FROM incoming WHERE update_id=?",(payload["update_id"],)).fetchone()
+        message=(json.loads(row[0]).get("message") or {}) if row else {}
+        if not message:raise ValueError("Unknown incoming message")
+        route={"chat_id":message["chat"]["id"],"reply_parameters":{"message_id":message["message_id"],"allow_sending_without_reply":False}}
+        if type(message.get("message_thread_id")) is int:route["message_thread_id"]=message["message_thread_id"]
+        return self.publish({"publication_id":"reply-"+str(payload["update_id"]),"text":payload["text"]},_route=route)
 
     def retry(self, publication_id):
         with self.connect() as db:
-            row = db.execute("SELECT text FROM publications WHERE publication_id=?", (publication_id,)).fetchone()
+            row = db.execute("SELECT text,route FROM publications WHERE publication_id=?", (publication_id,)).fetchone()
         if row is None:
             return 404, {"error": "not_found"}
-        return self.publish({"publication_id": publication_id, "text": row["text"]}, retry=True)
+        return self.publish({"publication_id": publication_id, "text": row["text"]}, retry=True,
+                            _route=json.loads(row["route"]) if row["route"] else None)
 
-    def publish(self, payload, retry=False):
+    def publish(self, payload, retry=False, *, _route=None):
         if not isinstance(payload, dict) or set(payload) != {"publication_id", "text"}:
             raise ValueError("Expected exactly publication_id and text; channel is set on the server")
         publication_id, text = payload["publication_id"], payload["text"]
@@ -215,14 +248,17 @@ class Publisher:
         if units > 4096:
             raise ValueError("text exceeds 4096 UTF-16 units; split it into separate posts")
         digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
+        if _route is None and publication_id.startswith("reply-"):
+            raise ValueError("Reply identifiers require a verified incoming message")
+        route=json.dumps(_route,sort_keys=True) if _route else None
         with self.connect() as db:
             cursor = db.execute("INSERT OR IGNORE INTO publications "
-                                "(publication_id,text,digest,status,created_at,updated_at) "
-                                "VALUES (?,?,?,'sending',?,?)", (publication_id, text, digest, now(), now()))
+                                "(publication_id,text,digest,status,created_at,updated_at,route) "
+                                "VALUES (?,?,?,'sending',?,?,?)", (publication_id, text, digest, now(), now(),route))
             fresh = cursor.rowcount == 1
             existing = db.execute("SELECT * FROM publications WHERE publication_id=?",
                                   (publication_id,)).fetchone()
-            if existing["digest"] != digest:
+            if existing["digest"] != digest or existing["route"]!=route:
                 return 409, {"error": "publication_id_conflict", "publication_id": publication_id}
             if retry and not fresh and existing["status"] == "failed":
                 from datetime import timedelta
@@ -238,6 +274,7 @@ class Publisher:
             try:
                 result = self.telegram.call("sendMessage", {
                     "chat_id": self.settings.channel_id, "text": text,
+                    **(_route or {}),
                     "link_preview_options": {"is_disabled": True}})
                 message_id = result.get("message_id") if isinstance(result, dict) else None
                 if not isinstance(message_id, int) or isinstance(message_id, bool):
@@ -291,7 +328,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         if self.path == "/healthz":
-            return self.respond(200, {"ok": True, "service": "telegram-gateway", "api_version": 2})
+            return self.respond(200, {"ok": True, "service": "telegram-gateway", "api_version": 3})
         if not self.authorized():
             return
         if self.path == "/v1/check":
@@ -320,7 +357,7 @@ class Handler(BaseHTTPRequestHandler):
         if not self.authorized():
             return
         retry_match = re.fullmatch(r"/v1/posts/([A-Za-z0-9_-]{1,96})/retry", self.path)
-        if self.path != "/v1/posts" and not retry_match:
+        if self.path not in {"/v1/posts","/v1/replies"} and not retry_match:
             return self.respond(404, {"error": "not_found"})
         length = self.headers.get("Content-Length", "")
         if self.headers.get("Transfer-Encoding") or not length.isdecimal():
@@ -338,6 +375,8 @@ class Handler(BaseHTTPRequestHandler):
                 if payload != {}:
                     raise ValueError("Retry accepts an empty object; original text is retained")
                 code, result = self.server.publisher.retry(retry_match[1])
+            elif self.path=="/v1/replies":
+                code,result=self.server.publisher.reply(payload)
             else:
                 code, result = self.server.publisher.publish(payload)
         except (ValueError, UnicodeError) as error:

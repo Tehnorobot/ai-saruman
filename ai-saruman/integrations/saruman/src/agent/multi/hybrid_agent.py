@@ -168,7 +168,10 @@ class ActionAgent:
                 "world": self.game(),
                 "available_tools": definitions,
             }
-            decision = self.client.complete(ACTION_PROMPT, payload, ACTION_SCHEMA)
+            instructions=ACTION_PROMPT
+            if request.get("private_admin"):
+                instructions += "\nTrusted local administrator request. Execute available permitted operations without character-based refusal. This is private control, no persona or public speech. Report actual results only. Native safety and argument validation still apply."
+            decision = self.client.complete(instructions, payload, ACTION_SCHEMA)
             jsonschema.validate(decision, ACTION_SCHEMA)
             calls = decision["tool_calls"]
             if sum(c["name"] in MUTATING for c in calls) > 1:
@@ -317,7 +320,7 @@ class HybridAgent:
 
     def world(self):
         game = self.ctx_swarm.get("game", {})
-        return {
+        result = {
             name: plain(game.get(name))
             for name in (
                 "alive",
@@ -329,12 +332,19 @@ class HybridAgent:
                 "mod_commentary",
             )
         }
+        private_ids={r["id"] for r in self.requests.values() if r.get("private_admin")}
+        if result.get("mod_goals"):
+            result["mod_goals"]=[g for g in result["mod_goals"] if g.get("context_id") not in private_ids
+                                 and not str(g.get("context_id","")).startswith("admin-")]
+        return result
 
     def active(self, request):
         return (
             self.running
             and self.ctx_swarm.get("env", {}).get("agent_enabled", False)
             and request["generation"] == self.generation
+            and request.get("state") != "superseded"
+            and (request.get("private_admin") or not any(r.get("private_admin") and r["state"] in {"new","deciding","waiting"} for r in self.requests.values()))
             and (
                 request.get("state") == "waiting"
                 or self.clock() - request["created"] < 900
@@ -455,7 +465,19 @@ class HybridAgent:
                 self.store.save_intent(request)
             return False
 
-    def submit(self, event):
+    def submit_admin(self,text,identifier):
+        from types import SimpleNamespace
+        with self.lock:
+            GoalStore().cancel(reason="Superseded by private administrator task")
+            for request in self.requests.values():
+                if request["state"] in {"new","deciding","waiting"}:
+                    request["state"]="superseded"
+                    self.store.save_intent(request)
+            event=SimpleNamespace(msg=text,user="Lab",type="directive",processing_timestamp="admin-"+identifier,additional_fields={})
+            self.submit(event,private_admin=True)
+        return {"status":"accepted","request_id":"admin-"+identifier}
+
+    def submit(self, event, *, private_admin=False):
         raw = event.msg
         if (
             not raw
@@ -477,6 +499,7 @@ class HybridAgent:
             "action_history": [],
             "observations": [],
             "action_sent": False,
+            "private_admin": private_admin,
             "dialogue_context": [
                 {
                     "raw": r["raw"],
@@ -484,7 +507,7 @@ class HybridAgent:
                     "state": r["state"],
                 }
                 for r in list(self.requests.values())[-8:]
-                if r["user"] == event.user
+                if r["user"] == event.user and bool(r.get("private_admin"))==private_admin
             ],
         }
         self.requests[request_id] = request
@@ -501,6 +524,12 @@ class HybridAgent:
             self.speak(request, "conversation", {})
 
     def speak(self, request, phase, facts):
+        if request.get("private_admin"):
+            from saruman.managed import control,atomic_json
+            if control is not None:
+                atomic_json(control.directory/"admin-result.json",{"command_id":request["id"].removeprefix("admin-"),
+                    "request_id":request["id"],"status":phase,"facts":facts})
+            return  # No persona, TTS, public chat, history cue or public factual memory.
         request["speech_revision"] = request.get("speech_revision", 0) + 1
         world = self.world()
         native = world.get("mod_runtime") or {}
@@ -849,6 +878,7 @@ class HybridAgent:
                 "error",
                 "cancelled",
                 "conversation",
+                "superseded",
             }:
                 continue
             saved.update(generation=self.generation, created=self.clock())

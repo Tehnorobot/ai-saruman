@@ -4,13 +4,15 @@ import json
 import os
 from pathlib import Path
 import sqlite3
+from contextlib import closing
 from unittest.mock import Mock, patch
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 from test_lab import Fixture
 from saruman.provider import CodexProvider
-from saruman.roles import ModelSettings, api_complete, protocol, settings
+from saruman.roles import ModelSettings, LabRoleProvider, api_complete, protocol, settings
+from saruman.telegram import POST_SCHEMA
 from saruman.web import Application, make_server
 import threading
 
@@ -45,7 +47,7 @@ class ModelTests(Fixture):
 
     def test_old_telegram_profile_is_migrated_once(self):
         path = self.root / "old.sqlite"
-        with sqlite3.connect(path) as db:
+        with closing(sqlite3.connect(path)) as db, db:
             db.execute("CREATE TABLE profiles (role TEXT PRIMARY KEY, revision INTEGER, body TEXT)")
             db.execute("INSERT INTO profiles VALUES ('persona',7,?)", (json.dumps({**settings.default_profile(), "model":"gpt-6.1-sol"}),))
         store = settings.RoleStore(path)
@@ -54,6 +56,22 @@ class ModelTests(Fixture):
         p.pop("revision")
         store.save("persona", {**p, "model":"gpt-6.1-terra"}, paused=True)
         self.assertEqual(settings.RoleStore(path).profiles()["telegram"]["model"], "gpt-6.1-sol")
+
+    def test_telegram_generation_uses_its_role_schema_and_usage_history(self):
+        self.select("telegram",model="gpt-6.1-sol",reasoning="low")
+        codex=Mock()
+        def generate(instructions,prompt,model,trace,**options):
+            self.assertEqual(model,"gpt-6.1-sol")
+            self.assertEqual(options["output_schema"],POST_SCHEMA)
+            trace["usage"]={"inputTokens":30,"outputTokens":12,"totalTokens":42}
+            return {"text":"A reflection.","event_ids":["schedule"]}
+        codex.complete.side_effect=generate
+        value=LabRoleProvider(self.models,codex,role="telegram",schema=POST_SCHEMA).complete(
+            "Public character only","{}","",{"session_id":"telegram:test"})
+        self.assertEqual(value["event_ids"],["schedule"])
+        row=self.models.store.history()[0]
+        self.assertEqual(row["role"],"telegram")
+        self.assertEqual(row["state"],"completed")
 
     def test_live_request_and_stale_editor_cannot_replace_profile(self):
         p = self.models.store.profiles()["action"]

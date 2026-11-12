@@ -15,6 +15,8 @@ ROLE_INFO = {
     "persona": ("Персонаж · речь и решения", "Общение, голосовые реплики и инициатива. Нужны текст и соблюдение схемы.", False),
     "action": ("Игровые действия", "Выбор инструментов и аргументов. Нужны точные решения и структурированный ответ.", False),
     "telegram": ("Telegram · тексты постов", "Посты из подтверждённых событий. Нужны хороший русский и точность фактов.", False),
+    "telegram_reply": ("Telegram · диалоги", "Ответы людям и память собеседника. Нужны текст, хороший русский и соблюдение границ приватности.", False),
+    "admin": ("Lab · административные команды", "Выбор разрешённой операции по вашей просьбе. Нужны точные аргументы и структурированный ответ; изображения не требуются.", False),
     "legacy_core": ("Старый режим · основной агент", "Только legacy; общий агент и вспомогательный контекст инструментов.", True),
     "legacy_planner": ("Старый режим · планировщик", "Только legacy; планирование игровых задач.", True),
     "legacy_reaction": ("Старый режим · реакции", "Только legacy; реакции на события.", True),
@@ -24,7 +26,7 @@ ROLE_INFO = {
     "tool_nickname": ("Инструмент · анализ имени", "Вспомогательный вызов старого режима; короткая текстовая задача.", True),
     "tool_vision": ("Инструмент · анализ изображения", "Только при вызове screenshot. Модель обязательно должна принимать изображения.", True),
 }
-ROLES = ("persona", "action", "telegram", "lab_chat") + tuple(k for k, v in ROLE_INFO.items() if v[2])
+ROLES = ("persona","action","telegram","lab_chat","telegram_reply","admin") + tuple(k for k, v in ROLE_INFO.items() if v[2])
 # Initial catalogue copied from the owner's Lab snapshot, 2026-10-24.
 # Account availability is checked by the provider on actual use, never by opening UI.
 CODEX = (

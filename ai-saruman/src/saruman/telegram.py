@@ -11,4 +11,5 @@ if "_saruman_telegram" not in sys.modules:
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
 
-from _saruman_telegram.automation import Control, Store  # noqa: E402
+from _saruman_telegram.automation import Control, Director, Store, POST_PROMPT, POST_SCHEMA  # noqa: E402
+from _saruman_telegram.conversations import Conversations, REPLY_PROMPT, REPLY_SCHEMA

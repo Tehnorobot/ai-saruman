@@ -9,13 +9,16 @@ from pathlib import Path
 import secrets
 import threading
 import traceback
+import uuid
 from urllib.parse import parse_qs, urlparse
 
 from .memory import Workplace, estimate_tokens
 from .provider import CodexProvider
 from .roles import ModelSettings, LabRoleProvider
 from .storage import Store
-from .telegram import Control, Store as TelegramStore
+from .telegram import Director, Store as TelegramStore, POST_PROMPT, POST_SCHEMA, Conversations, REPLY_PROMPT, REPLY_SCHEMA
+from .runtime import CharacterRuntime
+from .admin import Admin, SCHEMA as ADMIN_SCHEMA, PROMPT as ADMIN_PROMPT
 
 MAX_BODY = 64 * 1024
 
@@ -32,13 +35,28 @@ class Application:
                                 "note": "Нажми «Подключить Codex», чтобы проверить аккаунт и лимиты."}
         self.token = secrets.token_urlsafe(32)
         self.turn_lock = threading.Lock()
-        self.telegram = Control(TelegramStore((data_dir or project / ".saruman") / "telegram.sqlite3"))
+        telegram_store = TelegramStore((data_dir or project / ".saruman") / "telegram.sqlite3")
+        role_session=uuid.uuid4().hex
+        post_provider = LabRoleProvider(self.models, self.codex, role="telegram", schema=POST_SCHEMA)
+        def draft(payload):
+            return post_provider.complete(self.workplace.read("PERSONA.md") + POST_PROMPT,
+                json.dumps(payload, ensure_ascii=False), "", {"session_id": "telegram:lab:"+role_session})
+        self.director = Director(draft, telegram_store, managed=True)
+        self.telegram = self.director.control
+        self.runtime = CharacterRuntime(project, telegram_store, self.director)
+        reply_provider=LabRoleProvider(self.models,self.codex,role="telegram_reply",schema=REPLY_SCHEMA)
+        self.replies=Conversations(telegram_store,lambda payload:reply_provider.complete(
+            self.workplace.read("PERSONA.md")+REPLY_PROMPT,json.dumps(payload,ensure_ascii=False),"",{"session_id":"telegram:reply:"+role_session}),self.telegram)
+        self.runtime.replies=self.replies
+        admin_provider=LabRoleProvider(self.models,self.codex,role="admin",schema=ADMIN_SCHEMA)
+        self.admin=Admin(telegram_store,self.runtime,lambda payload:admin_provider.complete(
+            ADMIN_PROMPT,json.dumps(payload,ensure_ascii=False),"",{"session_id":"admin:private:"+role_session}))
 
     def overview(self):
         return {"csrf_token": self.token, "memory": self.workplace.snapshot(),
                 "sessions": self.store.sessions(), "analytics": self.store.analytics(),
                 "provider": self.provider_status, "models": self.models.snapshot(),
-                "persona": self.workplace.read("PERSONA.md")}
+                "persona": self.workplace.read("PERSONA.md"), "runtime": self.runtime.snapshot()}
 
     def refresh_provider(self):
         try:
@@ -128,6 +146,14 @@ class Handler(BaseHTTPRequestHandler):
                 return self.respond(self.app.overview())
             if parsed.path == "/api/telegram":
                 return self.respond(self.app.telegram.store.snapshot(int(params.get("page", ["0"])[0])))
+            if parsed.path == "/api/runtime":
+                return self.respond(self.app.runtime.snapshot())
+            if parsed.path == "/api/admin":
+                return self.respond({"messages":self.app.admin.history(),"game_result":self.app.runtime.game.read("admin-result.json")})
+            if parsed.path == "/api/telegram/dialogues":
+                return self.respond(self.app.replies.snapshot(params.get("scope",[None])[0],
+                    int(params["user_id"][0]) if "user_id" in params else None,
+                    int(params["before"][0]) if "before" in params else None))
             if parsed.path == "/api/messages":
                 return self.respond(self.app.store.messages(params.get("session_id", [""])[0]))
             if parsed.path == "/api/database":
@@ -169,6 +195,14 @@ class Handler(BaseHTTPRequestHandler):
                 return self.respond(self.app.models.save(payload))
             if self.path == "/api/chat":
                 return self.respond(self.app.chat(payload))
+            if self.path == "/api/runtime/start":
+                return self.respond(self.app.runtime.start(payload))
+            if self.path == "/api/runtime/stop":
+                return self.respond(self.app.runtime.stop())
+            if self.path == "/api/runtime/connection":
+                return self.respond(self.app.runtime.connection.configure(payload))
+            if self.path == "/api/admin":
+                return self.respond(self.app.admin.execute(payload))
             if self.path == "/api/telegram/settings":
                 return self.respond(self.app.telegram.store.configure(payload))
             if self.path == "/api/telegram/check":
@@ -211,11 +245,10 @@ def main():
         parser.exit(1, str(error) + "\n")
     print(f"Saruman Lab → http://127.0.0.1:{server.server_port}", flush=True)
     print("Локальная БД: " + str(app.store.path), flush=True)
-    app.telegram.start()
     try:
         server.serve_forever()
     except KeyboardInterrupt:
         pass
     finally:
-        app.telegram.close()
+        app.runtime.close()
         server.server_close()

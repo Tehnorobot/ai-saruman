@@ -140,7 +140,7 @@ class CodexProvider:
                     "limits": limits, "limit_error": limit_error,
                     "note": "Каталог моделей не гарантирует доступ; его подтверждает успешный ответ."}
 
-    def complete(self, instructions, prompt, model, trace, *, reasoning="default", timeout=180):
+    def complete(self, instructions, prompt, model, trace, *, reasoning="default", timeout=180, output_schema=None):
         start = time.monotonic()
         try:
             with Rpc() as rpc, tempfile.TemporaryDirectory(prefix="saruman-chat-") as directory:
@@ -162,7 +162,7 @@ class CodexProvider:
                 rpc.request("turn/start", {"threadId": thread_id, "model": model,
                     **({"effort": reasoning} if reasoning != "default" else {}),
                     "input": [{"type": "text", "text": prompt}],
-                    "outputSchema": OUTPUT_SCHEMA, "environments": [],
+                    "outputSchema": OUTPUT_SCHEMA if output_schema is None else output_schema, "environments": [],
                     "serviceTierForTurn": "default"})
                 completed_text, deltas = {}, {}
                 deadline = time.monotonic() + timeout
@@ -196,7 +196,9 @@ class CodexProvider:
                             result = json.loads(raw[-1])
                         except json.JSONDecodeError:
                             raise RuntimeError("Codex вернул ответ вне запрошенной JSON-схемы.")
-                        if not isinstance(result.get("reply"), str) or not isinstance(result.get("memories"), list):
+                        if not isinstance(result, dict):
+                            raise RuntimeError("Codex вернул некорректный объект ответа.")
+                        if output_schema is None and (not isinstance(result.get("reply"), str) or not isinstance(result.get("memories"), list)):
                             raise RuntimeError("В ответе Codex отсутствуют reply или memories.")
                         return result
                 raise RuntimeError(f"Превышено время ответа Codex ({timeout} секунд). Повтор не выполнялся.")

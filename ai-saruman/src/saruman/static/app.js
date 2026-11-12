@@ -27,7 +27,7 @@ const scenarios = [
   {name:"Проверка памяти", icon:"memory", text:"Что ты помнишь обо мне из нашего диалога? Отдели известные тебе факты от предположений."},
   {name:"Неизвестные сведения", icon:"chat", text:"Сколько у меня сейчас алмазов в инвентаре? Если не знаешь, не выдумывай."}
 ];
-const views = {chat:"Тестирование", memory:"Память", history:"Диалоги", analytics:"Аналитика", telegram:"Telegram", settings:"Настройки"};
+const views = {control:"Управление",chat:"Тестирование", memory:"Память", history:"Диалоги", analytics:"Аналитика", telegram:"Telegram", settings:"Настройки"};
 const state = {data:null, view:location.hash.slice(1) || "chat", session:null, messages:[], draft:"",
   remember:false, busy:false, connecting:false, memoryView:"graph", entity:null, file:null,
   database:"sessions", databaseData:null, model:"", error:null};
@@ -37,6 +37,9 @@ let toastTimer;
 state.telegram = null;
 state.telegramPage = 0;
 state.telegramDraft = "";
+state.runtimeBusy = false;
+state.minecraftChoice = null;
+state.admin = null;state.adminDraft='';state.adminBusy=false;state.dialogues=null;state.gameForm=null;
 function toast(text) {
   $("#toast").textContent = text;
   $("#toast").hidden = false;
@@ -90,6 +93,7 @@ function sidebar() {
 function heading() {
   const subtitles = {chat:"Проверьте голос, решения и последовательность характера.",memory:"Воспоминания, сущности и связи — без скрытых слоёв.",history:"Каждый эксперимент сохраняется в последовательном диалоге.",analytics:"Измеренный расход и прозрачная оценка контекста.",settings:"Провайдер, модель и reasoning для каждой задачи персонажа."};
   subtitles.telegram='Подтверждённые события, черновики и публикации в канале.';
+  subtitles.control='Приватные команды, состояние и подключение к миру.';
   return '<div class="page-heading"><div><div class="eyebrow">САРУМАН / CHARACTER EXPERIMENTS</div><h1>' + views[state.view] +
     '</h1><p class="subtitle">' + subtitles[state.view] + '</p></div>' +
     (state.view === "chat" ? button("Новый диалог","new-session","","plus") : button("Обновить","refresh","refresh","refresh")) + '</div>';
@@ -274,34 +278,71 @@ function analyticsView() {
     panel('Запросы и вклад памяти',rows?'<div class="table-scroll"><table><thead><tr><th>Время</th><th>Модель</th><th>Статус</th><th>Вход</th><th>Кэш</th><th>Выход</th><th>Память, оценка</th><th>Фактов</th><th>Задержка</th><th>Ошибка / примечание</th></tr></thead><tbody>'+
       rows+'</tbody></table></div>':'<div class="empty">Запросов ещё нет.</div>');
 }
-function settingsView(){return modelSettingsView();}
+function settingsView(){
+  const g=state.gameForm||state.data.runtime.game_settings;
+  return modelSettingsView()+panel('Подключение к Minecraft','<form id="game-settings" class="panel-body role-selectors">'+
+    '<label>Тип<select id="game-mode"><option value="server" '+(g.mode==='server'?'selected':'')+'>Сервер</option><option value="world" '+(g.mode==='world'?'selected':'')+'>Существующий одиночный мир</option></select></label>'+
+    '<label>Адрес сервера или имя папки сохранения<input id="game-target" value="'+e(g.target)+'" required></label>'+
+    '<label>Лаунчер .exe (необязательно)<input id="game-launcher" value="'+e(g.launcher)+'"></label>'+
+    '<label>Аргументы лаунчера — JSON-массив<textarea id="game-arguments">'+e(JSON.stringify(g.arguments))+'</textarea></label>'+
+    '<p class="tiny">Minecraft 1.21.11 с UnionClef. Лаунчер должен уметь запускать выбранный профиль с вашими аргументами. Без настройки лаунчера сначала откройте клиент вручную. Вход подтверждается игрой; авторизация и предупреждения игры требуют вашего участия.</p>'+
+    '<button class="button primary">Сохранить подключение</button></form>');
+}
+function controlView(){
+  const d=state.admin||{messages:[],game_result:{}};
+  const messages=d.messages.slice().reverse().map(m=>'<article class="panel-body"><strong>Вы</strong><p class="bubble">'+e(m.input)+'</p><strong>Управление · '+e(m.status)+'</strong><pre class="note-preview">'+e(m.result)+'</pre></article>').join('');
+  return panel('Приватный административный чат','<div class="panel-body tiny">Этот чат управляет доступными операциями. Он отделён от публичных диалогов и памяти персонажа. Принятие поручения ещё не означает его выполнение.</div>'+
+    '<div class="admin-messages">'+(messages||'<div class="empty">Попросите проверить состояние, подготовить пост или выполнить игровое поручение.</div>')+'</div>'+
+    '<form id="admin-form" class="composer"><textarea id="admin-text" placeholder="Приватная команда" maxlength="12000">'+e(state.adminDraft)+'</textarea><button class="button primary" '+(state.adminBusy?'disabled':'')+'>'+(state.adminBusy?'Обрабатываем…':'Отправить')+'</button></form>',
+    button('Войти в настроенный мир','game-connect'))+
+    panel('Состояние подключения','<div class="panel-body">'+e(state.data.runtime.connection.reason)+'</div>')+
+    (d.game_result.command_id?panel('Результат игрового поручения','<pre class="note-preview">'+e(JSON.stringify(d.game_result,null,2))+'</pre>'):'');
+}
+function runtimeControls() {
+  const runtime=state.data.runtime||{active:false,components:{},options:{minecraft:true}};
+  const names={running:'Работает',stopped:'Остановлен',stopping:'Останавливается',starting:'Запуск',checking:'Проверка',ready:'Готов',
+    waiting_world:'Ожидает мир',waiting_services:'Ожидает службы',paused:'Пауза',retrying:'Повтор подключения',
+    disabled:'Выключен',unavailable:'Недоступен',not_configured:'Нужна настройка',external:'Отдельный процесс'};
+  const minecraft=state.minecraftChoice===null?runtime.options.minecraft:state.minecraftChoice;
+  const cards=Object.entries(runtime.components).map(([key,item])=>'<div class="runtime-component"><strong>'+e(key==='minecraft'?'Minecraft':'Telegram')+
+    ' <span class="tag">'+e(names[item.status]||item.status)+'</span></strong><small>'+e(item.reason||'')+'</small></div>').join('');
+  return '<section id="runtime-controls" class="runtime-controls" aria-label="Управление персонажем"><div class="runtime-actions"><strong>Персонаж</strong>'+
+    '<label class="check-label"><input id="runtime-minecraft" type="checkbox" '+(minecraft?'checked':'')+'> Minecraft</label>'+
+    '<button class="button primary" data-action="runtime-start" '+(state.runtimeBusy?'disabled':'')+'>Start</button>'+
+    '<button class="button" data-action="runtime-stop" '+(state.runtimeBusy?'disabled':'')+'>Stop</button>'+
+    '<small>'+e(runtime.active?'Запущен из Lab':'Остановлен')+'</small></div><div class="runtime-components">'+cards+'</div>'+
+    (runtime.error?'<div class="alert error">'+e(runtime.error)+'</div>':'')+'</section>';
+}
 function telegramView() {
   const d=state.telegram;
   if(!d)return panel('Telegram','<div class="empty">Загрузка…</div>');
   const names={draft:'На просмотре',preparing:'Готовится',queued:'В очереди',sending:'Отправляется',sent:'Опубликовано',failed:'Ошибка',unknown:'Доставка неизвестна',cancelled:'Отменено'};
-  const fresh=d.runtime.updated && Date.now()/1000-d.runtime.updated<20;
   const online=d.connection.checked_at && Date.now()/1000-d.connection.checked_at<90 && d.connection.can_post;
   const form=state.telegramForm||d.settings;
   const tunnelNames={running:'подключён',external:'внешний туннель или HTTPS',connecting:'подключение',retrying:'повтор подключения',not_configured:'требуется настройка',stopped:'отключён'};
   const updateNames={not_checked:'ещё не проверено',receiving:'подключено'};
-  const postModel=d.runtime.model;
+  const postModel=state.data.models.profiles.telegram;
+  const character=state.data.runtime;
   const stats='<div class="stats-grid">'+stat('Шлюз',online?'Доступен':'Нет подтверждения',d.connection.channel_title||d.connection.error||'Нажмите «Проверить связь»',online)+
-    stat('Персонаж',fresh&&d.runtime.active?'В работе':'Нет активного сигнала',fresh&&d.runtime.world_ready?'Игровые наблюдения поступают':'Запустите игровой runtime')+
+    stat('Подготовка',d.counts.draft?'Ждёт просмотра':d.draft_status.status==='generating'?'Пишет пост':character&&character.active?'По расписанию':'Остановлена','Telegram работает и при закрытом Minecraft')+
     stat('Опубликовано',number(d.counts.sent||0),'В локальном журнале')+stat('События',number(d.pending_events),'Ещё не включены в пост')+'</div>';
   const controls=panel('Публикации','<form id="telegram-settings" class="panel-body">'+
     '<label><input id="tg-enabled" type="checkbox" '+(form.enabled?'checked':'')+'> Включить Telegram</label><br><br>'+
     '<label><input id="tg-auto" type="checkbox" '+(form.auto_post?'checked':'')+'> Публиковать подготовленные посты автоматически</label><br><br>'+
+    '<label><input id="tg-replies" type="checkbox" '+(form.reply_enabled?'checked':'')+'> Отвечать на личные сообщения и комментарии</label><br><br>'+
+    '<p class="tiny">Ответы требуют gateway.py API v3 на VPS. Для комментариев нужна связанная группа обсуждения и доступ бота к её сообщениям.</p>'+
     '<label>Интервал подготовки постов, секунд <input id="tg-interval" type="number" min="1" value="'+e(form.interval_seconds)+'"></label><br><br>'+
     '<label>Событий в одном запросе модели <input id="tg-batch" type="number" min="1" value="'+e(form.batch_size)+'"></label><br><br>'+
     '<button class="button lime" type="submit">Сохранить</button> '+button('Проверить связь','tg-check','','refresh')+
     '<p class="tiny">Без автопубликации тексты остаются на просмотре. Их готовит отдельная модель роли Telegram. Выберите её в разделе «Настройки». Доставка постов не использует LLM.</p>'+
-    '<p class="tiny">Модель постов: '+e(postModel?postModel.provider+' / '+postModel.model+' · '+postModel.reasoning:'появится после запуска игрового runtime')+'.</p>'+
+    '<p class="tiny">Модель постов: '+e(postModel?postModel.provider+' / '+postModel.model+' · '+postModel.reasoning:'выберите в настройках')+'.</p>'+
+    '<p class="tiny">Следующая подготовка: '+e(character&&character.next_draft?new Date(character.next_draft*1000).toLocaleString('ru-RU'):'по расписанию после Start')+'. Без новых игровых событий Саруман может написать размышление.</p>'+
     '<p class="tiny">Ключи: integrations/telegram-gateway/.env.client. SSH: '+e(tunnelNames[d.tunnel.status]||d.tunnel.status||'не проверялся')+'. При отключении Telegram очередь сохраняется.</p>'+
     (d.tunnel.detail?'<p class="tiny">'+e(d.tunnel.detail)+'</p>':'')+
     (d.draft_status.error?'<p class="tiny">Подготовка: '+e(d.draft_status.error)+'</p>':'')+
     (d.updates_status==='receiving'?'':'<p class="tiny">Чтение канала: '+e(updateNames[d.updates_status]||d.updates_status)+'</p>')+'</form>');
   const manual=panel('Свой черновик','<form id="telegram-draft" class="panel-body"><textarea id="tg-text" rows="4" placeholder="Текст для канала" aria-label="Текст поста">'+e(state.telegramDraft)+
-    '</textarea><br><button class="button" type="submit">Сохранить черновик</button><p class="tiny">Эта кнопка сохраняет текст. Для отправки нажмите «В очередь» у поста и включите Telegram.</p></form>');
+    '</textarea><br><button class="button" type="submit">Сохранить черновик</button><p class="tiny">Для отправки нажмите «В очередь» у поста, включите Telegram и нажмите Start сверху.</p></form>');
   const posts=d.posts.map(p=>'<article class="panel-body"><strong>'+e(names[p.status]||p.status)+'</strong> · '+e(new Date(p.created*1000).toLocaleString('ru-RU'))+
     '<p style="white-space:pre-wrap">'+e(p.text||'Подготовка текста…')+'</p><div class="tiny">ID: '+e(p.id)+' · попыток: '+number(p.attempts)+(p.message_id?' · Telegram #'+e(p.message_id):'')+'</div>'+
     (p.error?'<p class="tiny">'+e(p.error)+(p.status==='unknown'?' — проверьте канал; автоматической повторной отправки нет.':'')+'</p>':'')+
@@ -309,7 +350,8 @@ function telegramView() {
     (['draft','queued','failed'].includes(p.status)?'<button class="button" data-tg-id="'+e(p.id)+'" data-tg-action="cancel">Отменить</button>':'')+
     '<details><summary>Источники событий</summary><pre class="note-preview">'+e(JSON.stringify(p.event_ids,null,2))+'</pre></details></article>').join('');
   const records=(rows,label)=>rows.map(r=>'<details class="panel-body"><summary>'+e(r.kind||r.stage||('Telegram update '+r.update_id))+'</summary><pre class="note-preview">'+e(JSON.stringify(r,null,2))+'</pre></details>').join('')||'<div class="empty">'+label+'</div>';
-  return stats+'<div class="settings-layout">'+controls+manual+'</div>'+panel('История постов',posts||'<div class="empty">Постов пока нет. Подтверждённые игровые события появятся после запуска персонажа.</div>')+
+  const dialogue=state.dialogues?'<div class="panel-body"><p class="tiny">Память разделена по Telegram user_id и чату; личные переписки не включаются в посты.</p>'+state.dialogues.people.map(p=>'<details><summary>'+e(p.name)+' · user '+e(p.user_id)+' · '+e(p.scope)+'</summary><p>'+e(p.memory||'Фактов пока нет')+'</p></details>').join('')+state.dialogues.messages.map(m=>'<details><summary>'+e(m.scope)+' · user '+e(m.user_id)+' · '+e(m.status)+'</summary><p>'+e(m.input)+'</p><p>'+e(m.reply||m.error||'Ожидание')+'</p></details>').join('')+(state.dialogues.next_before?button('Более ранние сообщения','tg-dialogues-before'):'')+'</div>':'<div class="panel-body">'+button('Посмотреть переписки и память','tg-dialogues')+'</div>';
+  return stats+'<div class="settings-layout">'+controls+manual+'</div>'+panel('Ответы людям',dialogue)+panel('История постов',posts||'<div class="empty">Постов пока нет. Подтверждённые события или размышления появятся по расписанию.</div>')+
     '<details>'+ '<summary>Память событий и диагностика</summary>'+panel('Игровые события',records(d.events,'Игровых событий пока нет'))+
     panel('Входящие посты канала',records(d.inbox,'Полученных обновлений пока нет'))+panel('Попытки подготовки и отправки',records(d.attempts,'Попыток пока нет'))+'</details>'+
     '<div class="panel-body">'+button('← Назад','tg-prev')+' <span>Страница '+(state.telegramPage+1)+'</span> '+button('Далее →','tg-next')+'</div>';
@@ -321,11 +363,11 @@ function render() {
   if (!state.data) return;
   if (!views[state.view]) state.view="chat";
   const provider=state.data.provider;
-  const bodies={chat:chatView,memory:memoryView,history:historyView,analytics:analyticsView,telegram:telegramView,settings:settingsView};
+  const bodies={control:controlView,chat:chatView,memory:memoryView,history:historyView,analytics:analyticsView,telegram:telegramView,settings:settingsView};
   $("#app").innerHTML='<div class="shell">'+sidebar()+'<main class="main"><header class="topbar"><div class="breadcrumb"><span>Рабочее пространство</span><span>/</span><strong>Саруман</strong></div><div class="top-actions"><span class="pill"><span class="dot '+
     (chatReady()?'online':'')+'"></span>'+e(providerNames[chatProfile().provider])+' / '+e(chatProfile().model)+
     '</span>'+(state.view==='settings'?'':button(views.settings,'models-settings'))+
-    '</div></header>'+heading()+bodies[state.view]()+'<footer class="page-foot"><span>ISENGARD LAB · Реальные файлы, наблюдаемые данные</span><span>Память: Markdown · История: SQLite · Модели: по задачам</span></footer></main></div>';
+    '</div></header>'+heading()+runtimeControls()+bodies[state.view]()+'<footer class="page-foot"><span>ISENGARD LAB · Реальные файлы, наблюдаемые данные</span><span>Память: Markdown · История: SQLite · Модели: по задачам</span></footer></main></div>';
 }
 async function refresh() {
   state.data=await api("/api/overview");
@@ -382,7 +424,7 @@ document.addEventListener("input",(event)=>{
   if(event.target.id==="message-input") state.draft=event.target.value;
   if(event.target.id==="tg-text") state.telegramDraft=event.target.value;
   if(event.target.closest('#telegram-settings')) state.telegramForm={
-    enabled:$('#tg-enabled').checked,auto_post:$('#tg-auto').checked,
+    enabled:$('#tg-enabled').checked,auto_post:$('#tg-auto').checked,reply_enabled:$('#tg-replies').checked,
     interval_seconds:Number($('#tg-interval').value),batch_size:Number($('#tg-batch').value)};
 });
 document.addEventListener("change",async(event)=>{
@@ -409,6 +451,20 @@ document.addEventListener("change",async(event)=>{
   } catch(error){toast(error.message);}
 });
 document.addEventListener("submit",(event)=>{
+  if(event.target.id==='game-settings'){
+    event.preventDefault();
+    try{
+      const value={mode:$('#game-mode').value,target:$('#game-target').value,launcher:$('#game-launcher').value,arguments:JSON.parse($('#game-arguments').value)};
+      api('/api/runtime/connection',value).then(async()=>{state.gameForm=null;await refresh();render();toast('Подключение сохранено.');}).catch(error=>toast(error.message));
+    }catch(error){toast('Аргументы должны быть JSON-массивом строк.');}
+  }
+  if(event.target.id==='admin-form'){
+    event.preventDefault();if(state.adminBusy)return;
+    const text=$('#admin-text').value;if(!text.trim())return;
+    state.adminBusy=true;state.adminDraft=text;render();
+    api('/api/admin',{text,request_id:crypto.randomUUID()}).then(async()=>{state.adminDraft='';state.admin=await api('/api/admin');await refresh();})
+      .catch(error=>toast(error.message)).finally(()=>{state.adminBusy=false;render();});
+  }
   if(event.target.dataset.roleForm){
     event.preventDefault();
     const role=event.target.dataset.roleForm;
@@ -423,7 +479,7 @@ document.addEventListener("submit",(event)=>{
   if(event.target.id==="chat-form"){event.preventDefault();sendMessage();}
   if(event.target.id==='telegram-settings'){
     event.preventDefault();
-    const values={enabled:$('#tg-enabled').checked,auto_post:$('#tg-auto').checked,
+    const values={enabled:$('#tg-enabled').checked,auto_post:$('#tg-auto').checked,reply_enabled:$('#tg-replies').checked,
       interval_seconds:Number($('#tg-interval').value),batch_size:Number($('#tg-batch').value)};
     api('/api/telegram/settings',values).then(async()=>{state.telegramForm=null;await refreshTelegram();render();toast('Настройки Telegram сохранены.');}).catch(error=>toast(error.message));
   }
@@ -456,6 +512,23 @@ document.addEventListener("click",async(event)=>{
       $("#message-input").focus();return;
     }
     const action=target.dataset.action;
+    if(action==='game-connect'){
+      await api('/api/admin',{text:'Войти в настроенный мир',operation:'connect',request_id:crypto.randomUUID()});
+      state.admin=await api('/api/admin');await refresh();render();return;
+    }
+    if(action==='tg-dialogues'){state.dialogues=await api('/api/telegram/dialogues');render();return;}
+    if(action==='tg-dialogues-before'){state.dialogues=await api('/api/telegram/dialogues?before='+state.dialogues.next_before);render();return;}
+    if(action==='runtime-start'||action==='runtime-stop'){
+      if(state.runtimeBusy)return;
+      const choice=state.minecraftChoice===null?state.data.runtime.options.minecraft:state.minecraftChoice;
+      state.runtimeBusy=true;render();
+      try{
+        state.data.runtime=await api('/api/runtime/'+(action==='runtime-start'?'start':'stop'),action==='runtime-start'?{minecraft:choice}:{});
+        state.minecraftChoice=null;
+        toast(action==='runtime-start'?'Запуск персонажа запрошен. Состояния компонентов показаны сверху.':'Остановка запрошена. Очередь Telegram сохранена.');
+      }finally{state.runtimeBusy=false;render();}
+      return;
+    }
     if(action==='models-settings'){location.hash="settings";return;}
     if(action==='tg-check'){const r=await api('/api/telegram/check',{});await refreshTelegram();render();toast(r.can_post?'Бот имеет право публикации.':r.error||'Проверьте подключение и права.');return;}
     if(action==='tg-prev'||action==='tg-next'){state.telegramPage=Math.max(0,state.telegramPage+(action==='tg-next'?1:-1));await refreshTelegram();render();return;}
@@ -479,9 +552,9 @@ document.addEventListener("click",async(event)=>{
     }
   } catch(error){toast(error.message);}
 });
-window.addEventListener("hashchange",async()=>{state.view=location.hash.slice(1);render();if(state.view==='telegram'){try{await refreshTelegram();render();}catch(error){toast(error.message);}}});
+window.addEventListener("hashchange",async()=>{state.view=location.hash.slice(1);render();try{if(state.view==='telegram')await refreshTelegram();if(state.view==='control')state.admin=await api('/api/admin');render();}catch(error){toast(error.message);}});
 (async()=>{
-  try{await refresh();if(state.data.sessions.length)await loadSession(state.data.sessions[0].id);if(state.view==='telegram')await refreshTelegram();render();}
+  try{await refresh();if(state.data.sessions.length)await loadSession(state.data.sessions[0].id);if(state.view==='telegram')await refreshTelegram();if(state.view==='control')state.admin=await api('/api/admin');render();}
   catch(error){$("#app").innerHTML='<div class="boot"><strong>Лаборатория недоступна</strong><p>'+e(error.message)+'</p><p>Запустите сервер и обновите страницу.</p></div>';}
 })();
 setInterval(async()=>{
@@ -489,3 +562,17 @@ setInterval(async()=>{
   try{await refreshTelegram();if(!document.activeElement.closest('form')&&!document.querySelector('details[open]')&&!String(window.getSelection()).trim())render();}
   catch(error){toast(error.message);}
 },5000);
+document.addEventListener('change',event=>{
+  if(event.target.id==='runtime-minecraft')state.minecraftChoice=event.target.checked;
+});
+document.addEventListener('input',event=>{
+  if(event.target.id==='admin-text')state.adminDraft=event.target.value;
+});
+setInterval(async()=>{
+  if(!state.data||state.runtimeBusy)return;
+  try{
+    state.data.runtime=await api('/api/runtime');
+    const controls=$('#runtime-controls');
+    if(controls&&!controls.contains(document.activeElement))controls.outerHTML=runtimeControls();
+  }catch(error){/* Keep the last confirmed state; the refresh action reports connection errors. */}
+},3000);

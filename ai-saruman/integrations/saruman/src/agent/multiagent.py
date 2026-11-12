@@ -29,10 +29,16 @@ if __name__ == "__main__":
 
 class MultiAgent(BaseAgent):
     """
+
     Multi-agent wrapper that coordinates ReactionAgent, PlannerAgent and CoreAgent.
 
     Pattern: Planner decides strategy -> 3 ReactionAgent iterations -> 1 CoreAgent iteration -> repeat
     """
+
+    def submit_admin(self,text,identifier):
+        if self.hybrid_agent is None:
+            return {"status":"unavailable","reason":"Административный вход доступен в модовом режиме"}
+        return self.hybrid_agent.submit_admin(text,identifier)
 
     def __init__(
         self,
