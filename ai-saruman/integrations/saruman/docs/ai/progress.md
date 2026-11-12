@@ -22,8 +22,10 @@
 - Regressions reproduced the missing routing and premature Start. Full Lab suite:
   64 tests passed, one existing Windows symlink privilege skip. No real join,
   publication, LLM call or settings change was made by these checks.
-- Application to the running Lab requires an approved restart: the character is
-  active, so its current in-memory admin handler must not be replaced silently.
+- After the owner stopped Lab and approved installation, launched the updated Lab
+  on 8765 with UTF-8 output. Read-only live runtime/admin checks passed; the
+  character remains stopped and command history is retained. The actual game
+  entry will occur only when the owner repeats the command.
 
 ## 2026-11-12: Exact saved-world selection and actionable name correction
 
