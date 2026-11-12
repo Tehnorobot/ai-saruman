@@ -473,6 +473,7 @@ class HybridAgent:
                 if request["state"] in {"new","deciding","waiting"}:
                     request["state"]="superseded"
                     self.store.save_intent(request)
+                    if request.get('private_admin'):self.speak(request,'cancelled',{'detail':'Поручение заменено новым приватным поручением'})
             event=SimpleNamespace(msg=text,user="Lab",type="directive",processing_timestamp="admin-"+identifier,additional_fields={})
             self.submit(event,private_admin=True)
         return {"status":"accepted","request_id":"admin-"+identifier}
@@ -525,10 +526,10 @@ class HybridAgent:
 
     def speak(self, request, phase, facts):
         if request.get("private_admin"):
-            from saruman.managed import control,atomic_json
+            from saruman.managed import control,admin_result
             if control is not None:
-                atomic_json(control.directory/"admin-result.json",{"command_id":request["id"].removeprefix("admin-"),
-                    "request_id":request["id"],"status":phase,"facts":facts})
+                admin_result(control.directory,{"command_id":request["id"].removeprefix("admin-"),
+                    "request_id":request["id"],"request_state":request.get('state'),"status":phase,"facts":facts})
             return  # No persona, TTS, public chat, history cue or public factual memory.
         request["speech_revision"] = request.get("speech_revision", 0) + 1
         world = self.world()
@@ -921,6 +922,7 @@ class HybridAgent:
             if request["state"] in {"deciding", "waiting", "new"}:
                 request["state"] = "cancelled"
                 self.store.save_intent(request)
+                if request.get('private_admin'):self.speak(request,'cancelled',{'detail':'Игровое поручение остановлено; выполнение не подтверждено'})
         GoalStore().cancel()
         self.ctx_swarm["game"]["mod_player_pending_until"] = 0
         context = plain(self.ctx_swarm["game"].get("mod_player_context", {}))

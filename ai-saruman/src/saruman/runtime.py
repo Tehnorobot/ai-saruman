@@ -176,6 +176,7 @@ class CharacterRuntime:
         self.error = None
         self.connection = GameConnection(project,store,clock)
         self.replies = None
+        self.workflows = None
 
     def publish(self):
         self.store.set_meta("character_runtime", {"active": self.active, "updated": self.clock(),
@@ -199,6 +200,7 @@ class CharacterRuntime:
             self.game.request(options["minecraft"])
             self.director.start()
             if self.replies:self.replies.start()
+            if self.workflows:self.workflows.start()
             if not self.thread:
                 self.thread = threading.Thread(target=self.loop, name="character-lifecycle", daemon=True)
                 self.thread.start()
@@ -252,6 +254,7 @@ class CharacterRuntime:
 
     def close(self):
         self.stop()
+        if self.workflows:self.workflows.close()
         if self.owner.file:
             self.game.shutdown()
         self.closed.set()

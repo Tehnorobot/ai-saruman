@@ -13,9 +13,11 @@ import subprocess
 import threading
 import time
 import uuid
+import base64
 
 from .client import call, validate_url
 from .gateway import read_env
+from .media import inspect_png
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -31,7 +33,8 @@ def record_goal(previous, result, store=None):
     identifier = hashlib.sha256((world + ":tree:" + run).encode()).hexdigest()
     store.event(identifier, "tree_grown" if success else "tree_failed", {
                                           "fact": "Native TreeGrow confirmed that one tree grew" if success else "Native TreeGrow ended without confirmed growth",
-                                          "world_scope": world, "run_id": run})
+                                          "world_scope": world, "run_id": run},
+                post_id=store.workflow_publication(previous.get('context_id')))
 POST_SCHEMA = {"type": "object", "additionalProperties": False, "required": ["text", "event_ids"],
                "properties": {"text": {"type": "string", "minLength": 1, "maxLength": 3500},
                               "event_ids": {"type": "array", "minItems": 1,
@@ -87,6 +90,60 @@ class Store:
                 CREATE TABLE IF NOT EXISTS inbox (
                     update_id INTEGER PRIMARY KEY, payload TEXT NOT NULL, created REAL NOT NULL);
             """)
+            columns={r[1] for r in db.execute('PRAGMA table_info(posts)')}
+            if 'media' not in columns:db.execute('ALTER TABLE posts ADD COLUMN media TEXT')
+
+    def media_path(self, digest):
+        if not isinstance(digest,str) or not re.fullmatch('[a-f0-9]{64}',digest):raise ValueError('Invalid media ID')
+        folder=(self.path.parent/'media').resolve()
+        candidate=folder/(digest+'.png')
+        if candidate.resolve().parent!=folder:raise ValueError('Media path escapes storage')
+        return candidate
+
+    def save_photo(self, data):
+        meta=inspect_png(data);path=self.media_path(meta['sha256'])
+        path.parent.mkdir(parents=True,exist_ok=True)
+        if path.exists():
+            if hashlib.sha256(path.read_bytes()).hexdigest()!=meta['sha256']:raise ValueError('Stored photo changed')
+        else:
+            temporary=path.with_suffix('.'+uuid.uuid4().hex+'.tmp')
+            try:temporary.write_bytes(data);os.replace(temporary,path)
+            finally:temporary.unlink(missing_ok=True)
+        return meta
+
+    def photo_payload(self, meta):
+        data=self.media_path(meta['sha256']).read_bytes()
+        if inspect_png(data)!=meta:raise ValueError('Stored photo changed')
+        return {'data':base64.b64encode(data).decode(),'sha256':meta['sha256']}
+
+    def workflow_post(self, identifier, text, media=None):
+        limit=1024 if media else 3500
+        if not isinstance(text,str) or not text.strip() or len(text.encode('utf-16-le'))//2>limit:
+            raise ValueError('Caption exceeds '+str(limit)+' UTF-16 units')
+        if media:self.photo_payload(media)
+        now=self.clock();encoded=json.dumps(media,sort_keys=True) if media else None
+        with self.db() as db:
+            events=[r[0] for r in db.execute('SELECT id FROM events WHERE post_id=? ORDER BY created',(identifier,))]
+            db.execute("INSERT OR IGNORE INTO posts (id,text,event_ids,status,created,updated,media) VALUES (?,?,?,'draft',?,?,?)",
+                       (identifier,text,json.dumps(events),now,now,encoded))
+            row=db.execute('SELECT text,media FROM posts WHERE id=?',(identifier,)).fetchone()
+            if row['text']!=text or row['media']!=encoded:raise ValueError('Publication identity conflict')
+        return identifier
+
+    def workflow_publication(self,context_id):
+        """Reserve observed workflow events for its explicit post, not a second scheduled post."""
+        if not context_id:return None
+        with self.db() as db:
+            if not db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='workflows'").fetchone():return None
+            rows=db.execute('SELECT body FROM workflows').fetchall()
+        for row in rows:
+            steps=json.loads(row[0])['steps']
+            for index,step in enumerate(steps):
+                if context_id!='admin-'+step['id']:continue
+                following=steps[index+1:]
+                draft=next((s for s in following if s['operation']=='draft'),None)
+                if draft and any(s['operation']=='publish' for s in following):return 'chain-'+draft['id']
+        return None
 
     @contextmanager
     def db(self):
@@ -133,10 +190,10 @@ class Store:
                                (json.dumps(self.clock()+value["interval_seconds"]),))
         return value
 
-    def event(self, identifier, kind, payload):
+    def event(self, identifier, kind, payload, *, post_id=None):
         with self.db() as db:
-            result = db.execute("INSERT OR IGNORE INTO events VALUES (?,?,?,?,NULL)",
-                                (identifier, kind, json.dumps(payload, ensure_ascii=False), self.clock()))
+            result = db.execute("INSERT OR IGNORE INTO events VALUES (?,?,?,?,?)",
+                                (identifier, kind, json.dumps(payload, ensure_ascii=False), self.clock(),post_id))
         return result.rowcount == 1
 
     def attempt(self, post_id, stage, result):
@@ -237,6 +294,7 @@ class Store:
             pending = db.execute("SELECT COUNT(*) FROM events WHERE post_id IS NULL").fetchone()[0]
         for post in posts:
             post["event_ids"] = json.loads(post["event_ids"])
+            post['media']=json.loads(post['media']) if post.get('media') else None
             post.pop("claim", None)
         for row in events + inbox:
             row["payload"] = json.loads(row["payload"])
@@ -454,8 +512,17 @@ class Control:
             return
         if code == 404:
             # Only the same persistent publication ID is ever retried.
-            code, result = self.transport(url, key, "POST", "/v1/posts",
-                                          {"publication_id": identifier, "text": post["text"]})
+            payload={"publication_id":identifier,"text":post['text']}
+            if post.get('media'):
+                version,health=self.transport(url,key,'GET','/healthz')
+                if version!=200 or type(health.get('api_version')) is not int or health['api_version']<4:
+                    with self.store.db() as db:db.execute("UPDATE posts SET status='queued',error='gateway_upgrade_required',next_try=? WHERE id=?",(now+30,identifier))
+                    return
+                try:payload['photo']=self.store.photo_payload(json.loads(post['media']))
+                except (OSError,ValueError):
+                    with self.store.db() as db:db.execute("UPDATE posts SET status='failed',error='invalid_local_photo' WHERE id=?",(identifier,))
+                    return
+            code, result = self.transport(url, key, "POST", "/v1/posts",payload)
         elif code == 200 and result.get("status") == "failed":
             code, result = self.transport(url, key, "POST", f"/v1/posts/{identifier}/retry", {})
             if code == 404:

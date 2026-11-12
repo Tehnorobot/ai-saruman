@@ -159,6 +159,15 @@ class ManagedGameTests(unittest.TestCase):
         self.assertTrue(state["owner_connected"])
         self.assertEqual(list(self.root.glob("*.tmp")),[])
 
+    def test_uncertain_dispatch_is_not_replayed_after_worker_restart(self):
+        managed=load('managed')
+        managed.admin_result(self.root,{'command_id':'reserved','status':'dispatching'})
+        handler=Mock(return_value={'status':'accepted'});self.control.directive_handler=handler
+        self.command(directive={'id':'reserved','text':'grow a tree'})
+        self.control.step();handler.assert_not_called()
+        saved=json.loads((self.root/'results/reserved.json').read_text(encoding='utf-8'))
+        self.assertEqual(saved['status'],'uncertain')
+
     def test_startup_stop_and_shutdown_cancel_only_the_matching_worker(self):
         self.assertFalse(self.control.startup_cancelled())
         self.command();self.assertFalse(self.control.startup_cancelled())

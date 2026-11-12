@@ -15,13 +15,18 @@ from pathlib import Path
 import re
 import secrets
 import sqlite3
+import base64
+try:
+    from .media import decode_photo, MAX_PHOTO
+except ImportError:
+    from media import decode_photo, MAX_PHOTO
 from urllib.error import HTTPError, URLError
 from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
 from urllib.parse import parse_qs, urlsplit
 
 
 ID_PATTERN = re.compile(r"[A-Za-z0-9_-]{1,96}\Z")
-MAX_BODY = 24 * 1024
+MAX_BODY = ((MAX_PHOTO+2)//3)*4 + 24 * 1024
 
 
 def read_env(path: Path) -> dict[str, str]:
@@ -86,10 +91,20 @@ class Telegram:
         self.opener = build_opener(ProxyHandler({}), NoRedirect())
 
     def call(self, method: str, payload: dict):
+        payload=dict(payload)
+        photo=payload.pop('_photo_bytes',None)
+        if photo is not None:
+            boundary='saruman-'+secrets.token_hex(24)
+            parts=[]
+            for name,value in payload.items():
+                parts.append(('--'+boundary+'\r\nContent-Disposition: form-data; name="'+name+'"\r\n\r\n'+str(value)+'\r\n').encode('utf-8'))
+            parts.extend([('--'+boundary+'\r\nContent-Disposition: form-data; name="photo"; filename="minecraft.png"\r\nContent-Type: image/png\r\n\r\n').encode(),photo,('\r\n--'+boundary+'--\r\n').encode()])
+            body=b''.join(parts);content_type='multipart/form-data; boundary='+boundary
+        else:
+            body=json.dumps(payload, ensure_ascii=False).encode('utf-8');content_type='application/json'
         request = Request(
             f"https://api.telegram.org/bot{self.token}/{method}",
-            json.dumps(payload, ensure_ascii=False).encode("utf-8"),
-            {"Content-Type": "application/json"}, method="POST",
+            body, {"Content-Type": content_type}, method="POST",
         )
         try:
             with self.opener.open(request, timeout=25) as response:
@@ -138,6 +153,7 @@ class Publisher:
                 created_at TEXT NOT NULL, updated_at TEXT NOT NULL)""")
             columns={r[1] for r in db.execute("PRAGMA table_info(publications)")}
             if "route" not in columns:db.execute("ALTER TABLE publications ADD COLUMN route TEXT")
+            if "photo" not in columns:db.execute("ALTER TABLE publications ADD COLUMN photo BLOB")
             db.execute("CREATE TABLE IF NOT EXISTS incoming (update_id INTEGER PRIMARY KEY,payload TEXT NOT NULL)")
             db.execute("CREATE TABLE IF NOT EXISTS receive_cursor (id INTEGER PRIMARY KEY,offset INTEGER NOT NULL)")
     def recover_interrupted(self):
@@ -227,16 +243,20 @@ class Publisher:
 
     def retry(self, publication_id):
         with self.connect() as db:
-            row = db.execute("SELECT text,route FROM publications WHERE publication_id=?", (publication_id,)).fetchone()
+            row = db.execute("SELECT text,route,photo FROM publications WHERE publication_id=?", (publication_id,)).fetchone()
         if row is None:
             return 404, {"error": "not_found"}
-        return self.publish({"publication_id": publication_id, "text": row["text"]}, retry=True,
+        photo=row['photo']
+        return self.publish({"publication_id": publication_id, "text": row["text"],
+                            **({'photo':{'data':base64.b64encode(photo).decode(),'sha256':hashlib.sha256(photo).hexdigest()}} if photo else {})}, retry=True,
                             _route=json.loads(row["route"]) if row["route"] else None)
 
     def publish(self, payload, retry=False, *, _route=None):
-        if not isinstance(payload, dict) or set(payload) != {"publication_id", "text"}:
+        if not isinstance(payload, dict) or set(payload) not in ({"publication_id", "text"},{"publication_id", "text","photo"}):
             raise ValueError("Expected exactly publication_id and text; channel is set on the server")
         publication_id, text = payload["publication_id"], payload["text"]
+        photo,photo_meta=decode_photo(payload['photo']) if 'photo' in payload else (None,None)
+        if photo and _route:raise ValueError('Photos are supported only in the configured channel')
         if not isinstance(publication_id, str) or not ID_PATTERN.fullmatch(publication_id):
             raise ValueError("publication_id: 1-96 letters, numbers, underscores or hyphens")
         if not isinstance(text, str) or not text.strip():
@@ -245,16 +265,17 @@ class Publisher:
             units = len(text.encode("utf-16-le")) // 2
         except UnicodeEncodeError:
             raise ValueError("text contains invalid Unicode") from None
-        if units > 4096:
-            raise ValueError("text exceeds 4096 UTF-16 units; split it into separate posts")
+        if units > (1024 if photo else 4096):
+            raise ValueError('text exceeds '+str(1024 if photo else 4096)+' UTF-16 units')
         digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
+        if photo:digest=hashlib.sha256((digest+':'+photo_meta['sha256']).encode()).hexdigest()
         if _route is None and publication_id.startswith("reply-"):
             raise ValueError("Reply identifiers require a verified incoming message")
         route=json.dumps(_route,sort_keys=True) if _route else None
         with self.connect() as db:
             cursor = db.execute("INSERT OR IGNORE INTO publications "
-                                "(publication_id,text,digest,status,created_at,updated_at,route) "
-                                "VALUES (?,?,?,'sending',?,?,?)", (publication_id, text, digest, now(), now(),route))
+                                "(publication_id,text,digest,status,created_at,updated_at,route,photo) "
+                                "VALUES (?,?,?,'sending',?,?,?,?)", (publication_id, text, digest, now(), now(),route,photo))
             fresh = cursor.rowcount == 1
             existing = db.execute("SELECT * FROM publications WHERE publication_id=?",
                                   (publication_id,)).fetchone()
@@ -272,7 +293,7 @@ class Publisher:
                 fresh = claimed.rowcount == 1
         if fresh:
             try:
-                result = self.telegram.call("sendMessage", {
+                result = self.telegram.call('sendPhoto',{'chat_id':self.settings.channel_id,'caption':text,'_photo_bytes':photo}) if photo else self.telegram.call("sendMessage", {
                     "chat_id": self.settings.channel_id, "text": text,
                     **(_route or {}),
                     "link_preview_options": {"is_disabled": True}})
@@ -328,7 +349,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         if self.path == "/healthz":
-            return self.respond(200, {"ok": True, "service": "telegram-gateway", "api_version": 3})
+            return self.respond(200, {"ok": True, "service": "telegram-gateway", "api_version": 4})
         if not self.authorized():
             return
         if self.path == "/v1/check":
@@ -362,7 +383,7 @@ class Handler(BaseHTTPRequestHandler):
         length = self.headers.get("Content-Length", "")
         if self.headers.get("Transfer-Encoding") or not length.isdecimal():
             return self.respond(400, {"error": "content_length_required"})
-        if len(length) > 6 or not 0 < int(length) <= MAX_BODY:
+        if len(length) > 8 or not 0 < int(length) <= MAX_BODY:
             return self.respond(413, {"error": "body_too_large"})
         if self.headers.get_content_type() != "application/json":
             return self.respond(415, {"error": "application_json_required"})

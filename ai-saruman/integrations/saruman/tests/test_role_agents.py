@@ -571,6 +571,19 @@ class HybridTests(Fixtures):
         self.agent.submit(event)
         self.assertFalse(self.agent.requests["1"].get("private_admin"))
 
+    def test_private_task_cancellation_is_reported_to_durable_lab_journal(self):
+        import saruman.managed as managed
+        from types import SimpleNamespace
+        import tempfile
+        with tempfile.TemporaryDirectory() as directory,patch.object(managed,'control',SimpleNamespace(directory=Path(directory))):
+            self.agent.submit_admin('Посади дерево','chain-step')
+            self.agent._cancel_requests()
+            result=json.loads((Path(directory)/'results/chain-step.json').read_text(encoding='utf-8'))
+            self.assertEqual(result['status'],'cancelled')
+            self.assertEqual(result['request_state'],'cancelled')
+            self.assertEqual(self.ctx['chat_queue'],[])
+            self.assertEqual(self.ctx['tts_queue'],[])
+
     def test_persona_has_no_executor_and_text_cannot_become_command(self):
         self.agent.submit(self.event("привет"))
         request = self.agent.requests["1"]

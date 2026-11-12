@@ -293,16 +293,23 @@ function controlView(){
   const d=state.admin||{messages:[],game_result:{}};
   const labels={accepted:'Принято',answered:'Ответ',interpreting:'Разбирает команду',needs_input:'Нужно уточнение',
     no_draft:'Нет готового поста',draft:'Готов к публикации',waiting_start:'Ожидает Start',queued:'В очереди',preparing:'Готовится',sending:'Отправляется',
-    sent:'Опубликовано',already_sent:'Уже опубликовано',failed:'Ошибка отправки',error:'Ошибка',unknown:'Проверьте доставку',cancelled:'Отменено'};
+    sent:'Опубликовано',already_sent:'Уже опубликовано',failed:'Ошибка',error:'Ошибка',unknown:'Проверьте доставку',cancelled:'Отменено',
+    running:'Выполняется',completed:'Завершено',pending:'Ожидает'};
+  const steps={connect:'Вход в мир',game_task:'Игровое действие',screenshot:'Скриншот Minecraft',draft:'Подготовка поста',publish:'Публикация в канале'};
   const messages=d.messages.slice().reverse().map(m=>{
     let result={};try{const parsed=JSON.parse(m.result);if(parsed&&typeof parsed==='object'&&!Array.isArray(parsed))result=parsed;}catch(error){}
     return '<article class="panel-body"><strong>Вы</strong><p class="bubble">'+e(m.input)+'</p><strong>Управление · '+e(labels[m.status]||m.status)+
       '</strong><pre class="note-preview">'+e(result.detail||result.error||m.result)+'</pre>'+
+      (result.steps?'<ol class="workflow-steps">'+result.steps.map(s=>'<li><strong>'+e(steps[s.operation]||s.operation)+'</strong> · '+e(labels[s.status]||s.status)+
+        (s.text?'<p class="tiny">'+e(s.text)+'</p>':'')+
+        (s.result?.error||s.result?.reason||s.result?.detail?'<p class="tiny">'+e(s.result.error||s.result.reason||s.result.detail)+'</p>':'')+
+        (s.operation==='screenshot'&&s.result?.sha256?'<a href="/api/media/'+e(s.result.sha256)+'" target="_blank" rel="noreferrer"><img class="workflow-photo" src="/api/media/'+e(s.result.sha256)+'" alt="Снимок Minecraft"></a>':'')+
+        (s.result?.message_id?'<p class="tiny">Telegram: сообщение '+e(s.result.message_id)+'</p>':'')+'</li>').join('')+'</ol>':'')+
       (result.operation==='publish'&&m.status==='needs_input'?'<a href="#telegram">Выбрать пост в Telegram</a>':'')+'</article>';
   }).join('');
   return panel('Приватный административный чат','<div class="panel-body tiny">Этот чат управляет доступными операциями. Он отделён от публичных диалогов и памяти персонажа. Принятие поручения ещё не означает его выполнение.</div>'+
     '<div class="admin-messages">'+(messages||'<div class="empty">Попросите проверить состояние, подготовить пост или выполнить игровое поручение.</div>')+'</div>'+
-    '<form id="admin-form" class="composer"><textarea id="admin-text" placeholder="Приватная команда" maxlength="12000">'+e(state.adminDraft)+'</textarea><button class="button primary" '+(state.adminBusy?'disabled':'')+'>'+(state.adminBusy?'Обрабатываем…':'Отправить')+'</button></form>',
+    '<form id="admin-form" class="composer"><textarea id="admin-text" placeholder="Например: посади дерево, затем опубликуй пост со скриншотом" maxlength="12000">'+e(state.adminDraft)+'</textarea><button class="button primary" '+(state.adminBusy?'disabled':'')+'>'+(state.adminBusy?'Обрабатываем…':'Отправить')+'</button></form>',
     button('Войти в настроенный мир','game-connect'))+
     panel('Состояние подключения','<div class="panel-body">'+e(state.data.runtime.connection.reason)+'</div>')+
     (d.game_result.command_id?panel('Результат игрового поручения','<pre class="note-preview">'+e(JSON.stringify(d.game_result,null,2))+'</pre>'):'');
@@ -576,6 +583,11 @@ setInterval(async()=>{
   try{await refreshTelegram();if(!document.activeElement.closest('form')&&!document.querySelector('details[open]')&&!String(window.getSelection()).trim())render();}
   catch(error){toast(error.message);}
 },5000);
+setInterval(async()=>{
+  if(state.view!=='control'||!state.data||state.adminBusy)return;
+  try{state.admin=await api('/api/admin');if(!document.activeElement.closest('form')&&!String(window.getSelection()).trim())render();}
+  catch(error){/* Preserve the last confirmed workflow state during reconnect. */}
+},3000);
 document.addEventListener('change',event=>{
   if(event.target.id==='runtime-minecraft')state.minecraftChoice=event.target.checked;
   if(event.target.id==='runtime-filter')state.filterChoice=event.target.checked;

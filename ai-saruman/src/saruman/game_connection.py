@@ -29,6 +29,7 @@ class GameConnection:
         self.value={"status":"stopped","reason":"Подключение к миру не запрошено"}
         self.probe=None;self.launcher=None;self.identifier=None;self.last_probe=0;self.deadline=0
         self.selected=None
+        self.last_request_id=None
 
     def configure(self,value):
         self.store.set_meta("game_connection",validate(value));return value
@@ -42,12 +43,13 @@ class GameConnection:
             raise ValueError('Укажите цель в Настройки → Подключение к Minecraft или напишите: Войди в мир «имя папки в saves».')
         return validate(value)
 
-    def request(self,*,world=None):
-        value=self.configuration(world=world)
+    def request(self,*,world=None,identifier=None,configuration=None):
+        value=validate(configuration) if configuration is not None else self.configuration(world=world)
         if self.probe and self.probe.poll() is None:raise RuntimeError("Проверка подключения ещё выполняется")
         self.selected={**value,"arguments":list(value["arguments"])}
-        self.identifier=uuid.uuid4().hex;self.deadline=self.clock()+180
-        self.value={"status":"starting","reason":'Ожидание Minecraft и вход в мир «'+value['target']+'»'
+        self.identifier=identifier or uuid.uuid4().hex;self.deadline=self.clock()+180
+        self.last_request_id=self.identifier
+        self.value={"status":"starting","request_id":self.identifier,"reason":'Ожидание Minecraft и вход в мир «'+value['target']+'»'
                     if value['mode']=='world' else "Ожидание Minecraft и подключение к выбранному серверу"}
         # Launching is an explicit authenticated operator action, using a saved executable
         # and argument array. No shell, credentials or launch arguments are invented by LLM.
@@ -80,7 +82,7 @@ class GameConnection:
             try:result=json.loads(out)
             except (ValueError,TypeError):result={"status":"unavailable"}
             if result.get("status")=="in_world":
-                self.value={"status":"running","reason":"Minecraft подтвердил открытый мир"};self.identifier=None;return
+                self.value={"status":"running","request_id":self.identifier,"reason":"Minecraft подтвердил открытый мир"};self.identifier=None;return
             if result.get("status")=="rejected" and result.get("code") in {"world_not_found","invalid_world_name"}:
                 self.value={"status":"needs_world_name","code":result["code"],
                             "reason":result.get("reason","Укажите точное имя папки мира в saves.")}

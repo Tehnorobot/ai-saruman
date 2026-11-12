@@ -1,5 +1,38 @@
 # Progress
 
+## 2026-11-12: Durable private workflows and Minecraft photos for Telegram
+
+### Investigate
+- Admin interpretation allowed only one operation; compound world names swallowed
+  the remaining command. Game acceptance was not a completed action. Telegram
+  gateway API v3 and its durable outbox supported text only.
+
+### Plan
+- Reuse the admin and Telegram model roles. Persist ordered steps and stable IDs;
+  advance only from the exact game result and confirmed Telegram delivery. Capture
+  Minecraft's framebuffer into project storage and extend the existing gateway.
+
+### Implement
+- Added private workflow checkpoints, per-command game result journals, explicit
+  cancellation/uncertain outcomes and ordered UI progress with photo previews.
+  Completed steps and post identities survive restarts; Stop pauses orchestration.
+  Native cancellation remains a cancellation, never an implicit replay or success.
+- Public captions receive only selected confirmed game facts. Observed workflow
+  tree events are reserved for that workflow's post, preventing duplicate scheduled
+  coverage. The configured Telegram role prepares text; no new model role was added.
+- Added Minecraft 1.21.11 screenshot adapter, validated project-owned PNG storage,
+  gateway API v4 multipart sendPhoto, immutable text/photo identity and reconciliation.
+  An old gateway holds photos for upgrade while existing text delivery still works.
+- Added owner-run update_gateway.py with syntax checks, service health verification
+  and file rollback; preserves credentials/database/channel and sends no test post.
+  Administrative passwordless SSH was unavailable, so VPS installation is pending
+  the owner's SSH password entry. See telegram-gateway/WORKFLOWS_RU.md.
+- Live check captured and inspected a real Minecraft frame without publishing it.
+- Validation: 104 Lab checks passed plus one existing Windows symlink skip;
+  110 game-role/action/runtime checks and 72 gateway checks passed. JavaScript
+  syntax passed. Installed the local update while the character was stopped;
+  no gameplay command or Telegram publication was submitted during deployment.
+
 ## 2026-11-12: Explicit Lab checkbox for game text filtering
 
 ### Investigate

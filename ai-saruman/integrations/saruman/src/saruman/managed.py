@@ -51,6 +51,24 @@ def atomic_json(path, value):
         temporary.unlink(missing_ok=True)
 
 
+_result_lock=threading.Lock()
+
+
+def admin_result(directory,value):
+    """Per-command evidence survives later commands; acceptance cannot erase completion."""
+    import re
+    identifier=value['command_id']
+    if not re.fullmatch('[A-Za-z0-9_-]{1,96}',identifier):raise ValueError('Invalid command ID')
+    directory=Path(directory)
+    with _result_lock:
+        path=directory/'results'/(identifier+'.json')
+        try:previous=json.loads(path.read_text(encoding='utf-8'))
+        except (OSError,ValueError):previous={}
+        if value.get('status') in {'accepted','dispatching'} and previous.get('status') not in {None,'dispatching','accepted'}:return
+        atomic_json(path,value)
+        atomic_json(directory/'admin-result.json',value)
+
+
 class BackgroundAgent:
     """The blocking supervisor loop must never occupy the lifecycle/Stop thread."""
     def __init__(self,run,is_running):
@@ -131,15 +149,18 @@ class ManagedControl:
                 if (owned and command.get("active") and self.directive_handler and directive.get("id")
                         and directive.get("id")!=self.directive_id):
                     saved={}
-                    try:saved=json.loads((self.directory/"admin-result.json").read_text(encoding="utf-8"))
+                    try:saved=json.loads((self.directory/'results'/(directive['id']+'.json')).read_text(encoding="utf-8"))
                     except (OSError,ValueError):pass
                     self.directive_id=directive["id"]
                     if saved.get("command_id")!=self.directive_id:
                         # Reserve before execution. After a crash an uncertain command is
                         # observed, never blindly executed a second time.
-                        atomic_json(self.directory/"admin-result.json",{"command_id":self.directive_id,"status":"dispatching"})
+                        admin_result(self.directory,{"command_id":self.directive_id,"status":"dispatching"})
                         result=self.directive_handler(directive["text"],self.directive_id)
-                        atomic_json(self.directory/"admin-result.json",{"command_id":self.directive_id,**result})
+                        admin_result(self.directory,{"command_id":self.directive_id,**result})
+                    elif saved.get('status')=='dispatching':
+                        admin_result(self.directory,{'command_id':self.directive_id,'status':'uncertain',
+                            'reason':'Доставка поручения была прервана; повторного запуска нет. Проверьте игру.'})
             else:
                 details = {}
             atomic_json(self.directory / "status.json", {

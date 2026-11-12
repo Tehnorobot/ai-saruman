@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from importlib.resources import files
@@ -20,6 +21,7 @@ from .storage import Store
 from .telegram import Director, Store as TelegramStore, POST_PROMPT, POST_SCHEMA, Conversations, REPLY_PROMPT, REPLY_SCHEMA
 from .runtime import CharacterRuntime
 from .admin import Admin, SCHEMA as ADMIN_SCHEMA, PROMPT as ADMIN_PROMPT
+from .workflows import Workflows
 
 MAX_BODY = 64 * 1024
 
@@ -45,6 +47,17 @@ class Application:
         self.director = Director(draft, telegram_store, managed=True)
         self.telegram = self.director.control
         self.runtime = CharacterRuntime(project, telegram_store, self.director)
+        caption_provider=LabRoleProvider(self.models,self.codex,role='telegram',schema={
+            'type':'object','additionalProperties':False,'required':['text'],'properties':{'text':{'type':'string'}}})
+        def caption(payload):
+            prompt=(self.workplace.read('PERSONA.md')+'\nWrite one concise Russian diary post. '
+                    'Use only confirmed_game_results as evidence of game achievements. A topic is not evidence. '
+                    'Do not reveal private orders, coordinates, player names or technical IDs. '
+                    'A screenshot is a current Minecraft frame, not proof that a requested action succeeded. '
+                    'Never invent actions. Respect caption_limit in UTF-16 units. Return only {"text":"..."}.')
+            return caption_provider.complete(prompt,json.dumps(payload,ensure_ascii=False),'',
+                {'session_id':'telegram:workflow:'+role_session})
+        self.runtime.workflows=Workflows(project,telegram_store,self.runtime,caption)
         reply_provider=LabRoleProvider(self.models,self.codex,role="telegram_reply",schema=REPLY_SCHEMA)
         self.replies=Conversations(telegram_store,lambda payload:reply_provider.complete(
             self.workplace.read("PERSONA.md")+REPLY_PROMPT,json.dumps(payload,ensure_ascii=False),"",{"session_id":"telegram:reply:"+role_session}),self.telegram)
@@ -145,6 +158,14 @@ class Handler(BaseHTTPRequestHandler):
             params = parse_qs(parsed.query)
             if parsed.path == "/api/overview":
                 return self.respond(self.app.overview())
+            if parsed.path.startswith('/api/media/'):
+                digest=parsed.path.removeprefix('/api/media/')
+                try:
+                    path=self.app.telegram.store.media_path(digest)
+                    data=path.read_bytes()
+                    if hashlib.sha256(data).hexdigest()!=digest:raise ValueError('Photo changed')
+                    return self.respond(data,content_type='image/png')
+                except (OSError,ValueError):return self.respond({'error':'Снимок не найден'},404)
             if parsed.path == "/api/telegram":
                 return self.respond(self.app.telegram.store.snapshot(int(params.get("page", ["0"])[0])))
             if parsed.path == "/api/runtime":

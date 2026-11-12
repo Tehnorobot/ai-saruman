@@ -11,6 +11,17 @@ from test_runtime import FakeGame
 
 
 class TelegramHttpTests(Fixture):
+    def test_photo_preview_is_project_owned_and_invalid_paths_are_rejected(self):
+        from test_workflows import png
+        store=self.app.telegram.store
+        meta=store.save_photo(png())
+        with urlopen(self.base+'/api/media/'+meta['sha256']) as response:
+            self.assertEqual(response.headers['Content-Type'],'image/png')
+            self.assertEqual(response.read(),png())
+        for suffix in ('../telegram.sqlite3','not-a-digest','a'*64):
+            with self.assertRaises(HTTPError) as error:urlopen(self.base+'/api/media/'+suffix)
+            self.assertEqual(error.exception.code,404);error.exception.close()
+
     def setUp(self):
         super().setUp()
         self.app = Application(self.root, provider=FakeProvider())

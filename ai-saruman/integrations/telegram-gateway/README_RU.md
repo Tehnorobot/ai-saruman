@@ -91,7 +91,7 @@ install -d -m 750 -o telegram-gateway -g telegram-gateway /opt/saruman-telegram
 
 ```powershell
 cd C:\Users\aimihail\Desktop\projects\ai-saruman\integrations\telegram-gateway
-scp -i "$env:USERPROFILE\.ssh\saruman-vps" gateway.py client.py .env.example root@VPS_IP:/opt/saruman-telegram/
+scp -i "$env:USERPROFILE\.ssh\saruman-vps" gateway.py media.py client.py .env.example root@VPS_IP:/opt/saruman-telegram/
 ```
 
 На VPS:
@@ -339,6 +339,11 @@ GET  /v1/updates?offset=N   новые посты только настроен�
 ```
 
 Реальный ответ также содержит UTC-даты и `retry_after`. Текст сохраняется целиком
-в SQLite. Произвольная выгрузка старой истории канала, изображения и видео пока
+в SQLite. Произвольная выгрузка старой истории канала и видео пока
 не подключены. Получение новых постов и автономная очередь
 на компьютере доступны после [обновления и настройки интеграции](AUTONOMOUS_RU.md).
+
+## Цепочки и изображения
+
+Порядок действий, скриншоты Minecraft и разовое обновление VPS для фото:
+[WORKFLOWS_RU.md](WORKFLOWS_RU.md).
