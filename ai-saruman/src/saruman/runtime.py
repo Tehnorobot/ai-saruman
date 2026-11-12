@@ -3,6 +3,7 @@ import json
 import os
 from pathlib import Path
 import socket
+import sqlite3
 import subprocess
 import threading
 import time
@@ -174,6 +175,8 @@ class CharacterRuntime:
         self.thread = None
         self.closed = threading.Event()
         self.error = None
+        self.last_tick = None
+        self.journal_error = False
         self.connection = GameConnection(project,store,clock)
         self.replies = None
         self.workflows = None
@@ -201,7 +204,8 @@ class CharacterRuntime:
             self.director.start()
             if self.replies:self.replies.start()
             if self.workflows:self.workflows.start()
-            if not self.thread:
+            if not self.thread or not self.thread.is_alive():
+                self.last_tick=self.clock()
                 self.thread = threading.Thread(target=self.loop, name="character-lifecycle", daemon=True)
                 self.thread.start()
         return self.snapshot()
@@ -210,29 +214,41 @@ class CharacterRuntime:
         with self.lock:
             if self.owner.file:
                 self.active = False; self.epoch += 1
-                self.publish()
                 self.game.directive=None
                 self.game.request(False)
                 self.game.heartbeat()
                 self.connection.cancel()
+                try:self.publish()
+                except (OSError,sqlite3.Error):
+                    self.journal_error=True
+                    self.error='Журнал временно недоступен; игровые действия остановлены'
         return self.snapshot()
 
     def step(self):
         with self.lock:
-            self.publish()
+            self.last_tick=self.clock()
+            # The game watchdog must receive its IPC heartbeat even when SQLite
+            # is temporarily busy. Never put a database commit before this step.
             try:
                 self.game.step()
                 self.connection.step()
                 self.error = None
             except (OSError, ValueError, RuntimeError):
                 self.error = "Не удалось обновить игровой процесс; Telegram продолжает работу"
+            self.journal_error=False
+            try:self.publish()
+            except (OSError,sqlite3.Error):
+                self.journal_error=True
+                self.error='Журнал временно недоступен; повтор записи выполняется автоматически'
 
     def loop(self):
         while not self.closed.is_set():
             try:
                 self.step()
-            except (OSError, ValueError):
-                self.error = "Не удалось обновить журнал состояния"
+            except Exception as error:
+                # This is a long-lived worker boundary: a failed iteration must
+                # be visible and retried, not silently kill the lifecycle thread.
+                self.error = 'Ошибка обработчика ('+type(error).__name__+'); повтор выполняется автоматически'
             self.closed.wait(2)
 
     def snapshot(self):
@@ -247,8 +263,20 @@ class CharacterRuntime:
                 telegram = {"status": "retrying", "reason": connection["error"]}
             elif settings["enabled"] and draft.get("error"):
                 telegram = {"status": "retrying", "reason": "Подготовка поста: " + draft["error"]}
-        return {"active": self.active, "components": {"minecraft": dict(self.game.value), "telegram": telegram},
-                "options": {**RUNTIME_DEFAULTS, **self.store.meta("runtime_options", {})}, "error": self.error,
+        alive=bool(self.thread and self.thread.is_alive())
+        fresh=self.last_tick is not None and 0<=self.clock()-self.last_tick<15
+        healthy=not self.active or alive and fresh
+        minecraft=dict(self.game.value)
+        error=self.error
+        if not healthy:
+            error='Обработчик Lab не отвечает; последнее состояние устарело. Нажмите Start для восстановления.'
+            minecraft={'status':'interrupted','reason':error}
+            if settings['enabled']:telegram={'status':'interrupted','reason':error}
+        elif self.active and self.journal_error and settings['enabled']:
+            telegram={'status':'retrying','reason':self.error}
+        return {"active": self.active, "components": {"minecraft": minecraft, "telegram": telegram},
+                'health':{'lifecycle_alive':alive,'fresh':fresh,'healthy':healthy,'last_tick':self.last_tick},
+                "options": {**RUNTIME_DEFAULTS, **self.store.meta("runtime_options", {})}, "error": error,
                 "next_draft": self.store.meta("next_draft"), "auto_post": settings["auto_post"],
                 "connection":self.connection.value,"game_settings":self.store.meta("game_connection",{"mode":"server","target":"","launcher":"","arguments":[]})}
 

@@ -2,6 +2,7 @@
 import hashlib
 import json
 import os
+import sqlite3
 from pathlib import Path
 import subprocess
 import threading
@@ -63,7 +64,7 @@ class Workflows:
         def loop():
             while not self.closed.is_set():
                 try:self.step()
-                except (OSError,ValueError,RuntimeError):pass  # Per-step failure is saved by step().
+                except (OSError,ValueError,RuntimeError,sqlite3.Error):pass  # Retry a temporary checkpoint failure with the same step ID.
                 self.closed.wait(1)
         self.thread=threading.Thread(target=loop,name='private-workflows',daemon=True);self.thread.start()
 
@@ -90,6 +91,10 @@ class Workflows:
                 elif result.get('status') in {'failed','error','unknown','unresolved','cancelled','uncertain','blocked','needs_world_name','rejected','unavailable','conversation','refused','clarify'}:
                     step['status']='failed';value.update(status='failed',detail=result.get('reason') or result.get('error') or 'Этап не подтверждён; последующие действия не запускались')
                 self.save(value)
+            except sqlite3.Error:
+                # The reserved checkpoint and idempotency keys are already durable.
+                # Observe them on the next iteration; do not repeat a confirmed action.
+                raise
             except Exception as error:
                 step.update(status='failed',result={'error':str(error)})
                 value.update(status='failed',detail='Этап '+str(index+1)+': '+str(error));self.save(value)

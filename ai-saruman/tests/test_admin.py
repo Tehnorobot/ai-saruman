@@ -120,6 +120,14 @@ class AdminTests(unittest.TestCase):
         self.assertEqual(self.runtime.game.directive['text'],'посади дерево')
         self.assertEqual(self.store.snapshot()['events'],[])
 
+    def test_standalone_game_history_shows_actual_cancellation_without_rewriting_log(self):
+        self.command('посади два дерева',operation='game_task',argument='посади два дерева')
+        self.runtime.game.read=Mock(return_value={'command_id':'request','status':'cancelled','facts':{'detail':'Watchdog stopped gameplay'}})
+        observed=self.admin.history()[0]
+        self.assertEqual(observed['status'],'cancelled')
+        self.assertEqual(json.loads(observed['result'])['detail'],'Watchdog stopped gameplay')
+        with self.store.db() as db:self.assertEqual(db.execute("SELECT status FROM admin_messages WHERE id='request'").fetchone()[0],'accepted')
+
     def test_named_world_command_uses_local_save_without_config_or_model(self):
         self.interpret.side_effect=AssertionError('Explicit named-world command must not call a model')
         with patch.object(self.runtime,'start') as start,patch.object(self.runtime.connection,'request',return_value={'status':'starting'}) as request:

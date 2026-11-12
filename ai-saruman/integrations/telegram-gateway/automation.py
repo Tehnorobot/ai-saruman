@@ -73,6 +73,7 @@ class Store:
         self.clock = clock
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self.db() as db:
+            db.execute('PRAGMA journal_mode=WAL')
             db.executescript("""
                 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS events (

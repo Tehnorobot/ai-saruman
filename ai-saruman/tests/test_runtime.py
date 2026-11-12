@@ -4,6 +4,7 @@ from pathlib import Path
 import tempfile
 import time
 import threading
+import sqlite3
 import unittest
 from unittest.mock import Mock, MagicMock, patch
 from types import SimpleNamespace
@@ -25,6 +26,58 @@ class FakeGame:
 
 
 class LifecycleTests(unittest.TestCase):
+    def test_busy_journal_cannot_prevent_game_heartbeat(self):
+        now=[1000.0];self.runtime.clock=lambda:now[0]
+        game=MinecraftProcess(self.root,clock=self.runtime.clock);self.runtime.game=game
+        game.worker_id='owned';game.request(True)
+        for instant in (1000.0,1002.0):
+            now[0]=instant
+            atomic_json(game.directory/'status.json',{'worker_id':'owned','updated':instant,'phase':'ready','agent_running':True,'world_ready':True})
+            with patch.object(self.store,'set_meta',side_effect=sqlite3.OperationalError('database is locked')):
+                self.runtime.step()
+            self.assertEqual(game.read('command.json')['updated'],instant)
+            self.assertIn('Журнал временно недоступен',self.runtime.error)
+        self.runtime.step();self.assertIsNone(self.runtime.error)
+
+    def test_lifecycle_loop_survives_a_failed_iteration(self):
+        ticked=threading.Event();calls=[]
+        def step():
+            calls.append(1)
+            if len(calls)==1:raise sqlite3.OperationalError('database is locked')
+            ticked.set()
+        with patch.object(self.runtime,'step',side_effect=step):
+            self.runtime.start({'minecraft':False})
+            self.assertTrue(ticked.wait(5))
+            self.assertTrue(self.runtime.thread.is_alive())
+
+    def test_start_recovers_a_dead_lifecycle_thread(self):
+        dead=threading.Thread(target=lambda:None);dead.start();dead.join()
+        self.runtime.thread=dead;self.runtime.start({'minecraft':False})
+        self.assertIsNot(self.runtime.thread,dead);self.assertTrue(self.runtime.thread.is_alive())
+
+    def test_stop_reaches_game_even_when_journal_commit_fails(self):
+        self.runtime.start({'minecraft':False});self.runtime.game.directive={'id':'unfinished','text':'work'}
+        with patch.object(self.store,'set_meta',side_effect=sqlite3.OperationalError('database is locked')):
+            result=self.runtime.stop()
+        self.assertFalse(result['active']);self.assertFalse(self.game.active);self.assertIsNone(self.game.directive)
+
+    def test_cached_running_state_is_not_shown_when_lifecycle_thread_died(self):
+        self.runtime.active=True;self.runtime.last_tick=time.time()
+        self.runtime.thread=Mock();self.runtime.thread.is_alive.return_value=False
+        self.runtime.game.value={'status':'running','reason':'old cached value'}
+        result=self.runtime.snapshot()
+        self.assertFalse(result['health']['healthy'])
+        self.assertEqual(result['components']['minecraft']['status'],'interrupted')
+        self.assertIn('устарело',result['error'])
+
+    def test_wal_allows_heartbeat_write_while_another_connection_reads_history(self):
+        self.store.set_meta('example','old')
+        with self.store.db() as reader:
+            self.assertEqual(reader.execute('PRAGMA journal_mode').fetchone()[0],'wal')
+            reader.execute('BEGIN');reader.execute('SELECT * FROM meta').fetchall()
+            self.store.set_meta('character_runtime',{'active':True,'updated':1000})
+        self.assertEqual(self.store.meta('character_runtime')['updated'],1000)
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)

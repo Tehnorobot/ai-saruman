@@ -80,6 +80,13 @@ class Admin:
         if result.get('workflow_id') and self.runtime.workflows:
             workflow=self.runtime.workflows.get(result['workflow_id'])
             if workflow:return {**row,'status':workflow['status'],'result':json.dumps({**result,**workflow},ensure_ascii=False)}
+        if result.get('operation')=='game_task' or result.get('status')=='requested':
+            observed=self.runtime.game.read('results/'+row['id']+'.json')
+            if observed.get('command_id')==row['id']:
+                facts=observed.get('facts',{})
+                detail=facts.get('detail') or observed.get('reason') or 'Результат игрового поручения обновлён'
+                return {**row,'recorded_status':row['status'],'status':observed['status'],
+                        'result':json.dumps({**result,**observed,'detail':detail},ensure_ascii=False)}
         if result.get('post_id') and (result.get('operation')=='publish' or result.get('status')=='queued'):
             post=db.execute("SELECT * FROM posts WHERE id=?",(result['post_id'],)).fetchone()
             if post:
@@ -161,7 +168,7 @@ class Admin:
                     self.runtime.start({"minecraft":True})
                     self.runtime.game.directive={"id":identifier,"text":argument}
                     self.runtime.game.heartbeat()
-                    result={"status":"requested","detail":"Приватное поручение сохранено для игрового агента. Выполнение ещё не подтверждено"}
+                    result={"operation":"game_task","command_id":identifier,"status":"requested","detail":"Приватное поручение сохранено для игрового агента. Выполнение ещё не подтверждено"}
                 else:result={"status":"answered","detail":argument}
                 status=result['status'] if operation in {'publish','answer'} else 'accepted'
             except Exception as error:

@@ -294,7 +294,7 @@ function controlView(){
   const labels={accepted:'Принято',answered:'Ответ',interpreting:'Разбирает команду',needs_input:'Нужно уточнение',
     no_draft:'Нет готового поста',draft:'Готов к публикации',waiting_start:'Ожидает Start',queued:'В очереди',preparing:'Готовится',sending:'Отправляется',
     sent:'Опубликовано',already_sent:'Уже опубликовано',failed:'Ошибка',error:'Ошибка',unknown:'Проверьте доставку',cancelled:'Отменено',
-    running:'Выполняется',completed:'Завершено',pending:'Ожидает'};
+    running:'Выполняется',completed:'Завершено',pending:'Ожидает',requested:'Передано игре',unresolved:'Выполнение не подтверждено',refused:'Отклонено',clarify:'Нужно уточнение',uncertain:'Результат неизвестен'};
   const steps={connect:'Вход в мир',game_task:'Игровое действие',screenshot:'Скриншот Minecraft',draft:'Подготовка поста',publish:'Публикация в канале'};
   const messages=d.messages.slice().reverse().map(m=>{
     let result={};try{const parsed=JSON.parse(m.result);if(parsed&&typeof parsed==='object'&&!Array.isArray(parsed))result=parsed;}catch(error){}
@@ -317,7 +317,7 @@ function controlView(){
 function runtimeControls() {
   const runtime=state.data.runtime||{active:false,components:{},options:{minecraft:true}};
   const names={running:'Работает',stopped:'Остановлен',stopping:'Останавливается',starting:'Запуск',restarting:'Перезапуск',checking:'Проверка',ready:'Готов',
-    waiting_world:'Ожидает мир',waiting_services:'Ожидает службы',paused:'Пауза',retrying:'Повтор подключения',
+    waiting_world:'Ожидает мир',waiting_services:'Ожидает службы',paused:'Пауза',retrying:'Повтор подключения',interrupted:'Обработчик не отвечает',
     disabled:'Выключен',unavailable:'Недоступен',not_configured:'Нужна настройка',external:'Отдельный процесс'};
   const minecraft=state.minecraftChoice===null?runtime.options.minecraft:state.minecraftChoice;
   const filter=state.filterChoice===null?runtime.options.filter_enabled!==false:state.filterChoice;
@@ -328,7 +328,7 @@ function runtimeControls() {
     '<label class="check-label"><input id="runtime-filter" type="checkbox" '+(filter?'checked':'')+' '+(runtime.active?'disabled':'')+'> Фильтр речи и игрового чата</label>'+
     '<button class="button primary" data-action="runtime-start" '+(state.runtimeBusy?'disabled':'')+'>Start</button>'+
     '<button class="button" data-action="runtime-stop" '+(state.runtimeBusy?'disabled':'')+'>Stop</button>'+
-    '<small>'+e(runtime.active?'Запущен из Lab':'Остановлен')+'</small></div><div class="runtime-components">'+cards+'</div>'+
+    '<small>'+e(runtime.active?(runtime.health?.healthy===false?'Требуется восстановление':'Запущен из Lab'):'Остановлен')+'</small></div><div class="runtime-components">'+cards+'</div>'+
     '<small>Фильтр применяется при Start. Для изменения нажмите Stop. При выключении речь и игровой чат проходят без модерации.</small>'+
     (runtime.error?'<div class="alert error">'+e(runtime.error)+'</div>':'')+'</section>';
 }

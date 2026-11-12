@@ -1,6 +1,7 @@
 """Durable, scope-isolated Telegram dialogue; external messages have no game/admin tools."""
 import json
 import threading
+import sqlite3
 from .automation import lifecycle_active
 
 REPLY_SCHEMA={"type":"object","additionalProperties":False,"required":["text","memory"],
@@ -45,7 +46,8 @@ class Conversations:
         while not self.stop.is_set():
             try:self.step()
             except Exception as error:
-                self.store.set_meta("reply_status",{"status":"retrying","error":type(error).__name__})
+                try:self.store.set_meta("reply_status",{"status":"retrying","error":type(error).__name__})
+                except (OSError,sqlite3.Error):pass
             self.stop.wait(2)
 
     def snapshot(self,scope=None,user_id=None,before=None):
