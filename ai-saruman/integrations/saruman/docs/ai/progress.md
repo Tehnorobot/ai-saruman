@@ -21,12 +21,16 @@
   replacement prevents relaunch. Minecraft itself and Telegram settings stay separate.
 - Preflight cancellation now observes matching negative owner commands during
   model readiness waits. Default filtering and the remaining Doctor checks remain.
-- Validation: 83 Lab tests passed, one existing Windows symlink skip; JavaScript
+- Validation: 84 Lab tests passed, one existing Windows symlink skip; JavaScript
   syntax passed. Live read-only Doctor --live --no-filter passed against the open
   world and installed addons, without generation, gameplay or publication.
-- After explicit owner approval, stopped the character and restarted Lab. Live
-  runtime reports the default-on checkbox and remains stopped; Telegram settings,
-  publication states and attempt IDs are unchanged. The previous preflight worker
+- The first post-install probe caught old API settings: Windows allowed an older
+  console Lab and the new Lab to listen on 8765 together. Reproduced this in a real
+  socket regression, then added exclusive Windows socket binding. After explicit
+  owner approval, closed only verified duplicate Lab processes and launched one
+  instance. Five live runtime probes consistently show the default-on option;
+  a duplicate live bind is rejected. The character remains stopped and Telegram
+  settings/publications/attempt IDs are unchanged. The previous preflight worker
   acknowledged cancellation. The owner can now uncheck the filter and press Start.
 
 ## 2026-11-12: Truthful private publication commands and delivery status

@@ -84,6 +84,15 @@ class TelegramHttpTests(Fixture):
         self.post('/api/runtime/stop',{})
         self.assertTrue(self.post('/api/runtime/start',{'filter_enabled':True})['options']['filter_enabled'])
 
+    def test_second_lab_cannot_listen_on_the_same_port(self):
+        duplicate=None
+        try:
+            with self.assertRaises(OSError):duplicate=make_server(self.app,self.server.server_port)
+        finally:
+            if duplicate:duplicate.server_close()
+        with urlopen(self.base+'/api/runtime') as response:
+            self.assertFalse(json.load(response)['active'])
+
     def test_manual_draft_queue_cancel_and_persistence(self):
         identifier = self.post("/api/telegram/draft", {"text": "Проверка UI"})["id"]
         self.assertEqual(self.snapshot()["posts"][0]["status"], "draft")

@@ -7,6 +7,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from importlib.resources import files
 from pathlib import Path
 import secrets
+import socket
 import threading
 import traceback
 import uuid
@@ -226,8 +227,19 @@ class Handler(BaseHTTPRequestHandler):
             self.respond({"error": "Внутренняя ошибка. Подробности в терминале сервера."}, 500)
 
 
+class LabHTTPServer(ThreadingHTTPServer):
+    # Windows SO_REUSEADDR can let two HTTP servers serve the same loopback port.
+    # API responses must always belong to one Lab instance/version.
+    allow_reuse_address = not hasattr(socket, "SO_EXCLUSIVEADDRUSE")
+
+    def server_bind(self):
+        if hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
+            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+        super().server_bind()
+
+
 def make_server(app, port=8765):
-    server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
+    server = LabHTTPServer(("127.0.0.1", port), Handler)
     server.app = app
     return server
 
