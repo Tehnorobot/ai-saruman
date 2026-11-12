@@ -1,5 +1,23 @@
 # Progress
 
+## 2026-11-12: Preserve scrolling in private control
+
+### Investigate
+- Three-second admin polling rebuilt the full page and reset scroll offsets in
+  the command history and nested result panels.
+
+### Plan
+- Preserve the current page and control-panel offsets by stable command IDs
+  during same-view renders. Reserve screenshot dimensions before image loading.
+
+### Implement
+- Restore vertical/horizontal panel offsets and page position after rendering;
+  skip restoration on view changes. Screenshots expose their known dimensions.
+- Validation: isolated Chrome with synthetic read-only APIs retained page/history/
+  command-result/game-result positions at 180/320/118/85 px over three real auto
+  refreshes, including delayed photo responses; no JavaScript errors. Static
+  files are served directly, so the owner only needs to reload the browser page.
+
 ## 2026-11-12: Recover lifecycle after SQLite contention
 
 ### Investigate

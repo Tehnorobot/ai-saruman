@@ -41,6 +41,7 @@ state.runtimeBusy = false;
 state.minecraftChoice = null;
 state.filterChoice = null;
 state.admin = null;state.adminDraft='';state.adminBusy=false;state.dialogues=null;state.gameForm=null;
+let renderedView=null;
 function toast(text) {
   $("#toast").textContent = text;
   $("#toast").hidden = false;
@@ -299,20 +300,20 @@ function controlView(){
   const messages=d.messages.slice().reverse().map(m=>{
     let result={};try{const parsed=JSON.parse(m.result);if(parsed&&typeof parsed==='object'&&!Array.isArray(parsed))result=parsed;}catch(error){}
     return '<article class="panel-body"><strong>Вы</strong><p class="bubble">'+e(m.input)+'</p><strong>Управление · '+e(labels[m.status]||m.status)+
-      '</strong><pre class="note-preview">'+e(result.detail||result.error||m.result)+'</pre>'+
+      '</strong><pre class="note-preview" data-control-scroll="result-'+e(m.id)+'">'+e(result.detail||result.error||m.result)+'</pre>'+
       (result.steps?'<ol class="workflow-steps">'+result.steps.map(s=>'<li><strong>'+e(steps[s.operation]||s.operation)+'</strong> · '+e(labels[s.status]||s.status)+
         (s.text?'<p class="tiny">'+e(s.text)+'</p>':'')+
         (s.result?.error||s.result?.reason||s.result?.detail?'<p class="tiny">'+e(s.result.error||s.result.reason||s.result.detail)+'</p>':'')+
-        (s.operation==='screenshot'&&s.result?.sha256?'<a href="/api/media/'+e(s.result.sha256)+'" target="_blank" rel="noreferrer"><img class="workflow-photo" src="/api/media/'+e(s.result.sha256)+'" alt="Снимок Minecraft"></a>':'')+
+        (s.operation==='screenshot'&&s.result?.sha256?'<a href="/api/media/'+e(s.result.sha256)+'" target="_blank" rel="noreferrer"><img class="workflow-photo" width="'+e(s.result.width)+'" height="'+e(s.result.height)+'" src="/api/media/'+e(s.result.sha256)+'" alt="Снимок Minecraft"></a>':'')+
         (s.result?.message_id?'<p class="tiny">Telegram: сообщение '+e(s.result.message_id)+'</p>':'')+'</li>').join('')+'</ol>':'')+
       (result.operation==='publish'&&m.status==='needs_input'?'<a href="#telegram">Выбрать пост в Telegram</a>':'')+'</article>';
   }).join('');
   return panel('Приватный административный чат','<div class="panel-body tiny">Этот чат управляет доступными операциями. Он отделён от публичных диалогов и памяти персонажа. Принятие поручения ещё не означает его выполнение.</div>'+
-    '<div class="admin-messages">'+(messages||'<div class="empty">Попросите проверить состояние, подготовить пост или выполнить игровое поручение.</div>')+'</div>'+
+    '<div class="admin-messages" data-control-scroll="messages">'+(messages||'<div class="empty">Попросите проверить состояние, подготовить пост или выполнить игровое поручение.</div>')+'</div>'+
     '<form id="admin-form" class="composer"><textarea id="admin-text" placeholder="Например: посади дерево, затем опубликуй пост со скриншотом" maxlength="12000">'+e(state.adminDraft)+'</textarea><button class="button primary" '+(state.adminBusy?'disabled':'')+'>'+(state.adminBusy?'Обрабатываем…':'Отправить')+'</button></form>',
     button('Войти в настроенный мир','game-connect'))+
     panel('Состояние подключения','<div class="panel-body">'+e(state.data.runtime.connection.reason)+'</div>')+
-    (d.game_result.command_id?panel('Результат игрового поручения','<pre class="note-preview">'+e(JSON.stringify(d.game_result,null,2))+'</pre>'):'');
+    (d.game_result.command_id?panel('Результат игрового поручения','<pre class="note-preview" data-control-scroll="game-'+e(d.game_result.command_id)+'">'+e(JSON.stringify(d.game_result,null,2))+'</pre>'):'');
 }
 function runtimeControls() {
   const runtime=state.data.runtime||{active:false,components:{},options:{minecraft:true}};
@@ -381,12 +382,22 @@ async function refreshTelegram() {
 function render() {
   if (!state.data) return;
   if (!views[state.view]) state.view="chat";
+  const preserve=state.view==='control'&&renderedView==='control';
+  const pagePosition=preserve?{x:window.scrollX,y:window.scrollY}:null;
+  const scrollPositions=new Map(preserve?Array.from(document.querySelectorAll('[data-control-scroll]'),node=>[
+    node.dataset.controlScroll,{top:node.scrollTop,left:node.scrollLeft}]):[]);
   const provider=state.data.provider;
   const bodies={control:controlView,chat:chatView,memory:memoryView,history:historyView,analytics:analyticsView,telegram:telegramView,settings:settingsView};
   $("#app").innerHTML='<div class="shell">'+sidebar()+'<main class="main"><header class="topbar"><div class="breadcrumb"><span>Рабочее пространство</span><span>/</span><strong>Саруман</strong></div><div class="top-actions"><span class="pill"><span class="dot '+
     (chatReady()?'online':'')+'"></span>'+e(providerNames[chatProfile().provider])+' / '+e(chatProfile().model)+
     '</span>'+(state.view==='settings'?'':button(views.settings,'models-settings'))+
     '</div></header>'+heading()+runtimeControls()+bodies[state.view]()+'<footer class="page-foot"><span>ISENGARD LAB · Реальные файлы, наблюдаемые данные</span><span>Память: Markdown · История: SQLite · Модели: по задачам</span></footer></main></div>';
+  renderedView=state.view;
+  for(const node of document.querySelectorAll('[data-control-scroll]')){
+    const position=scrollPositions.get(node.dataset.controlScroll);
+    if(position){node.scrollTop=position.top;node.scrollLeft=position.left;}
+  }
+  if(pagePosition)window.scrollTo({left:pagePosition.x,top:pagePosition.y,behavior:'instant'});
 }
 async function refresh() {
   state.data=await api("/api/overview");
