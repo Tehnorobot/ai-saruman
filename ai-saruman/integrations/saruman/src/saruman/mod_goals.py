@@ -2,6 +2,7 @@
 
 import json
 import os
+import re
 import sqlite3
 import time
 import uuid
@@ -42,6 +43,7 @@ class GoalStore:
         )
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self.connection() as db:
+            db.execute("PRAGMA journal_mode=WAL")
             db.execute(
                 "CREATE TABLE IF NOT EXISTS goals (id TEXT PRIMARY KEY, request TEXT UNIQUE, source TEXT, priority INTEGER, state TEXT, created REAL, updated REAL, body TEXT)"
             )
@@ -51,15 +53,23 @@ class GoalStore:
 
     @contextmanager
     def connection(self):
-        with sqlite3.connect(self.path, timeout=5) as db:
+        db = sqlite3.connect(self.path, timeout=5)
+        try:
             db.row_factory = sqlite3.Row
-            yield db
+            with db:
+                yield db
+        finally:
+            db.close()
 
-    def submit(self, kind, *, source, request_id=None, count=1, command=None):
+    def submit(self, kind, *, source, request_id=None, count=1, command=None, target=None):
         if source not in {"player", "operator", "planner"}:
             raise ValueError("Unknown goal source")
-        if kind not in {"trees", "command"} or source == "planner" and kind != "trees":
+        if kind not in {"trees", "command", "follow"} or source == "planner" and kind not in {"trees", "follow"}:
             raise ValueError("Planner may only submit native mod skills")
+        if kind == "follow":
+            if not isinstance(target, str) or not re.fullmatch(r"[A-Za-z0-9_]{1,16}", target):
+                raise ValueError("Expected an exact Minecraft player name")
+            command = f"@follow {target}"
         if (
             isinstance(count, bool)
             or not isinstance(count, int)
@@ -80,6 +90,7 @@ class GoalStore:
             "count": count,
             "completed": 0,
             "command": command,
+            "target": target,
             "run_id": None,
             "world": None,
             "state": "queued",

@@ -33,6 +33,8 @@ class FakeMods:
             return copy.deepcopy(self.snapshot)
         if operation == "defense":
             self.snapshot["defense_enabled"] = args["enabled"]
+            if args["enabled"]:
+                self.snapshot.update(manual_stop=False, manual_stop_latched=False, stop_kind="none")
         if operation == "tree_start":
             request = args["request_id"]
             if request not in self.receipts:
@@ -47,7 +49,13 @@ class FakeMods:
             self.snapshot["native_busy"] = False
         if operation == "command":
             self.snapshot["native_busy"] = True
-            return {"status": "sent"}
+            request = args["request_id"]
+            self.receipts.setdefault(request, {"status": "sent"})
+            self.snapshot["command"] = {"run_id": request, "current": True, "finished": False}
+            if self.lose_next:
+                self.lose_next = False
+                raise TimeoutError("command delivered, reply lost")
+            return self.receipts[request]
         if operation == "tree_resume":
             self.snapshot["tree"]["isFinished"] = False
             self.snapshot["native_busy"] = True
@@ -667,7 +675,7 @@ class NativeRoutingTests(unittest.TestCase):
         self.assertEqual(self.game["mod_goals"][0]["source"], "operator")
         view = panel.view()
         self.assertIn("0/2", view[0])
-        self.assertEqual([row[0] for row in view[1]], ["Auto Defense", "TreeGrow"])
+        self.assertEqual([row[0] for row in view[1]], ["Auto Defense", "TreeGrow", "UnionClef"])
 
     def test_native_panel_has_no_legacy_activity_editor_and_saves_only_tree_switch(
         self,
@@ -719,7 +727,7 @@ class NativeRoutingTests(unittest.TestCase):
         after = panel.view()
         self.assertEqual(len(before[1][0]), len(modules.headers))
         self.assertEqual(len(after[1][0]), len(modules.headers))
-        self.assertEqual([row[0] for row in after[1]], ["Auto Defense", "TreeGrow"])
+        self.assertEqual([row[0] for row in after[1]], ["Auto Defense", "TreeGrow", "UnionClef"])
 
 
 if __name__ == "__main__":

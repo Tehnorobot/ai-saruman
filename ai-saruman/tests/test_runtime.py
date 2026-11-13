@@ -172,6 +172,24 @@ class LifecycleTests(unittest.TestCase):
         self.assertEqual(game.value['status'],'unavailable')
         self.assertIn('stale Java object',game.value['reason'])
 
+    def test_actual_native_activity_reaches_lab_component(self):
+        game=MinecraftProcess(self.root)
+        atomic_json(game.directory/'command.json',{'worker_id':'owned','revision':1})
+        atomic_json(game.directory/'status.json',{'worker_id':'owned','updated':time.time(),'phase':'ready',
+            'agent_running':True,'world_ready':True,'native_activity':{'phase':'player','reason':'Обращение игрока: собственное занятие прерывается'}})
+        game.request(True);game.step()
+        self.assertEqual(game.value['status'],'running')
+        self.assertIn('Обращение игрока',game.value['reason'])
+
+    def test_death_is_waiting_respawn_not_a_permanent_manual_pause(self):
+        game=MinecraftProcess(self.root)
+        atomic_json(game.directory/'command.json',{'worker_id':'owned','revision':1})
+        atomic_json(game.directory/'status.json',{'worker_id':'owned','updated':time.time(),'phase':'ready',
+            'agent_running':True,'world_ready':True,'manual_stop_latched':True,
+            'native_stop_kind':'reset','player_alive':False})
+        game.request(True);game.step()
+        self.assertEqual(game.value['status'],'waiting_respawn')
+
 
 class ManagedGameTests(unittest.TestCase):
     def setUp(self):

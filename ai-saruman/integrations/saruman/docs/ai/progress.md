@@ -1,5 +1,57 @@
 # Progress
 
+## 2026-11-12: Player priority and native idle activities
+
+### Investigate
+- Native mode bypassed the old random activity catalogue and could only queue trees;
+  the owner's tree background switch was off. Chat and voice shared the player inbox,
+  but voice did not signal pending input before response generation.
+- Auto Defense used the same latch for death/world reset and manual Stop. The bridge
+  also called UnionClef cancelUserTask for personal task cancellation: pinned bytecode
+  confirms that this disables the global TaskRunner, creating another manual-stop latch.
+- Verified exact installed APIs: Task.isFinished()/stopped() take no parameters;
+  SingleTaskChain.setTask(null) stops its root/children without disabling TaskRunner.
+  SQLite context-manager transactions did not close connections deterministically.
+
+### Plan
+- Keep native execution and existing model roles. After 20 seconds of actual idle,
+  select tree growing or following a random alive loaded player, excluding self.
+- Preempt personal activities for text/voice requests, preserve verified progress,
+  distinguish reset recovery from explicit manual Stop, and release only owned roots.
+- Recover from task/API/database failures without blind replay of uncertain mutations;
+  publish actual activity/wait reasons to Lab. No additional retry pause after failure.
+
+### Implement
+- Added typed follow goals, random activity/player choice and an idle clock reset by
+  actual work, dialogue, defense, disconnect and respawn. Failed hobbies prefer an
+  available alternative; player requests bypass the idle timer. Follow departure,
+  defense interruption, lost response and cancellation retain receipt identities.
+- Text and STT voice signal player priority before model completion. The native prompt
+  directs feasible requests to enabled tools. Legacy activity execution remains off.
+- The shim distinguishes RESET/manual Stop, exposes alive/player/command facts and
+  detaches only its exact finished/stopped root. Tree cancellation calls finish and
+  scoped detachment, not the TreeGrow helper that disables the global runner. Native
+  death ends the old attempt; after respawn new work can start without a Stop/Start loop.
+- GoalStore enables WAL and closes each connection explicitly; database lease/history
+  errors remain inside the dispatcher boundary and recover on a later tick.
+- Lab shows actual work/wait reasons and waiting_respawn rather than a generic pause.
+  Native panel documents the two available personal activities.
+- Validation: 74 native/priority/preflight tests passed; real Java shim contract passed
+  for both pinned API variants; all 117 Lab tests completed with one existing Windows
+  symlink skip (191 successful tests in total, 1 skip). Actual Minecraft snapshot through
+  the compiled shim confirmed alive/world/player/command fields without game actions.
+  javac initially hit sandbox resource restrictions; permitted isolated execution passed.
+  A Windows test exposed the SQLite handle leak, which was fixed before installation.
+- Installed while the owner had stopped the character: gracefully retired the owned
+  game worker, enabled background trees while preserving other settings, restarted
+  only Lab and verified it remains stopped with the prior filter choice. No JAR/world
+  replacement or Telegram publication. Next Start loads the updated game process.
+  Local installation/probe/settings backup: .saruman/audit/native-idle-2026-11-12/ and
+  .saruman/audit/native-idle-probe-2026-11-12.json.
+- Boundary: following a second real player and live voice preemption still need an
+  in-game check; the available live world contained only Saruman. These paths passed
+  isolated protocol/event tests and the actual installed command ABI inspection.
+
 ## 2026-11-12: Preserve sapling drops while mining leaves
 
 ### Investigate

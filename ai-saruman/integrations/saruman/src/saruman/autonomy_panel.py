@@ -400,7 +400,9 @@ class AutonomyPanel:
         if current:
             lines.append(f"Текущая цель: {current['kind']} ({current['source']}), {current['state']}; подтверждено {current['completed']}/{current['count']}. ID: {current['id']}")
         else:
-            lines.append("Очередь пуста. Фоновый выбор доступен только для TreeGrow; защита реагирует на ситуацию.")
+            lines.append("Очередь пуста. После 20 секунд простоя: посадка дерева или следование за доступным игроком.")
+        if runtime.get("activity", {}).get("reason"):
+            lines.append(runtime["activity"]["reason"])
         if runtime.get("error") or error:
             lines.append(f"Ошибка: {runtime.get('error') or error}")
         tree_control = game.get("mod_tool_controls", {}).get("grow_trees", True)
@@ -409,6 +411,8 @@ class AutonomyPanel:
              "Включён" if runtime.get("defense_enabled") else "Выключен"],
             ["TreeGrow", "Выращивание деревьев", "Фоновая очередь" if weights["trees"] else "Только по запросу",
              "Готов" if ready and tree_control else "Выключен в Tool Controls" if not tree_control else "Ожидает готовности runtime"],
+            ["UnionClef", "Следование за случайным доступным игроком", "После 20 секунд простоя",
+             "Готов" if ready else "Ожидает готовности runtime"],
         ]
         history = [[datetime.fromtimestamp(g["created"]).strftime("%H:%M:%S"),
                     f"{g['source']}: {g['kind']} {g['completed']}/{g['count']}",

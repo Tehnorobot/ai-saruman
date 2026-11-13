@@ -1,6 +1,8 @@
 """Independent native-skill dispatcher. No model calls, movement loops or combat AI."""
 
 import os
+import random
+import re
 import time
 import uuid
 
@@ -20,6 +22,7 @@ class AutomationRuntime:
         supply=None,
         announce=None,
         event_sink=None,
+        rng=None,
     ):
         self.adapter, self.store, self.clock = adapter, store or GoalStore(), clock
         self.notify = notify or (lambda goal: None)
@@ -32,13 +35,55 @@ class AutomationRuntime:
         self.speech_catalogue_loaded = False
         self.last_plant = None
         self.next_tick = 0
-        self.next_plan = 0
         self.last_error = None
         self.owner = uuid.uuid4().hex
         self.was_enabled = False
+        self.rng = rng or random.Random()
+        self.idle_since = None
+        self.last_failed_activity = None
+        self.activity = {"phase": "starting", "reason": "Проверка игрового состояния"}
+
+    def hold(self, phase, reason):
+        self.idle_since = None
+        self.activity = {"phase": phase, "reason": reason}
+
+    def idle(self, game, snapshot, tools):
+        now = self.clock()
+        if self.idle_since is None:
+            self.idle_since = now
+        remaining = max(0, 20 - (now - self.idle_since))
+        self.activity = {"phase": "idle", "reason": "Выбор занятия после 20 секунд бездействия",
+                         "idle_seconds": now-self.idle_since, "next_in": remaining}
+        if remaining or os.getenv("SARUMAN_AUTONOMY_ENABLED", "true").lower() not in {"true", "1", "yes"}:
+            return
+        def available(name):
+            return tools is None or name in tools and not tools[name].get("disabled", False)
+        weights = load_weights(activities=catalog())
+        choices = []
+        if weights.get("trees", 0) > 0 and game.get("mod_tool_controls", {}).get("grow_trees", True) and available("grow_trees"):
+            choices.append("trees")
+        players = [name for name in snapshot.get("players", [])
+                   if isinstance(name, str) and re.fullmatch(r"[A-Za-z0-9_]{1,16}", name)]
+        if players and available("agent_action"):
+            choices.append("follow")
+        if not choices:
+            self.activity["reason"] = "Нет доступного занятия: ожидание игрока или включения посадки"
+            return
+        if len(choices) > 1 and self.last_failed_activity in choices:
+            choices.remove(self.last_failed_activity)
+        kind = self.rng.choice(choices)
+        self.store.submit(kind, source="planner", request_id=f"planner:{uuid.uuid4().hex}",
+                          target=self.rng.choice(players) if kind == "follow" else None)
+        self.hold("queued", "Выбрана посадка дерева" if kind == "trees" else "Выбрано следование за игроком")
 
     def change(self, goal, **changes):
         result = self.store.update(goal, **changes)
+        if result["state"] in {"completed", "failed", "cancelled", "uncertain"}:
+            self.idle_since = self.clock()
+            if result["source"] == "planner" and result["state"] in {"failed", "uncertain"}:
+                # Prefer another available hobby after a failure, without an
+                # extra cooldown or delaying a player's accepted request.
+                self.last_failed_activity = result["kind"]
         if self.event_sink:
             try:
                 self.event_sink(goal, result)
@@ -65,9 +110,9 @@ class AutomationRuntime:
         if now < self.next_tick:
             return
         self.next_tick = now + 0.25
-        if not self.store.lease(self.owner, now):
-            return
         try:
+            if not self.store.lease(self.owner, now):
+                return
             if not self.speech_catalogue_loaded:
                 records = game.get("action_voice_records")
                 if records is not None:
@@ -79,13 +124,14 @@ class AutomationRuntime:
                 raise RuntimeError(snapshot.get("reason", "Native mods unavailable"))
             # The addon latches an explicit native stop. Polling must not rearm it.
             # A new Stop -> Start is an explicit operator request to resume.
-            manual_paused = bool(enabled and self.was_enabled and snapshot.get("manual_stop_latched"))
-            active = bool(enabled and not manual_paused)
+            reset = snapshot.get("stop_kind") == "reset"
+            alive = snapshot.get("player_alive", game.get("alive")) is True
+            manual_paused = bool(enabled and self.was_enabled and snapshot.get("manual_stop_latched") and not reset)
+            active = bool(enabled and not manual_paused and alive and snapshot["in_world"])
             if snapshot["defense_enabled"] != active:
                 self.call("defense", snapshot, enabled=active)
-            if snapshot.get("manual_stop"):
+            if snapshot.get("manual_stop") and not reset:
                 self.store.cancel(reason="Native task stop")
-                self.next_plan = now + 10
             self.call(
                 "maintain", snapshot, ack_manual_stop=bool(snapshot.get("manual_stop"))
             )
@@ -113,16 +159,18 @@ class AutomationRuntime:
                 **snapshot,
                 "updated": now,
                 "status": "paused" if manual_paused else "running" if enabled else "stopped",
+                "activity": self.activity,
             }
+            game["mod_goals"] = self.store.list(limit=40)
         except Exception as error:  # noqa: BLE001 - boundary to an optional JVM plugin
             # A lost response is NOT permission to repeat a world action with a new id.
             self.last_error = f"{type(error).__name__}: {error}"
+            self.hold("unavailable", "Ожидание восстановления игрового API")
             game["mod_runtime"] = {
                 "status": "unavailable",
                 "error": self.last_error,
                 "updated": now,
             }
-        game["mod_goals"] = self.store.list(limit=40)
 
     def reconcile(self, game, snapshot, enabled, tools):
         now, world = self.clock(), snapshot["world"]
@@ -136,6 +184,8 @@ class AutomationRuntime:
             or game.get("mod_player_pending_until", 0) > now
         )
         player_waiting = replying or any(g["source"] != "planner" for g in goals)
+        if replying:
+            self.hold("player", "Обращение игрока: собственное занятие прерывается")
         for goal in goals:
             if goal["world"] and goal["world"] != world:
                 self.change(
@@ -155,11 +205,14 @@ class AutomationRuntime:
                 and player_waiting
             ):
                 if busy:
+                    self.hold("defense", "Защита удерживает управление; поручение игрока сохранено")
                     continue
                 if goal["run_id"]:
-                    self.call("cancel", snapshot, run_id=goal["run_id"])
-                if goal["kind"] == "command" and goal["state"] == "cancel_requested":
-                    self.call("stop_command", snapshot, run_id=goal["run_id"])
+                    response = self.call("cancel" if goal["kind"] == "trees" else "stop_command", snapshot,
+                                         run_id=goal.get("native_command_run") or goal["run_id"])
+                    if response.get("status") == "busy":
+                        self.hold("defense", "Ожидание освобождения управления для остановки занятия")
+                        continue
                 completed = goal["completed"]
                 if (
                     goal["kind"] == "trees"
@@ -178,17 +231,20 @@ class AutomationRuntime:
                 )
                 continue
             if goal["state"] in {"running", "starting", "interrupted", "resuming"}:
-                if game.get("alive") is False:
+                self.hold("working", "Посадка деревьев" if goal["kind"] == "trees" else "Следование за игроком" if goal["kind"] == "follow" else "Выполнение поручения игрока")
+                self.activity.update(goal_id=goal["id"], source=goal["source"], completed=goal["completed"], count=goal["count"])
+                if snapshot.get("player_alive", game.get("alive")) is False or snapshot.get("stop_kind") == "reset":
                     self.change(
                         goal,
                         state="failed",
                         reason="Player died; confirmed progress retained, current run will not resume",
                     )
                     continue
-                if game.get("alive") is not True:
+                if snapshot.get("player_alive", game.get("alive")) is not True:
                     return
                 if busy:
                     self.store.update(goal, state="interrupted", saw_defense=True)
+                    self.hold("defense", "Занятие прервано защитой")
                     continue
                 if goal["kind"] == "trees":
                     if tree.get("run_id") != goal["run_id"]:
@@ -198,6 +254,10 @@ class AutomationRuntime:
                             )
                             if response["status"] == "started":
                                 self.store.update(goal, state="running")
+                            elif response["status"] != "busy":
+                                self.change(goal, state="failed", reason=response.get("reason"))
+                            elif now > goal.get("deadline", now+1):
+                                self.change(goal, state="uncertain", reason="Native start not confirmed; inspect the retained receipt")
                         else:
                             self.change(
                                 goal,
@@ -235,7 +295,6 @@ class AutomationRuntime:
                                 else "queued",
                                 reason=tree.get("result"),
                             )
-                            self.next_plan = now + 10
                         elif (
                             goal.get("saw_defense")
                             and not tree.get("expired")
@@ -272,13 +331,44 @@ class AutomationRuntime:
                                 )
                         else:
                             self.change(goal, state="failed", reason=tree.get("result"))
-                            self.next_plan = now + 30
                     elif now > goal.get("deadline", now + 1):
                         self.call("cancel", snapshot, run_id=goal["run_id"])
                         self.change(
                             goal, state="failed", reason="Native run deadline exceeded"
                         )
+                elif goal["kind"] == "follow":
+                    command = snapshot.get("command", {})
+                    if goal["target"] not in snapshot.get("players", []):
+                        response = self.call("stop_command", snapshot, run_id=goal.get("native_command_run") or goal["run_id"])
+                        if response.get("status") != "busy":
+                            self.change(goal, state="failed", reason="Игрок больше недоступен для следования")
+                    elif goal["state"] == "starting":
+                        # Same receipt identity after a lost response. Never leave
+                        # a delivered follow in starting forever or send a new ID.
+                        response = self.call("command", snapshot, request_id=goal["run_id"], command=goal["command"])
+                        if response["status"] == "sent":
+                            self.store.update(goal, state="running")
+                        elif response["status"] != "busy":
+                            self.change(goal, state="failed", reason=response.get("reason"))
+                        elif now > goal.get("deadline", now+1):
+                            self.change(goal, state="uncertain", reason="Начало следования не подтверждено")
+                    elif command.get("run_id") == (goal.get("native_command_run") or goal["run_id"]) and command.get("finished"):
+                        self.change(goal, state="completed", reason="UnionClef завершил следование")
+                    elif goal.get("saw_defense"):
+                        # Following is a movement-only skill. It may be restarted
+                        # after defense; side-effecting generic commands may not.
+                        native_run = f"{goal['run_id']}:follow:{goal.get('resumes', 0)+1}"
+                        goal = self.store.update(goal, native_command_run=native_run)
+                        response = self.call("command", snapshot, request_id=native_run, command=goal["command"])
+                        if response["status"] == "sent":
+                            self.store.update(goal, state="running", saw_defense=False, resumes=goal.get("resumes", 0)+1, native_command_run=native_run)
+                        elif response["status"] != "busy":
+                            self.change(goal, state="failed", reason=response.get("reason"))
+                    elif not snapshot["native_busy"] or command and (not command.get("current") or command.get("stopped")):
+                        self.change(goal, state="failed", reason="UnionClef прекратил следование")
                 else:
+                    command = snapshot.get("command", {})
+                    command_matches = command.get("run_id") == goal["run_id"]
                     if goal.get("saw_defense"):
                         # Generic commands may have side effects; never replay blindly.
                         self.change(
@@ -286,8 +376,12 @@ class AutomationRuntime:
                             state="uncertain",
                             reason="Interrupted by defense; inspect state before issuing the next player command",
                         )
+                    elif command_matches and command.get("stopped") and not command.get("finished"):
+                        self.change(goal, state="failed", reason="UnionClef остановил поручение до завершения")
+                    elif command and not command_matches and now-goal.get("sent_at", now) >= 1:
+                        self.change(goal, state="uncertain", reason="Квитанция текущего поручения не найдена; автоматического повтора нет")
                     elif (
-                        not snapshot["native_busy"]
+                        (not snapshot["native_busy"] or command_matches and command.get("finished"))
                         and now - goal.get("sent_at", now) >= 1
                     ):
                         self.change(
@@ -307,8 +401,9 @@ class AutomationRuntime:
             not enabled
             or busy
             or not snapshot["in_world"]
-            or game.get("alive") is not True
+            or snapshot.get("player_alive", game.get("alive")) is not True
         ):
+            self.hold("waiting", "Защита удерживает управление" if busy else "Ожидание возрождения" if snapshot.get("player_alive", game.get("alive")) is not True else "Игровые действия приостановлены")
             return
         goals = self.store.list(active=True)
         if any(
@@ -318,6 +413,7 @@ class AutomationRuntime:
         ):
             return
         if snapshot["native_busy"]:
+            self.hold("native", "UnionClef выполняет задачу; проверка её завершения")
             return  # Never cancel a task we did not start.
         queued = next(
             (
@@ -328,28 +424,10 @@ class AutomationRuntime:
             None,
         )
         if queued is None:
-            if (
-                not replying
-                and not player_waiting
-                and now >= self.next_plan
-                and os.getenv("SARUMAN_AUTONOMY_ENABLED", "true").lower()
-                in {"true", "1", "yes"}
-            ):
-                weights = load_weights(activities=catalog())
-                tree_enabled = (
-                    game.get("mod_tool_controls", {}).get("grow_trees", True)
-                    if tools is None
-                    else "grow_trees" in tools
-                    and not tools["grow_trees"].get("disabled", False)
-                )
-                if weights.get("trees", 0) > 0 and tree_enabled:
-                    self.store.submit(
-                        "trees",
-                        source="planner",
-                        request_id=f"planner:{uuid.uuid4().hex}",
-                    )
-                self.next_plan = now + 10
+            if not replying and not player_waiting:
+                self.idle(game, snapshot, tools)
             return
+        self.hold("starting", "Запуск посадки дерева" if queued["kind"] == "trees" else "Запуск следования" if queued["kind"] == "follow" else "Запуск поручения игрока")
         run = f"{queued['id']}:{queued['completed']}"
         # Persist the identity BEFORE delivery, so a timeout can be reconciled.
         queued = self.store.update(
@@ -399,6 +477,6 @@ class AutomationRuntime:
             for goal in self.store.list(active=True):
                 if goal["run_id"] and goal["kind"] == "trees":
                     self.call("cancel", snapshot, run_id=goal["run_id"])
-                elif goal["run_id"] and goal["kind"] == "command":
-                    self.call("stop_command", snapshot, run_id=goal["run_id"])
+                elif goal["run_id"] and goal["kind"] in {"command", "follow"}:
+                    self.call("stop_command", snapshot, run_id=goal.get("native_command_run") or goal["run_id"])
         self.store.lease(self.owner, self.clock(), ttl=0)

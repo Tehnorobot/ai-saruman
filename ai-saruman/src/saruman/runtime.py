@@ -110,15 +110,17 @@ class MinecraftProcess:
                 self.value = {"status": phase, "reason": "Игровые действия остановлены" if phase=="stopped" else "Останавливаем игровые действия"}
             elif status.get("phase") != "ready":
                 self.value = {"status": status.get("phase", "starting"), "reason": status.get("reason", "Запуск")}
-            elif status.get("manual_stop_latched"):
+            elif status.get("manual_stop_latched") and status.get("native_stop_kind") != "reset":
                 self.value = {"status": "paused", "reason": "Игровые действия приостановлены; состояние модов требует проверки в игровом интерфейсе"}
             elif status.get('native_status')=='unavailable':
                 self.value={'status':'unavailable','reason':'Нет связи с игровым API: '+(status.get('native_error') or 'ожидание восстановления адаптера')}
+            elif status.get("world_ready") and status.get("player_alive") is False:
+                self.value={"status":"waiting_respawn","reason":"Персонаж погиб; ожидание возрождения"}
             elif not status.get("agent_running"):
                 self.value = {"status": "paused", "reason": "Игровой агент остановлен; нажмите Start для явного возобновления"}
             else:
                 self.value = {"status": "running" if status.get("world_ready") else "waiting_world",
-                              "reason": "Персонаж в мире" if status.get("world_ready") else "Ожидание открытого мира Minecraft"}
+                              "reason": (status.get("native_activity", {}).get("reason") or "Персонаж в мире") if status.get("world_ready") else "Ожидание открытого мира Minecraft"}
             return
         if not self.requested:
             if self.value.get("status")=="external":

@@ -1032,6 +1032,9 @@ def main():
                     "world_ready": bool(native.get("in_world")),
                     "native_status": native.get("status", "connecting"),
                     "native_error": native.get('error'),
+                    "native_activity": dict(native.get("activity", {}).items()),
+                    "native_stop_kind": native.get("stop_kind"),
+                    "player_alive": native.get("player_alive"),
                     "manual_stop_latched": bool(native.get("manual_stop_latched"))}
 
         def lab_directive(text,identifier):

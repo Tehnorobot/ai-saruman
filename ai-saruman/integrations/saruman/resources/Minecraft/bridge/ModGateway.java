@@ -122,6 +122,14 @@ public final class ModGateway implements Supplier<Map<String,Object>> {
             if ("snapshot".equals(op)) {
                 Map<String,Object> r=result("ready",null);
                 r.put("world",session); r.put("in_world",world!=null);
+                Object player=call(mod,"getPlayer");
+                r.put("player_alive",player!=null && Boolean.TRUE.equals(call(player,"method_5805")));
+                List<String> players=new ArrayList<>();
+                if (world!=null) for (Object other:(List<?>)call(world,"method_18456")) {
+                    if (other!=player && Boolean.TRUE.equals(call(other,"method_5805")))
+                        players.add(String.valueOf(call(call(other,"method_5477"),"getString")));
+                }
+                r.put("players",players);
                 Class<?> api=type("dev.autodefense.api.AutoDefenseApi");
                 r.put("defense_json",addonApi?call(call(api,"get"),"state"):call(api,"getStatusJson"));
                 r.put("defense_api",addonApi?"addon-0.1":"legacy-1.0");
@@ -129,6 +137,13 @@ public final class ModGateway implements Supplier<Map<String,Object>> {
                 r.put("native_busy",nativeBusy); r.put("tree",tree());
                 r.put("manual_stop",manualStop && !stopAcknowledged);
                 r.put("manual_stop_latched",addonApi && manualStop);
+                r.put("stop_kind",manualStop ? addonApi && "RESET".equals(String.valueOf(call(runtime,"action"))) ? "reset" : "manual" : "none");
+                Map<String,Object> command=new LinkedHashMap<>();
+                command.put("run_id",commandRun);
+                command.put("current",commandTask!=null && call(chain,"getCurrentTask")==commandTask);
+                command.put("finished",commandTask!=null && Boolean.TRUE.equals(call(commandTask,"isFinished")));
+                command.put("stopped",commandTask!=null && Boolean.TRUE.equals(call(commandTask,"stopped")));
+                r.put("command",command);
                 return r;
             }
             if ("defense".equals(op)) {
@@ -159,20 +174,36 @@ public final class ModGateway implements Supplier<Map<String,Object>> {
                     && field(owned,"species") != null && Integer.valueOf(0).equals(call(owned,"count",call(owned,"sapling")))) {
                     put(owned,"species",null); put(owned,"acquiring",true);
                 }
+                // UnionClef may retain a terminal root. Release only the exact
+                // object we own, keeping its receipt/result for reconciliation.
+                if (!busy && owned!=null && call(chain,"getCurrentTask")==owned
+                    && Boolean.TRUE.equals(call(owned,"isFinished")))
+                    call(chain,"setTask",new Object[]{null});
+                if (!busy && commandTask!=null && call(chain,"getCurrentTask")==commandTask
+                    && (Boolean.TRUE.equals(call(commandTask,"isFinished")) || Boolean.TRUE.equals(call(commandTask,"stopped"))))
+                    call(chain,"setTask",new Object[]{null});
                 return result("applied",null);
             }
             if (busy) return result("busy","native_defense");
             if ("cancel".equals(op)) {
                 if (owned != null && run.equals(args.get("run_id"))) {
-                    call(tc,"cancel","Cancelled by Saruman dispatcher");
+                    // TreeGrowClient.cancel also disables the global runner.
+                    // End only this run, then detach only its own root.
+                    if (!Boolean.TRUE.equals(call(owned,"isFinished"))
+                        && (call(chain,"getCurrentTask")==owned || !nativeBusy))
+                        call(owned,"finish","Отменено: приоритет нового поручения",false);
                     if (call(chain,"getCurrentTask") == owned) call(chain,"setTask",new Object[]{null});
+                    call(tc,"publish");
                 }
                 return result("cancelled",null);
             }
             if ("stop_command".equals(op)) {
                 if (!commandRun.equals(args.get("run_id"))) return result("rejected","unknown_command_run");
                 if (commandTask != null && call(chain,"getCurrentTask") == commandTask) {
-                    call(mod,"cancelUserTask"); call(chain,"setTask",new Object[]{null});
+                    // cancelUserTask also disables the entire TaskRunner. That
+                    // would look like a human Stop to Auto Defense and latch all
+                    // later work. setTask stops only our exact root and children.
+                    call(chain,"setTask",new Object[]{null});
                 }
                 return result("cancelled",null);
             }

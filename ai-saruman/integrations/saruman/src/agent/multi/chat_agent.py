@@ -1130,6 +1130,10 @@ class ChatAgent(BaseAgent):
 
     def _background_step(self):
         if using_mods(getattr(self, "ctx_swarm", {}).get("game", {})):
+            # Validated chat and STT voice share this inbox. Do not leave a
+            # personal activity running while the model prepares its response.
+            if self._collect_players().pending:
+                self.ctx_swarm["game"]["mod_player_pending_until"] = time.time()+2
             return False
         self._sync_player_lifecycle()
         registry = getattr(self, "tool_bank", {})

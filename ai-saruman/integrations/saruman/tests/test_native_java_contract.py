@@ -11,14 +11,17 @@ ALTO = r'''
 package adris.altoclef;
 public class AltoClef {
  public static final AltoClef INSTANCE=new AltoClef();
- public final Object world=new Object(); public final Chain chain=new Chain(); public final Executor executor=new Executor();
+ public final World world=new World(); public final Player player=new Player();public final Chain chain=new Chain(); public final Executor executor=new Executor();public boolean runnerEnabled=true;
  public static AltoClef getInstance(){return INSTANCE;} public Object getWorld(){return world;}
  public Chain getUserTaskChain(){return chain;} public Executor getCommandExecutor(){return executor;}
- public Player getPlayer(){return new Player();} public boolean isPaused(){return false;}
- public void runUserTask(Object task){chain.setTask(task);} public void cancelUserTask(){chain.setTask(null);}
+ public Player getPlayer(){return player;} public boolean isPaused(){return false;}
+ public void runUserTask(Object task){chain.setTask(task);} public void cancelUserTask(){runnerEnabled=false;chain.setTask(null);}
  public static class Chain { public Object task; public boolean isActive(){return task!=null;} public Object getCurrentTask(){return task;} public void setTask(Object t){task=t;} }
- public static class Executor {public int calls; public void executeWithPrefix(String command){calls++; INSTANCE.chain.setTask(new Object());}}
- public static class Player {public boolean method_5805(){return true;}}
+ public static class World {public java.util.List<Player> method_18456(){return java.util.List.of(INSTANCE.player,new Player("Alex",true),new Player("Steve",false));}}
+ public static class Task {public boolean done,stopped;public boolean isFinished(){return done;}public boolean stopped(){return stopped;}}
+ public static class Executor {public int calls; public void executeWithPrefix(String command){calls++; INSTANCE.chain.setTask(new Task());}}
+ public static class Player {public final String name;public final boolean alive;public Player(){this("Saruman",true);}public Player(String n,boolean a){name=n;alive=a;}public boolean method_5805(){return alive;}public Name method_5477(){return new Name(name);}}
+ public record Name(String value) {public String getString(){return value;}}
 }'''
 TREE = r'''
 package lab.treegrow;
@@ -34,6 +37,7 @@ public class TreeGrowClient {
   public String outcome(){return outcome;}public String reason(){return "";}public String interruption(){return interruption;}
   public int sites(){return 0;}public int uses(){return 0;}public int giveSends(){return 0;}public long remainingNanos(){return 100;}
   public Object site(){return null;}public Object sapling(){return null;}public int count(Object ignored){return 1;}
+  public void finish(String reason,boolean grown){terminal=true;success=grown;result=reason;cancels++;}
  }
 }'''
 MODERN = r'''
@@ -42,8 +46,8 @@ public class AutoDefenseClient {
  public static final Combat RUNTIME=new Combat();public static int publications;
  public static Combat combat(){return RUNTIME;}public static void publishSnapshot(Object client){publications++;}
  public static class Combat {
-  public boolean enabled=false,busy=false,manual=false;public int changes;
-  public boolean isEnabled(){return enabled;}public boolean ownsControls(){return busy;}public String action(){return busy?"COMBAT":"IDLE";}
+  public boolean enabled=false,busy=false,manual=false,reset=false;public int changes;
+  public boolean isEnabled(){return enabled;}public boolean ownsControls(){return busy;}public String action(){return reset?"RESET":busy?"COMBAT":"IDLE";}
   public boolean manualStop(){return manual;}public void enable(Object client){enabled=true;manual=false;changes++;}
   public void disable(Object client){enabled=false;changes++;}
  }
@@ -91,6 +95,8 @@ public class Harness {
   Map<String,Object> first=snapshot();check("ready".equals(first.get("status")),first.toString());
   check((modern?"addon-0.1":"legacy-1.0").equals(first.get("defense_api")),"wrong API");
   check(Boolean.FALSE.equals(first.get("defense_enabled")),"snapshot changed enabled state");
+  check(Boolean.TRUE.equals(first.get("player_alive")),"alive state missing");
+  check(List.of("Alex").equals(first.get("players")),"follow candidates include self or dead players");
   world=(String)first.get("world");
   apply("defense",Map.of("enabled",true));apply("defense",Map.of("enabled",true));apply("defense",Map.of("enabled",false));
   check(runtime.getClass().getField("changes").getInt(runtime)==2,"non-idempotent enable/disable");
@@ -112,11 +118,40 @@ public class Harness {
   check("sent".equals(apply("command",command).get("status")),"command not sent");
   check("sent".equals(apply("command",command).get("status")),"receipt not recovered");
   check(AltoClef.INSTANCE.executor.calls==1,"command replayed twice");
+  apply("stop_command",Map.of("world",world,"run_id","once"));
+  check(AltoClef.INSTANCE.runnerEnabled,"personal activity cancellation disabled the whole runner");
+  check(AltoClef.INSTANCE.chain.task==null,"owned follow kept running after player interruption");
+  apply("command",Map.of("world",world,"request_id","finished-command","command","@follow Alex"));
+  AltoClef.Task finished=(AltoClef.Task)AltoClef.INSTANCE.chain.task;finished.done=true;
+  apply("maintain",Map.of("world",world));
+  check(AltoClef.INSTANCE.chain.task==null,"completed owned command blocked queue");
+  check(Boolean.TRUE.equals(((Map<?,?>)snapshot().get("command")).get("finished")),"terminal command evidence lost");
+  apply("command",Map.of("world",world,"request_id","failed-command","command","@follow Alex"));
+  ((AltoClef.Task)AltoClef.INSTANCE.chain.task).stopped=true;
+  apply("maintain",Map.of("world",world));
+  check(AltoClef.INSTANCE.chain.task==null,"stopped command blocked later work");
+  Map<?,?> failure=(Map<?,?>)snapshot().get("command");
+  check(Boolean.TRUE.equals(failure.get("stopped")) && Boolean.FALSE.equals(failure.get("finished")),"stop confused with success");
+  Object foreign=new Object();AltoClef.INSTANCE.chain.setTask(foreign);
+  apply("maintain",Map.of("world",world));check(AltoClef.INSTANCE.chain.task==foreign,"foreign task cleared");
   AltoClef.INSTANCE.chain.setTask(null);
   check("started".equals(apply("tree_start",Map.of("world",world,"request_id","tree-one")).get("status")),"tree did not start");
   apply("cancel",Map.of("world",world,"run_id","foreign"));check(TreeGrowClient.cancels==0,"foreign task cancelled");
   apply("cancel",Map.of("world",world,"run_id","tree-one"));check(TreeGrowClient.cancels==1,"owned tree not cancelled");
+  check(AltoClef.INSTANCE.runnerEnabled,"tree preemption disabled the global runner");
   check(AltoClef.INSTANCE.chain.task==null,"owned task retained");
+  apply("tree_start",Map.of("world",world,"request_id","terminal-tree"));
+  TreeGrowClient.current.terminal=true;TreeGrowClient.current.success=false;TreeGrowClient.current.result="no sapling";
+  apply("maintain",Map.of("world",world));
+  check(AltoClef.INSTANCE.chain.task==null,"failed owned tree blocked queue");
+  check("no sapling".equals(((Map<?,?>)snapshot().get("tree")).get("result")),"failure evidence lost");
+  if(modern){
+   runtime.getClass().getField("manual").setBoolean(runtime,true);
+   runtime.getClass().getField("reset").setBoolean(runtime,true);
+   check("reset".equals(snapshot().get("stop_kind")),"death confused with manual stop");
+   runtime.getClass().getField("reset").setBoolean(runtime,false);
+   check("manual".equals(snapshot().get("stop_kind")),"explicit stop lost");
+  }
   System.out.println(modern?"MODERN PASS":"LEGACY PASS");
  }
 }'''

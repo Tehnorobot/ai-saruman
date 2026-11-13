@@ -191,6 +191,8 @@ class VoiceInputProcessor:
             type="voice",
             msg=text,
         )
+        if env == "minecraft" and user and self.ctx_swarm.get("game", {}).get("automation_mode") == "mods":
+            self.ctx_swarm["game"]["mod_player_pending_until"] = time.time()+30
         self.ctx_handler.add_message(event)
 
     def _cleanup_loop(self):
