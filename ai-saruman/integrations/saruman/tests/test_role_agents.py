@@ -33,10 +33,9 @@ from saruman.role_settings import (
 )
 
 
-def persona_output(chat="Слушаю.", voice="Слушаю тебя.", needs=False):
+def persona_output(text="Слушаю.", needs=False):
     return {
-        "chat_text": chat,
-        "voice_text": voice,
+        "text": text,
         "emotion": "neutral",
         "needs_action": needs,
     }
@@ -468,7 +467,7 @@ class ProviderTests(Fixtures):
 
     def test_persona_corrects_exact_schema_issue_and_accounts_for_both_attempts(self):
         self.profile()
-        invalid = persona_output(chat="x" * 81)
+        invalid = persona_output(text="x" * 701)
         transport = Mock(side_effect=[(invalid, {"total_tokens": 12}),
                                       (persona_output(), {"total_tokens": 7})])
         client = RoleClient(self.store, "persona", "test", transport)
@@ -479,8 +478,8 @@ class ProviderTests(Fixtures):
         repair = json.loads(transport.call_args.args[2])
         self.assertEqual(repair['original_input'], {'question': 'Привет'})
         self.assertEqual(repair['output_correction']['issue'], {
-            'schema_path': ['properties', 'chat_text', 'maxLength'],
-            'rule': 'maxLength', 'expected': 80})
+            'schema_path': ['properties', 'text', 'maxLength'],
+            'rule': 'maxLength', 'expected': 700})
         self.assertEqual(repair['output_correction']['previous_output'], invalid)
         rows = self.store.history()
         self.assertEqual(sum(row['usage']['total_tokens'] for row in rows), 19)
@@ -489,7 +488,7 @@ class ProviderTests(Fixtures):
 
     def test_format_correction_uses_remaining_configured_time_not_a_new_full_timeout(self):
         profile = self.profile()
-        transport = Mock(return_value=(persona_output(chat='x'*81), {'total_tokens': 12}))
+        transport = Mock(return_value=(persona_output(text='x'*701), {'total_tokens': 12}))
         client = RoleClient(self.store, 'persona', 'test', transport)
         with patch('saruman.role_client.time', Mock(monotonic=Mock(side_effect=[100, 100, 101+profile['timeout']]))):
             with self.assertRaisesRegex(RuntimeError, 'Истекло настроенное время'):
@@ -540,6 +539,14 @@ class ProviderTests(Fixtures):
 
 
 class HybridTests(Fixtures):
+    def test_chat_and_voice_share_the_entire_long_public_reply(self):
+        self.agent.submit(self.event('привет'))
+        request=self.agent.requests['1']
+        text=('Это одна и та же история о деревьях и Ортханке. '*12).strip()
+        self.assertTrue(self.agent.publish(request,persona_output(text=text)))
+        self.assertEqual(''.join(self.ctx['chat_queue']),text)
+        self.assertEqual(self.ctx['tts_queue'][0]['text'],text)
+
     def test_conversation_from_action_role_is_not_a_fake_failed_game_task(self):
         request=self.submit_action()
         self.agent.results.put(('action',request,action_output(decision='conversation'),None))
@@ -665,7 +672,7 @@ class HybridTests(Fixtures):
         request = self.agent.requests["1"]
         self.assertFalse(hasattr(self.agent.persona, "execute"))
         for text in ("@goto 1 2 3", "/give @s diamond", "Привет\n!grow_trees 99"):
-            self.assertFalse(self.agent.publish(request, persona_output(chat=text)))
+            self.assertFalse(self.agent.publish(request, persona_output(text=text)))
         self.assertEqual(self.ctx["chat_queue"], [])
         self.assertEqual(GoalStore().list(), [])
 
@@ -846,7 +853,7 @@ class HybridTests(Fixtures):
         self.agent.submit(self.event("привет"))
         job = self.agent.persona_queue.get_nowait()
         self.agent.results.put(
-            ("persona", job, persona_output(chat="Сейчас сделаю", needs=True), None)
+            ("persona", job, persona_output(text="Сейчас сделаю", needs=True), None)
         )
         self.agent.handle_results()
         self.assertEqual(self.agent.action_queue.get_nowait()["raw"], "привет")
@@ -959,7 +966,7 @@ class HybridTests(Fixtures):
     def test_mutated_persona_text_does_not_enter_factual_memory(self):
         self.agent.submit(self.event("привет"))
         request = self.agent.requests["1"]
-        self.agent.publish(request, persona_output(voice="Я посадил сто деревьев."))
+        self.agent.publish(request, persona_output(text="Я посадил сто деревьев."))
         self.assertEqual(GoalStore().list(), [])
         self.agent.ctx_handler.add_message.assert_not_called()
         self.assertNotIn("сто деревьев", str(self.agent.world()))

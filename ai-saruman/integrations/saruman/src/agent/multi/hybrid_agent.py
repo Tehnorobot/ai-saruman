@@ -25,6 +25,7 @@ from saruman.role_prompts import (
 )
 from saruman.role_settings import RoleStore
 from saruman.activity import current as current_activity, emit
+from saruman.public_speech import public_text, queue_public_speech
 
 ACTION_TOOLS = frozenset(
     {
@@ -141,8 +142,7 @@ class PersonaAgent:
                 {
                     "player_input": request.get("raw") if request else None,
                     "user": request.get("user") if request else None,
-                    "voice": result["voice_text"],
-                    "chat": result["chat_text"],
+                    "text": result["text"],
                 }
             )
 
@@ -724,16 +724,12 @@ class HybridAgent:
             request["state"] = "finished"
             return False
         # Plain speech only, NEVER prepare_mc_chat_send / text tool parser.
-        for field, limit in (("chat_text", 80), ("voice_text", 700)):
-            text = value[field].strip()
-            if len(text) > limit or any(
-                line.lstrip().startswith(("@", "/", "!", "$"))
-                for line in text.splitlines()
-            ):
-                self.ctx_swarm["game"]["role_error"] = (
-                    "Отклонён командный текст PersonaAgent"
-                )
-                return
+        try:
+            text=public_text(value['text'])
+            if len(text)>700:raise ValueError('Persona text exceeds its output contract')
+        except ValueError:
+            self.ctx_swarm['game']['role_error']='Отклонён некорректный публичный текст PersonaAgent'
+            return False
         game = self.ctx_swarm["game"]
         if request["state"] == "waiting":
             current = {g["id"]: g for g in GoalStore().list(limit=-1)}
@@ -745,18 +741,12 @@ class HybridAgent:
             and request["state"] == "waiting"
         ):
             return  # Don't narrate a stale peaceful intention during emergency defense.
-        if value["chat_text"] and request["source"] == "player":
-            self.ctx_swarm["chat_queue"].append(value["chat_text"].replace("\n", " "))
-        if value["voice_text"] and len(self.ctx_swarm["tts_queue"]) < 3:
-            self.ctx_swarm["tts_queue"].append(
-                {"text": value["voice_text"], "emotion": value["emotion"], 'request_id':request['id']}
-            )
-        self.persona.remember_spoken(value, request)
-        emit('response.queued', status='queued', trace=request['id'], actor=request.get('user', ''),
-             details={'chat_text': value['chat_text'], 'voice_text': value['voice_text'], 'emotion': value['emotion'],
-                      'chat_queued':bool(value['chat_text'] and request['source']=='player'),
-                      'voice_queue_size':len(self.ctx_swarm['tts_queue'])})
-        if value["voice_text"] or value["chat_text"]:
+        try:
+            queue_public_speech(self.ctx_swarm,text,value['emotion'],request_id=request['id'],chat=request['source'] in {'player','ambient'})
+        except ValueError as error:
+            game['role_error']=str(error);return False
+        self.persona.remember_spoken({**value,'text':text}, request)
+        if text:
             self.next_remark = self.clock() + random.uniform(180, 300)
         # Public generated text deliberately does not enter factual event memory.
         return True

@@ -23,6 +23,12 @@ def database(path):
 
 
 class ActivityTests(unittest.TestCase):
+    def test_single_public_text_is_retained_in_observed_player_history(self):
+        self.add()
+        self.journal.add('response.queued',trace='one',details={'text':'One complete public reply.','emotion':'neutral'})
+        context=self.journal.player_context('Alex')
+        self.assertEqual(context[-1]['details']['text'],'One complete public reply.')
+
     def setUp(self):
         self.temp=tempfile.TemporaryDirectory();self.addCleanup(self.temp.cleanup)
         self.root=Path(self.temp.name);self.journal=ActivityStore(self.root)

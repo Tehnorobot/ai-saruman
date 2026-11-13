@@ -15,6 +15,17 @@ from tts.fish import fish_gr
 
 
 class FishVoiceTests(unittest.TestCase):
+    def test_full_long_utterance_reaches_fish_without_replacement_or_token_cutoff(self):
+        with tempfile.TemporaryDirectory() as directory:
+            generated=Path(directory)/'long.wav'
+            wavfile.write(generated,44100,np.zeros(100,dtype=np.int16))
+            client=Mock();client.predict.return_value=(str(generated),None)
+            reference_text,reference=self.character.resolve_voice_ref('neutral')
+            text=('This is the complete requested reply, without a fabricated ending. '*10).strip()
+            with patch.object(fish_gr,'client',client):fish_gr.fish_tts(text,reference,reference_text)
+            self.assertEqual(client.predict.call_args.kwargs['text'],text)
+            self.assertEqual(client.predict.call_args.kwargs['max_new_tokens'],0)
+
     def setUp(self):
         self.character = CharacterManager("Saruman", force_new=True)
         context = patch.object(fish_gr, "character", self.character)

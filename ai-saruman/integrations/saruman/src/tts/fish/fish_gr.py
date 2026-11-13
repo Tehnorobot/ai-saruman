@@ -133,9 +133,6 @@ def fish_tts(
             return fish_tts(text, ref, ref_text, seed=seed, temperature=temperature)
 
     if client is not None:
-        if text and len(text) > 300:
-            text = text[:250] + ". Устала говорить, слишком длинный текст."
-            print("[FISH GR] TTS TEXT TRUNCATED!!!!! to " + text)
         audiofile = client.predict(
             **FishTTSGradioKWArgs(
                 text=text,
@@ -143,7 +140,7 @@ def fish_tts(
                 reference_id="",  # seems like its internal id in fish
                 reference_audio=handle_file(ref),
                 reference_text=ref_text,
-                max_new_tokens=500,  # 0 means no limit, 500 tokens ~= 30 secs
+                max_new_tokens=0,  # Native Fish EOS; preserve the full utterance.
                 chunk_length=200,  # TODO new untested
                 top_p=0.7,
                 repetition_penalty=1.2,

@@ -12,8 +12,6 @@ from tts.audio_device import AudioProcessor
 from tts.fish.fish_gr import fish_tts_emo
 from tts.voice_diagnostics import preview_audio, save_details, save_generated
 
-MAX_AUDIO_ALLOWED_TIME = 20
-
 SPELL_TO_EMOTIONS_RU = {
     "сарказм": "sarcastic",
     "подмигивает": "sarcastic",
@@ -112,14 +110,11 @@ def check_tts_queue(audio_processor, ctx_swarm, check_interrupt=False) -> bool:
             )
         except OSError as error:
             print(f"[TTS] Cannot save voice diagnostic: {error}")
-        # Bound speech before output so the completion event reflects the actual clip.
-        if len(audio) > MAX_AUDIO_ALLOWED_TIME * sr:
-            print(f"[TTS] Truncating speech to {MAX_AUDIO_ALLOWED_TIME}s")
-            audio = audio[: MAX_AUDIO_ALLOWED_TIME * sr]
         voice["is_speaking"] = True
         ctx_swarm["vtube"]["state"] = "idle"
         playback = audio_processor.play_sound(audio, sr, blocking=False)
-        deadline = time.monotonic() + MAX_AUDIO_ALLOWED_TIME + 10
+        # Detect a stalled device after its actual clip duration, without cutting speech.
+        deadline = time.monotonic() + len(audio) / sr + 10
         print(f"[TTS] playing {len(audio) / sr:.2f}s; waiting for device completion")
         while not playback.wait(0.05):
             if (

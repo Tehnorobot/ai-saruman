@@ -807,7 +807,10 @@ def mine_bridge_handler(ctx_swarm: CtxSwarmType, debug: bool = False):
                             "filter_results": {"acceptable": True}})
                     def native_speech(text, emotion):
                         if len(ctx_swarm["tts_queue"]) < 3:
-                            ctx_swarm["tts_queue"].append({"text": text, "emotion": emotion})
+                            from saruman.public_speech import queue_public_speech
+                            try:queue_public_speech(ctx_swarm,text,emotion)
+                            except ValueError as error:
+                                emit('response.rejected',status='error',details={'source':'native_commentary','error':str(error)})
                     from saruman.telegram_bridge import record_goal
                     mod_runtime = AutomationRuntime(NativeMods(java_gateway), notify=native_goal_event, server_send=mc.ChatMessage, announce=native_speech, event_sink=record_goal)
                     mod_runtime.was_enabled = native_was_enabled

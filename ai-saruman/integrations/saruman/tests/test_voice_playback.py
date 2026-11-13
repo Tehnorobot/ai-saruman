@@ -16,6 +16,21 @@ from tts.audio_device import AudioProcessor
 
 
 class VoicePlaybackTests(unittest.TestCase):
+    def test_fifty_second_clip_is_not_cut_and_uses_its_actual_device_deadline(self):
+        samples=np.zeros(500,dtype=np.float32)
+        ctx={'tts_queue':[{'text':'The complete reply.','emotion':'neutral'}],
+             'voice':{},'vtube':{'state':'old'},'env':{'actived':True}}
+        processor=Mock();handle=Mock(interrupted=False)
+        handle.wait.side_effect=[False,True];processor.play_sound.return_value=handle
+        metadata={'status':'generated'}
+        with patch.object(handler,'fish_tts_emo',return_value=(samples,10)), \
+             patch.object(handler,'save_generated',return_value=metadata), \
+             patch.object(handler,'save_details'),patch.object(handler.time,'monotonic',side_effect=[0,31]):
+            handler.check_tts_queue(processor,ctx)
+        np.testing.assert_array_equal(processor.play_sound.call_args.args[0],samples)
+        processor.interrupt_main_device.assert_not_called();handle.result.assert_called_once()
+        self.assertEqual(metadata['output_seconds'],50);self.assertEqual(metadata['status'],'played')
+
     def test_pcm_formats_keep_volume(self):
         for samples in (
             np.array([0, 16384, -16384], dtype=np.int16),

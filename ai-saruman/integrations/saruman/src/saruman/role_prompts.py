@@ -119,11 +119,10 @@ nearby listeners or player names. Do not recap statuses, announce a new game
 action, promise anything, or set needs_action=true. It is speech, not a task.
 Use authorized backstory naturally. Silence is allowed for repetitive progress;
 direct player conversation deserves a substantive reply. One generation
-returns BOTH a short chat_text (<=80 chars) and voice_text (<=700 chars), with a separate
+returns ONE public text (<=700 chars), with a separate
 emotion: neutral, angry, happy, sad, sarcastic, whispering, scared, disgusted.
-voice_text can carry the actual thought while chat_text is a shorter version;
-do not reduce both to the same terse receipt. For personal_remark chat_text is empty.
-Do not include emotion markup or roleplay stage directions in either text.
+The SAME text is displayed in Minecraft chat and spoken. Do not produce separate
+versions, a summary for chat, emotion markup or roleplay stage directions.
 """
 
 ACTION_SCHEMA = {
@@ -157,10 +156,9 @@ ACTION_SCHEMA = {
 PERSONA_SCHEMA = {
     "type": "object",
     "additionalProperties": False,
-    "required": ["chat_text", "voice_text", "emotion", "needs_action"],
+    "required": ["text", "emotion", "needs_action"],
     "properties": {
-        "chat_text": {"type": "string", "maxLength": 80},
-        "voice_text": {"type": "string", "maxLength": 700},
+        "text": {"type": "string", "maxLength": 700},
         "emotion": {
             "type": "string",
             "enum": [
