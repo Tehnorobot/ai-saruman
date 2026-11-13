@@ -16,7 +16,7 @@
   Subsequent native goal row 203 (source planner) confirmed one grown oak; owner
   goal row 202 and workflow row 27 stayed failed from Unstuck. This proves neither
   a general inability to break blocks nor completion of the private workflow.
-  The old native worker PID 16164 still requires replacement; Stop/Start of its
+  The old native worker PID 16164 required replacement; Stop/Start of its
   agent alone does not reload the parent bridge module or its cached Java shim.
 
 ### Plan
@@ -40,7 +40,13 @@
 - Validation: 108 checks passed: 62 native-runtime, 6 preflight, 16 bridge,
   2 Java and 22 workflow checks. New Java contract also passed a read-only
   snapshot in the actual Minecraft JVM; no movement/cancel/plant/publication was invoked.
-- Installation requires a native worker restart; current character remains active.
+- Installation applied after the owner stopped the character: terminated only
+  the verified native launcher tree (25728/16164), including its child workers.
+  Lab remains healthy and inactive; Minecraft remains open. The next Start loads
+  the updated Python modules and compiled Java shim 5c73c4cd822afafa. There are
+  no active model requests, sending posts or pending IPC directive; the 22 sent
+  posts and failed workflows remain history. A fresh owner command is required
+  for the end-to-end planting/photo/publication retest; it has not been run.
 
 ## 2026-11-13: One public reply in chat and speech, without truncation
 
