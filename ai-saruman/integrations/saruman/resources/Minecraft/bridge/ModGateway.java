@@ -34,7 +34,8 @@ public final class ModGateway implements Supplier<Map<String,Object>> {
                               "6943228ddd690a24b5aad2e98bccb36e798c15b96c0a57a419979e42eeabe4ce",
                               "15af6beddd33e4388812a4502f629fdf08d73dd711017c3950612658bb094385");
         else verify(dc,"e19d47caa2ae553ab81b5b84ab4fc11179595809797cee7d122cad5f2b1db43c");
-        verify(type("lab.treegrow.TreeGrowClient"),"edd7a699318d0b18f46abe67db25046502e20ca400f4751c0ac0679664e5bee9");
+        verify(type("lab.treegrow.TreeGrowClient"),"edd7a699318d0b18f46abe67db25046502e20ca400f4751c0ac0679664e5bee9",
+                                                "ed50500c43293f614c632b65f9c31c3a116a35c7759f16d547c392c3ae5708bf");
     }
     private Class<?> type(String name) throws Exception {
         return Class.forName(name, true, client.getClass().getClassLoader());
@@ -106,7 +107,8 @@ public final class ModGateway implements Supplier<Map<String,Object>> {
             if (now != world) { world=now; session=UUID.randomUUID().toString(); owned=null; run=""; commandTask=null; commandRun=""; receipts.clear(); stopAcknowledged=false; }
             Class<?> dc=defenseClient;
             Class<?> tc=type("lab.treegrow.TreeGrowClient");
-            verify(tc,"edd7a699318d0b18f46abe67db25046502e20ca400f4751c0ac0679664e5bee9");
+            verify(tc,"edd7a699318d0b18f46abe67db25046502e20ca400f4751c0ac0679664e5bee9",
+                      "ed50500c43293f614c632b65f9c31c3a116a35c7759f16d547c392c3ae5708bf");
             Object runtime=call(dc,addonApi?"combat":"runtime");
             Object handover=addonApi?null:field(runtime,"handover");
             boolean busy=addonApi

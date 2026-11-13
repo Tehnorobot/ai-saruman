@@ -1,5 +1,49 @@
 # Progress
 
+## 2026-11-12: Preserve sapling drops while mining leaves
+
+### Investigate
+- The owner observed shears yielding leaf blocks during sapling acquisition.
+  Independent pinned UnionClef bytecode review confirmed HAND is only a minimum
+  tool gate; child tasks and the tool selector still prefer shears for leaves.
+  A parent-only selection is overwritten before Minecraft processes input.
+
+### Plan
+- Keep navigation/mining in UnionClef. Add a scoped post-child hand check to the
+  sapling task, excluding shears/Silk Touch while keeping Fortune. Preserve exact
+  stack identity, cursor and inventory, and verify natural drops in an isolated game.
+
+### Implement
+- TreeGrow now selects an exact safe/empty hotbar slot or ordinary backpack SWAP
+  after acquisition child ticks. It verifies the actual hand, clears held/queued
+  attacks on failure and never discards equipment. Other tasks keep their tool policy.
+- Gradle production remap and all 97 existing tests succeeded in the restricted
+  offline runner. A natural-leaf fixture reproduced the original unsafe server
+  break, then completed the patched cycle: 11 leaf breaks, 0 unsafe breaks,
+  1 natural sapling drop, 0 leaf-block drops and a confirmed grown oak. Actual
+  stack/enchantment checks and a full inventory/cursor SWAP passed in Fabric.
+  Plain JUnit bootstrap lacked Minecraft access widening; those checks were moved
+  into the real client rather than removed. Independent review approved evidence.
+- Applied reviewed source under the paused TreeGrow project lock, with no canonical
+  acceptance/status changes. Maintenance record:
+  M-0000000000001285-c230905cc03ad428bfc3dc3d3ffcce4cb0d2aeb55e01dd4244e897681d35103f.
+- Added the exact new hash to both Python and Java compatibility checks, keeping
+  the previous verified hash. Seven native preflight/Java-contract checks passed.
+- Owner authorized installation after closing Minecraft. Verified closed gateway,
+  exclusive JAR read and original hash, backed up the old JAR and atomically replaced
+  only .minecraft/mods/treegrow-0.1.0.jar. Verified new SHA-256:
+  ed50500c43293f614c632b65f9c31c3a116a35c7759f16d547c392c3ae5708bf.
+  The Windows filesystem rejected replacement while our own validation handle was
+  open; reproduced on a disposable project file, then closed that handle before
+  the atomic replace. No filesystem permissions were changed.
+- Retired only the owned game Python worker to load new pins on the next Start;
+  root Lab/Telegram remain active. No live game commands, item grants or replay of
+  old tasks were issued during installation. Full evidence/backup/source/report:
+  Codex-Development-Lab/audit/sapling-drops-2026-11-12/.
+- Boundary: full natural-drop cycle tested with shears and Silk Touch together.
+  A separate Silk-Touch-only full cycle and birch gameplay were not run. The actual
+  owner's newly installed client still needs a retest after starting Minecraft.
+
 ## 2026-11-12: Rebind stale Minecraft handles and resume existing commands
 
 ### Investigate
