@@ -10,6 +10,14 @@
 - Native live read confirms scheduler interruptions with zero planted trees and
   remaining native budget. Idle Mob Defense may be selected with priority zero;
   treating every active foreign chain as busy would deadlock resumption.
+- Follow-up mining observation: the retained DestroyBlockTask was stopped and
+  its target 1010/72/29 was already air, with no current breaking predicates
+  forbidding it. Held bow was observed while stopped, not during leaf harvesting.
+  Subsequent native goal row 203 (source planner) confirmed one grown oak; owner
+  goal row 202 and workflow row 27 stayed failed from Unstuck. This proves neither
+  a general inability to break blocks nor completion of the private workflow.
+  The old native worker PID 16164 still requires replacement; Stop/Start of its
+  agent alone does not reload the parent bridge module or its cached Java shim.
 
 ### Plan
 - Use native resumability plus actual scheduler selection/priority, without
