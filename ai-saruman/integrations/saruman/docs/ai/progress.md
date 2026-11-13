@@ -35,8 +35,15 @@
 - Real MiniMax synthetic UTF-8 probe returned valid chat/voice JSON on the configured
   high profile; 1854 tokens recorded. It was not published or played. An earlier
   shell-encoding probe passed format only and is not treated as a semantic check.
-- Deployment and the speaker change are prepared, not yet applied to the active
-  game process. Evidence: .saruman/audit/voice-recovery-2026-11-12/.
+- Installed after the owner closed Minecraft. Backed up voicechat-client.properties
+  and changed only speaker to OpenAL Soft on Headphones (WH-1000XM4); exact text
+  comparison confirms the microphone and all other settings are preserved.
+- Restarted only the verified Lab process tree with no model/Telegram send in
+  flight, preserving the enabled runtime and disabled filter. The new Lab has one
+  listener, a healthy lifecycle, no startup errors and waits for Minecraft. Native
+  workers will load the updated role code on the next game connection. Actual
+  player-to-character audible conversation remains for the owner's gameplay check.
+- Evidence and original config backup: .saruman/audit/voice-recovery-2026-11-12/.
 
 ## 2026-11-12: Restore private workflow visibility and the Minecraft dispatcher
 
