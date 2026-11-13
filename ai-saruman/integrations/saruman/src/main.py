@@ -110,6 +110,7 @@ def activate_agent(checked=False):
     global main_agent_need_starting
     if checked:
         main_agent_need_starting = lambda: True
+        ctx_swarm["game"]["native_start_token"] = str(time.time_ns())
         return True
     else:
         ctx_swarm["env"]["agent_enabled"] = False
@@ -1026,16 +1027,9 @@ def main():
             return lab_agent_worker.start()
 
         def lab_status():
+            from saruman.bridge_health import native_runtime_status
             game = ctx_swarm.get("game", {})
-            native = dict(game.get("mod_runtime", {}).items())
-            return {"agent_running": bool(Supervisor and Supervisor.is_running()),
-                    "world_ready": bool(native.get("in_world")),
-                    "native_status": native.get("status", "connecting"),
-                    "native_error": native.get('error'),
-                    "native_activity": dict(native.get("activity", {}).items()),
-                    "native_stop_kind": native.get("stop_kind"),
-                    "player_alive": native.get("player_alive"),
-                    "manual_stop_latched": bool(native.get("manual_stop_latched"))}
+            return native_runtime_status(game, bool(Supervisor and Supervisor.is_running()))
 
         def lab_directive(text,identifier):
             if not hasattr(Supervisor,"submit_admin"):

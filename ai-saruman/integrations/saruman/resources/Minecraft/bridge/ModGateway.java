@@ -32,7 +32,8 @@ public final class ModGateway implements Supplier<Map<String,Object>> {
         defenseClient=dc; addonApi=modern;
         if (modern) verify(dc,"5e773d1e64f651943b5faf709aea3ef1458503a2a25910acd476ab6a457e25cb",
                               "6943228ddd690a24b5aad2e98bccb36e798c15b96c0a57a419979e42eeabe4ce",
-                              "15af6beddd33e4388812a4502f629fdf08d73dd711017c3950612658bb094385");
+                              "15af6beddd33e4388812a4502f629fdf08d73dd711017c3950612658bb094385",
+                              "bdc144486e720b9a31a58544883593c7f0412e9a8da8262c6bf34f618d38f736");
         else verify(dc,"e19d47caa2ae553ab81b5b84ab4fc11179595809797cee7d122cad5f2b1db43c");
         verify(type("lab.treegrow.TreeGrowClient"),"edd7a699318d0b18f46abe67db25046502e20ca400f4751c0ac0679664e5bee9",
                                                 "ed50500c43293f614c632b65f9c31c3a116a35c7759f16d547c392c3ae5708bf");

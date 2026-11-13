@@ -190,6 +190,26 @@ class LifecycleTests(unittest.TestCase):
         game.request(True);game.step()
         self.assertEqual(game.value['status'],'waiting_respawn')
 
+    def test_live_process_heartbeat_does_not_hide_a_stale_game_snapshot(self):
+        game=MinecraftProcess(self.root)
+        atomic_json(game.directory/'command.json',{'worker_id':'owned','revision':1})
+        atomic_json(game.directory/'status.json',{'worker_id':'owned','updated':time.time(),'phase':'ready',
+            'agent_running':True,'world_ready':True,'native_status':'running',
+            'native_updated':time.time()-30,'native_activity':{'reason':'Защита удерживает управление'}})
+        game.request(True);game.step()
+        self.assertEqual(game.value['status'],'unavailable')
+        self.assertNotIn('Защита удерживает',game.value['reason'])
+
+    def test_unavailable_observation_wins_over_saved_running_fields(self):
+        game=MinecraftProcess(self.root)
+        atomic_json(game.directory/'command.json',{'worker_id':'owned','revision':1})
+        atomic_json(game.directory/'status.json',{'worker_id':'owned','updated':time.time(),'phase':'ready',
+            'agent_running':True,'world_ready':True,'native_fresh':False,'native_updated':time.time(),
+            'native_error':'ConnectionResetError: getGoalRotation'})
+        game.request(True);game.step()
+        self.assertEqual(game.value['status'],'unavailable')
+        self.assertIn('getGoalRotation',game.value['reason'])
+
 
 class ManagedGameTests(unittest.TestCase):
     def setUp(self):

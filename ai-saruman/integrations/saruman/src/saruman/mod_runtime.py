@@ -38,6 +38,7 @@ class AutomationRuntime:
         self.last_error = None
         self.owner = uuid.uuid4().hex
         self.was_enabled = False
+        self.start_token = self.store.meta("native_start_token")
         self.rng = rng or random.Random()
         self.idle_since = None
         self.last_failed_activity = None
@@ -126,15 +127,20 @@ class AutomationRuntime:
             # A new Stop -> Start is an explicit operator request to resume.
             reset = snapshot.get("stop_kind") == "reset"
             alive = snapshot.get("player_alive", game.get("alive")) is True
-            manual_paused = bool(enabled and self.was_enabled and snapshot.get("manual_stop_latched") and not reset)
+            start_token = game.get("native_start_token")
+            explicit_start = bool(enabled and start_token is not None and start_token != self.start_token)
+            manual_paused = bool(enabled and self.was_enabled and snapshot.get("manual_stop_latched") and not reset and not explicit_start)
             active = bool(enabled and not manual_paused and alive and snapshot["in_world"])
             if snapshot["defense_enabled"] != active:
                 self.call("defense", snapshot, enabled=active)
-            if snapshot.get("manual_stop") and not reset:
+            if snapshot.get("manual_stop") and not reset and not explicit_start:
                 self.store.cancel(reason="Native task stop")
             self.call(
                 "maintain", snapshot, ack_manual_stop=bool(snapshot.get("manual_stop"))
             )
+            if explicit_start:
+                self.store.set_meta("native_start_token", start_token)
+                self.start_token = start_token
             if not enabled and self.was_enabled:
                 self.store.cancel(reason="Automation stopped")
             self.was_enabled = enabled
@@ -467,16 +473,20 @@ class AutomationRuntime:
         else:
             self.change(queued, state="failed", reason=response.get("reason"))
 
-    def close(self):
+    def close(self, *, stop=True):
         if not self.store.lease(self.owner, self.clock()):
             return
-        snapshot = self.adapter.call("snapshot")
-        if snapshot.get("status") == "ready":
-            self.call("defense", snapshot, enabled=False)
-            self.store.cancel()
-            for goal in self.store.list(active=True):
-                if goal["run_id"] and goal["kind"] == "trees":
-                    self.call("cancel", snapshot, run_id=goal["run_id"])
-                elif goal["run_id"] and goal["kind"] in {"command", "follow"}:
-                    self.call("stop_command", snapshot, run_id=goal.get("native_command_run") or goal["run_id"])
-        self.store.lease(self.owner, self.clock(), ttl=0)
+        try:
+            if not stop:
+                return  # Reconnect retains the JVM receipts and durable intentions.
+            snapshot = self.adapter.call("snapshot")
+            if snapshot.get("status") == "ready":
+                self.call("defense", snapshot, enabled=False)
+                self.store.cancel()
+                for goal in self.store.list(active=True):
+                    if goal["run_id"] and goal["kind"] == "trees":
+                        self.call("cancel", snapshot, run_id=goal["run_id"])
+                    elif goal["run_id"] and goal["kind"] in {"command", "follow"}:
+                        self.call("stop_command", snapshot, run_id=goal.get("native_command_run") or goal["run_id"])
+        finally:
+            self.store.lease(self.owner, self.clock(), ttl=0)

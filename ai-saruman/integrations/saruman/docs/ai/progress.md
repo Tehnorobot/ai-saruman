@@ -1,5 +1,62 @@
 # Progress
 
+## 2026-11-12: Target exclusion crash and disconnected bridge recovery
+
+### Investigate
+- Owner crash report showed KillEntityTask.toDebugString dereferencing target=null.
+  Independent review traced the producer: Auto Defense dropped an unreachable target
+  but returned RouteOutcome.NONE, allowing same-tick weapon selection to create the
+  invalid task. A second exclusion branch also continued into threat selection.
+- After the game exited, an unguarded getGoalRotation read killed MineBridge's updater.
+  Its process heartbeat continued publishing a cached in-world combat status. Cleanup
+  also skipped callback/transport closure after a JVM error. The old ingame loop could
+  wait inside the old connection rather than rebuilding callbacks and native guards.
+
+### Plan
+- Fix the addon control flow, retain target-free handover and automatic defense, and
+  reproduce the exact crash in an isolated client. Do not modify UnionClef binaries
+  or merely make debug output swallow the invalid entity task.
+- Rebuild failed bridge connections; preserve durable intentions/receipts and manual
+  Stop. Check native observation freshness separately from the Python heartbeat.
+
+### Implement
+- Auto Defense returns terminal EXCLUDED after route-budget exclusion and exits the
+  second exclusion tick before further threat/weapon decisions. Isolated pre-fix client
+  reproduced the exact NPE; another old-code run failed on post-drop threat selection.
+  Both fixed game branches passed all six assertions, kept defense enabled and acquired
+  a later valid hostile. All 71 selected route/weapon/handover unit checks and remapJar
+  passed. Test-only mixin counters observe entry/return without rewriting decisions.
+- Applied source/tests under the paused Auto Defense project lock. Canonical acceptance
+  and round history unchanged. Maintenance record:
+  M-0000000000003591-0f16ea751ec24151f353cbac96910b1cc594e63ba43b22f9a6e113686dd9649b.
+- MineBridge now reports updater failures and leaves the old connection for rebuilding;
+  liveness is read before helpers that deliberately suppress unavailable observations.
+  Adapter construction failure retries connection setup rather than polling without
+  an adapter. Cleanup always closes callback and transport and releases the native
+  lease, even after JVM cleanup fails. Reconnect preserves goals and JVM receipts.
+- Preserved prior enabled state across bridge reconnects; a durable explicit Start token
+  rearms only once. Reconnecting cannot erase a human Stop or replay an uncertain command.
+- Lab reads observation timestamps/freshness separately from process liveness; stale
+  combat data no longer renders as a current activity. Ten seconds is a display-health
+  threshold, not a task execution deadline.
+- Validation: 85 native/priority/preflight tests passed; all 119 Lab tests completed
+  (one existing Windows symlink skip); real Java adapter contract passed for both API
+  variants after the new exact artifact pin. Tests include actual callback-port release,
+  failed JVM cleanup, stale data with live heartbeat, manual Stop and preserved queue.
+  Independent final review found no blockers in the addon, evidence or bridge changes.
+- Fresh process/port and exclusive-file checks confirmed the owner's game was closed.
+  Backed up and replaced only auto-defense-0.1.0.jar; verified SHA-256:
+  bdc144486e720b9a31a58544883593c7f0412e9a8da8262c6bf34f618d38f736.
+  UnionClef and TreeGrow hashes are unchanged. Gradle/game evidence and backup:
+  Codex-Development-Lab/audit/null-target-2026-11-12/.
+- Gracefully retired the owned crashed game worker and restarted only Lab after no
+  Telegram request was in flight. Restored prior settings and Telegram lifecycle;
+  read-only healthz/check confirmed API v4, HTTP 200 and can_post=true. Game execution
+  remains explicitly paused until the owner's Start. No test post was sent.
+  Local runtime installation record: .saruman/audit/crash-recovery-2026-11-12/.
+- Boundary: full restart/reconnect in the owner's Minecraft and broader combat scenarios
+  remain live acceptance checks. The six game assertions cover this specific regression.
+
 ## 2026-11-12: Player priority and native idle activities
 
 ### Investigate

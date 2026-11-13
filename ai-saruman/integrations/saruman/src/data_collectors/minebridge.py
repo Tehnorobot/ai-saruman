@@ -29,6 +29,7 @@ from saruman.mod_goals import using_mods, submit_command
 from saruman.mod_adapter import NativeMods
 from saruman.mod_runtime import AutomationRuntime
 from saruman.mod_supply import ModSupply
+from saruman.bridge_health import BridgeHealth, close_bridge
 from saruman.collection import read_user_task
 from saruman.world_rules import NativeWorldRules
 from saruman.peaceful import guard_command, guard_crop_inputs, install_native_guard
@@ -273,10 +274,14 @@ def mine_bridge_handler(ctx_swarm: CtxSwarmType, debug: bool = False):
     ctx_game = ctx_swarm["game"]
     debug = debug
     handler = CtxHandler(ctx_swarm)
+    health = BridgeHealth(ctx_game)
+    native_was_enabled = False
     while ctx_env["actived"]:
         main_thread_actived = {"actived": True}
+        chat_queue_thread = None
         water_safety = None
         combat_reflex = None
+        health.unavailable(ConnectionError("Ожидание подключения Minecraft"))
         mod_runtime = None
         try:
             # ctx.lastmsg = "hz"
@@ -444,48 +449,7 @@ def mine_bridge_handler(ctx_swarm: CtxSwarmType, debug: bool = False):
             mc = java_gateway.entry_point
 
             def ingame(loop=True):
-                if loop:
-                    needLog = False
-                    fail = True
-                    while fail and ctx_env["actived"]:
-                        try:
-                            ez = mc.inGame()
-                            fail = False
-                            if not ctx_game["mc_started"]:
-                                ctx_game["mc_started"] = True
-                            if needLog:
-                                print("BRIDGE CONNECTION SUCCESSFUL")
-                            ctx_game["ingame"] = ez
-                            return ez
-                        except KeyboardInterrupt:
-                            print("[ Mine Bridge ] MAIN KEYBOARD INTERRUPT")
-                            raise KeyboardInterrupt
-                        except BaseException as err:
-                            # print('INGAME ERROR', err)
-                            if needLog:
-                                print("BRIDGE CONNECTION FAILED", err)
-                            ctx_game["mc_started"] = False
-                            ctx_game["ingame"] = False
-                            time.sleep(5)
-                            # return False
-                        finally:
-                            needLog = False  # False
-                else:
-                    try:
-                        ez = mc.inGame()
-                        if not ctx_game["mc_started"]:
-                            ctx_game["mc_started"] = True
-                        # print('CONNECTION SUCCESSFUL')
-                        return ez
-                    except KeyboardInterrupt:
-                        print("[ Mine Bridge ] MAIN KEYBOARD INTERRUPT")
-                        raise KeyboardInterrupt
-                    except BaseException as err:
-                        print(
-                            f"ERROR BRIDGE когда чекал запущенный майн. Его видимо нет в списке процессов или ещё че похуже {err}"
-                        )
-                        ctx_game["mc_started"] = False
-                        return False
+                return health.in_world(mc)
 
             print("[minebridge] waiting 1 sec, then ingame check")
             time.sleep(1)
@@ -516,6 +480,10 @@ def mine_bridge_handler(ctx_swarm: CtxSwarmType, debug: bool = False):
                 next_snapshot = 0.0
                 while ctx_env["actived"]:
                     time.sleep(max(0.05, float(os.getenv("MINECRAFT_POLL_INTERVAL", "0.1"))))
+                    # Read transport liveness before respawn/native helpers: those
+                    # deliberately catch unavailable observations and may return
+                    # early. They cannot own reconnection of the callback gateway.
+                    world_present = ingame()
                     enabled = bool(ctx_env.get("agent_enabled", False))
                     living = respawn.tick(mc, ctx_game, navigation, enabled=(
                         enabled and os.getenv("SARUMAN_AUTO_RESPAWN", "true").lower() in ("true", "1", "yes")))
@@ -652,7 +620,7 @@ def mine_bridge_handler(ctx_swarm: CtxSwarmType, debug: bool = False):
                                     )
                                 # ctx_chat.append(msg)
                         internal_chat_msgs[:] = []
-                    if ingame():
+                    if world_present:
                         # try:
                         #     captchaSolved = captchaQueueOutput.get(block=False)
                         #     if captchaSolved is not None:
@@ -758,6 +726,8 @@ def mine_bridge_handler(ctx_swarm: CtxSwarmType, debug: bool = False):
                                 "game_pitchspeed"
                             ] = goalRotation.getPitch()
 
+                        health.observed()
+
                     else:
                         # print('НЕ В ИГРЕ!!!')
                         time.sleep(2)
@@ -838,15 +808,17 @@ def mine_bridge_handler(ctx_swarm: CtxSwarmType, debug: bool = False):
                             ctx_swarm["tts_queue"].append({"text": text, "emotion": emotion})
                     from saruman.telegram_bridge import record_goal
                     mod_runtime = AutomationRuntime(NativeMods(java_gateway), notify=native_goal_event, server_send=mc.ChatMessage, announce=native_speech, event_sink=record_goal)
+                    mod_runtime.was_enabled = native_was_enabled
                     mod_runtime.supply = ModSupply(java_gateway, mod_runtime.store)
                 except Exception as error:
                     ctx_game["mod_runtime"] = {"status": "unavailable", "error": str(error)}
                     print(f"[MOD DISPATCH] Adapter unavailable: {error}")
+                    raise  # Rebuild the connection instead of polling without an adapter forever.
             else:
                 ctx_game["combat_policy"] = install_native_guard(java_gateway)
             ctx_game["navigation"] = {}
             ctx_game["collection"] = {}
-            updaterThread = threading.Thread(target=updater)
+            updaterThread = threading.Thread(target=lambda: health.run(updater, lambda: bool(ctx_env["actived"])))
             updaterThread.start()
             chat_queue_thread = threading.Thread(
                 target=chat_queue_handler,
@@ -870,6 +842,7 @@ def mine_bridge_handler(ctx_swarm: CtxSwarmType, debug: bool = False):
                     print(f"Phase {str(i)} ended. Running next")
             updaterThread.join()
         except Exception as err:
+            health.unavailable(err)
             print("Mine Bridge Произошла большая ошибка >", err)
             print("ТЕКСТ ОШИБКИ", traceback.format_exc())
             time.sleep(5)
@@ -884,13 +857,11 @@ def mine_bridge_handler(ctx_swarm: CtxSwarmType, debug: bool = False):
                 main_thread_actived["actived"] = False
                 if java_gateway is not None:
                     if mod_runtime is not None:
-                        mod_runtime.close()
-                    if water_safety is not None:
-                        water_safety.close(java_gateway)
-                    if combat_reflex is not None:
-                        combat_reflex.close(java_gateway)
-                    java_gateway.shutdown_callback_server()
-                    java_gateway.close()  # The Java gateway belongs to the running mod.
+                        native_was_enabled = mod_runtime.was_enabled
+                    close_bridge(java_gateway, native=mod_runtime, water=water_safety, combat=combat_reflex,
+                                 preserve_goals=bool(ctx_env["actived"] and ctx_env.get("agent_enabled")))
+                    if chat_queue_thread is not None:
+                        chat_queue_thread.join(6)
                     time.sleep(1)
                     java_gateway = None
             except KeyboardInterrupt:

@@ -14,6 +14,7 @@ from .game_connection import GameConnection
 
 atomic_json = load("managed").atomic_json
 OwnerLock = load("managed").FileOwnerLock
+NATIVE_MAX_AGE = load("bridge_health").NATIVE_MAX_AGE
 RUNTIME_DEFAULTS = {"minecraft": True, "filter_enabled": True}
 
 
@@ -110,6 +111,10 @@ class MinecraftProcess:
                 self.value = {"status": phase, "reason": "Игровые действия остановлены" if phase=="stopped" else "Останавливаем игровые действия"}
             elif status.get("phase") != "ready":
                 self.value = {"status": status.get("phase", "starting"), "reason": status.get("reason", "Запуск")}
+            elif status.get("native_fresh") is False or (
+                    isinstance(status.get("native_updated"), (int, float))
+                    and not 0 <= now-status["native_updated"] <= NATIVE_MAX_AGE):
+                self.value = {"status":"unavailable", "reason":status.get("native_error") or "Игровые данные устарели; ожидание восстановления Minecraft"}
             elif status.get("manual_stop_latched") and status.get("native_stop_kind") != "reset":
                 self.value = {"status": "paused", "reason": "Игровые действия приостановлены; состояние модов требует проверки в игровом интерфейсе"}
             elif status.get('native_status')=='unavailable':
