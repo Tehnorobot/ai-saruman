@@ -36,7 +36,8 @@ public final class ModGateway implements Supplier<Map<String,Object>> {
                               "bdc144486e720b9a31a58544883593c7f0412e9a8da8262c6bf34f618d38f736");
         else verify(dc,"e19d47caa2ae553ab81b5b84ab4fc11179595809797cee7d122cad5f2b1db43c");
         verify(type("lab.treegrow.TreeGrowClient"),"edd7a699318d0b18f46abe67db25046502e20ca400f4751c0ac0679664e5bee9",
-                                                "ed50500c43293f614c632b65f9c31c3a116a35c7759f16d547c392c3ae5708bf");
+                                                "ed50500c43293f614c632b65f9c31c3a116a35c7759f16d547c392c3ae5708bf",
+                                                "f41e3b8710d15d391b07e35c0707d23fe7d9b634fdf47cf7f5cd246fda52c074");
     }
     private Class<?> type(String name) throws Exception {
         return Class.forName(name, true, client.getClass().getClassLoader());
@@ -138,7 +139,8 @@ public final class ModGateway implements Supplier<Map<String,Object>> {
             Class<?> dc=defenseClient;
             Class<?> tc=type("lab.treegrow.TreeGrowClient");
             verify(tc,"edd7a699318d0b18f46abe67db25046502e20ca400f4751c0ac0679664e5bee9",
-                      "ed50500c43293f614c632b65f9c31c3a116a35c7759f16d547c392c3ae5708bf");
+                      "ed50500c43293f614c632b65f9c31c3a116a35c7759f16d547c392c3ae5708bf",
+                      "f41e3b8710d15d391b07e35c0707d23fe7d9b634fdf47cf7f5cd246fda52c074");
             Object runtime=call(dc,addonApi?"combat":"runtime");
             Object handover=addonApi?null:field(runtime,"handover");
             boolean busy=addonApi

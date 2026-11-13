@@ -1,5 +1,58 @@
 # Progress
 
+## 2026-11-13: TreeGrow mining from Lab and exclusive input ownership
+
+### Investigate
+- Reproduced the reported stall in an isolated Minecraft 1.21.11 with the exact
+  installed TreeGrow and Auto Defense. With released cursor: attack held, correct
+  aim (dbAimWait=0), zero server leaf breaks, zero block-breaking progress. After
+  ten seconds Unstuck cancelled the task. Auto Defense stayed idle without controls.
+- Vanilla handleInputEvents requires a captured cursor for block breaking and
+  otherwise cancels progress. The task/debug label alone does not establish mining.
+- Post-child tool correction also allowed UnionClef to repeatedly equip an unsafe
+  tool first, potentially resetting progress on every hand change.
+- Initial test attempts were infrastructure failures during memory exhaustion and
+  WSL timeouts, not product results. Recovered Docker only after checking all Lab
+  jobs/character were paused; preserved DB/volumes. Owner closed Minecraft and
+  authorized testing/installation. Voice/filter containers temporarily stopped
+  for RAM and subsequently restored.
+
+### Plan
+- Preserve vanilla's single mining driver and all normal UI/server constraints.
+  Allow the released-cursor gate only for the active, selected TreeGrow leaf-mining
+  child, matching its exact target and safe hand. Never capture window focus.
+- Choose the safe tool before native mining, keep equal-speed current tools stable.
+  Preserve other mods, recovery/defense priority, manual stop, world and run budgets.
+
+### Implement
+- Added composable ModifyExpressionValue cursor gate, scoped stable tool selection
+  before mining and typed read-only mining target access. Existing UnionClef
+  position/block avoid predicates are checked too; no global input/defense override.
+- Baseline real game failed with zero breaks under released cursor (exit 1).
+  Final Gradle: 97 checks passed, remapJar and gametest compilation succeeded.
+  The first unit snapshot omitted original acceptance metadata; restoring the
+  source plan/catalog/docs fixed that harness error without altering test assertions.
+- Five final isolated game runs exited 0: background (8 leaf breaks), foreground
+  (12), shears/Silk Touch inventory (12), real defense takeover and deliverable JAR
+  loaded as a dependency with original main classes removed (8 breaks). Four full
+  cycles produced natural saplings and grown oaks, zero unsafe/leaf-block loot.
+  Live guards checked menu/no attack/different target/foreign avoidance/restoration.
+- Real takeover verified revocation and cancelled-root exclusion, not a complete
+  Saruman combat/resume/publication cycle. The 108 separate runtime/preflight/Java/
+  bridge/workflow checks passed and cover same-run/budget resumption and truthful
+  workflow completion. Independent source/evidence review found no blocker.
+- Installed only TreeGrow JAR f41e3b8710d15d39 after exclusive file check, with
+  previous ed50500c backup outside mods. Auto Defense and Mage Home hashes unchanged.
+  Adapter allowlists include the new exact hash; d40735000fcf1523 shim is compiled.
+- Updated paused project 66b5a30bdb6945 sources and recorded maintenance event
+  M-0000000000001286-7d4ed0e7107319014c582b826fe00c85e07f0caa5d9f0b525d8c68fd6ba7f3ef.
+  Canonical acceptance/verification files, spec and job status were not changed.
+  Full evidence/backup: Codex-Development-Lab/audit/mining-ownership-2026-11-13.
+- Preserved a reproducible source/test patch and manifest in resources/Minecraft/
+  patches. Applying it to a clean copy matched all 12 final source files byte-for-byte.
+  Voice/filter services are running again; Lab is healthy/inactive, Minecraft closed,
+  no model requests or posts in flight. Next explicit Start loads the new adapter.
+
 ## 2026-11-13: Keep the tree workflow pending during native scheduler recovery
 
 ### Investigate

@@ -1,0 +1,2 @@
+# Preserve mixed source line endings inside the reproducible diff.
+*.patch -text

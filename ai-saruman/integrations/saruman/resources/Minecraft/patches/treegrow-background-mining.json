@@ -1,0 +1,99 @@
+{
+  "base_jar_sha256": "ed50500c43293f614c632b65f9c31c3a116a35c7759f16d547c392c3ae5708bf",
+  "patch_sha256": "f0f375b414a706a7737cfac8e075d07d47b254124f6287b8182c8fe9f24ce8dd",
+  "source_files": {
+    "build.gradle": {
+      "before": "b6b40a28d6a6ab1abce064c2fd85c7a6b26be8b334956c5726c1596c97c00e99",
+      "after": "b15690b926b8e1776745b31a66ddc54fb5dace4472ac5352acea6ad385f8b4f4"
+    },
+    "src/main/resources/fabric.mod.json": {
+      "before": "ea6bbb761a9eb5f4ee8aa21018a874a2895f8db0ad0381ed252172d021708369",
+      "after": "e2ba346dd2ef78c406c07258cb41d46986101c51b91c7e98179598008c5ad148"
+    },
+    "src/main/resources/treegrow.mixins.json": {
+      "before": null,
+      "after": "1e832c62c1f03de6e07209f30d46386353b06954340fbf86b467d17fc16e3af9"
+    },
+    "src/main/java/lab/treegrow/GrowTreeTask.java": {
+      "before": "403dcda33c3664a37d8f1e29de02d7f8f38320f1c305f6b4f988c915ea8c9de4",
+      "after": "797a948820c74e84523b634f6be52b9920564deae21ebf65502883133eaef040"
+    },
+    "src/main/java/lab/treegrow/TreeGrowClient.java": {
+      "before": "dae010cc1e5e1b39aca411f613ec0aadc1f68c59d78151a037caf7f24badea06",
+      "after": "65195ead186957551b86ea661d38215cdd73181b272441b349e53eb4eac3f40f"
+    },
+    "src/main/java/lab/treegrow/SaplingHarvestTools.java": {
+      "before": "8f80752dd6099dba7656e85a2a80026b04887dbbd60b0d9d9de0678248ec87c6",
+      "after": "6c7e039fc3b97587c96d9eb562f766972f68b1343e4c0012e3870d6147a687ea"
+    },
+    "src/main/java/lab/treegrow/LeafMiningTarget.java": {
+      "before": null,
+      "after": "a76e424c8cb46bef3a262dfaa6b69fa2187a24cb76bb9ec6fced870efca2909b"
+    },
+    "src/main/java/lab/treegrow/mixin/SaplingMiningTaskMixin.java": {
+      "before": null,
+      "after": "de092d39fc9bfa72a4d167faa958713ef00416f9d0e7389e39242d181db0a0c8"
+    },
+    "src/main/java/lab/treegrow/mixin/SaplingBackgroundInputMixin.java": {
+      "before": null,
+      "after": "06007136ccad374a32db02c0f3f2815221f9e6ded10ee211b924c942e4f2eaaa"
+    },
+    "src/gametest/resources/fabric.mod.json": {
+      "before": "f8320f08a6c3e18c1e569a1f27a084c8f9a98bbf8c9ecfdff4651edefe2ec32c",
+      "after": "8c7ef6a6f80a16e13691b6cbc4c12994a9c7b71e199a8f9be4e5735a30c74811"
+    },
+    "src/gametest/java/lab/treegrow/tests/TreeGrowClientTest.java": {
+      "before": "1fec046bdf32c517da5dc029e383b5f9418bae702f843e00040c1626763b92e9",
+      "after": "e6809f7087b92a9235f4288264a99d7049d899f5cd6ad56f56933b4d766a3218"
+    },
+    "src/gametest/java/lab/treegrow/tests/MiningOwnershipProbe.java": {
+      "before": null,
+      "after": "e028a9b5a9b38bfc693a3ccbcf49d679d21b615b040f1b32e5edd564636f8245"
+    }
+  },
+  "verification": {
+    "jar_sha256": "f41e3b8710d15d391b07e35c0707d23fe7d9b634fdf47cf7f5cd246fda52c074",
+    "bytes": 39983,
+    "unit_tests": 97,
+    "unit_failures": 0,
+    "native_checks": 108,
+    "baseline_exit_code": 1,
+    "games": {
+      "unlocked": {
+        "exit_code": 0,
+        "guards": true,
+        "completion": [
+          "MINING_PROBE completed breaks=8 saplings=1 unsafe=0 leafItems=0"
+        ]
+      },
+      "foreground": {
+        "exit_code": 0,
+        "guards": true,
+        "completion": [
+          "MINING_PROBE completed breaks=12 saplings=1 unsafe=0 leafItems=0"
+        ]
+      },
+      "silk": {
+        "exit_code": 0,
+        "guards": true,
+        "completion": [
+          "MINING_PROBE completed breaks=12 saplings=1 unsafe=0 leafItems=0"
+        ]
+      },
+      "takeover": {
+        "exit_code": 0,
+        "guards": true,
+        "completion": [
+          "MINING_TAKEOVER real combat/priority/release/stale-root checked"
+        ]
+      },
+      "production": {
+        "exit_code": 0,
+        "guards": true,
+        "completion": [
+          "MINING_PROBE completed breaks=8 saplings=1 unsafe=0 leafItems=0"
+        ]
+      }
+    }
+  }
+}
