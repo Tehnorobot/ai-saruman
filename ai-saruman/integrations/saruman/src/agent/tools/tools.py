@@ -58,7 +58,7 @@ from agent.tools.minecraft_tools import (
     minecraft_command,
     minecraft_command_tool_status,
 )
-from agent.tools.mod_tools import grow_trees, get_mod_status, cancel_mod_goal, stop_tree_growing, send_minecraft_chat
+from agent.tools.mod_tools import grow_trees, get_mod_status, cancel_mod_goal, stop_tree_growing, send_minecraft_chat, request_telegram_post, get_player_memory
 from agent.tools.state_tools import focus, pattern, plan, state_update
 from agent.tools.status_tools import (
     convert_tools_to_langchain,
@@ -100,7 +100,7 @@ def get_fx_names() -> str:
 
 
 ALL_TOOLS = [
-    grow_trees, get_mod_status, cancel_mod_goal, stop_tree_growing, send_minecraft_chat,
+    grow_trees, get_mod_status, cancel_mod_goal, stop_tree_growing, send_minecraft_chat, request_telegram_post, get_player_memory,
     # base_tools
     interrupt_chat,
     interrupt_voice,

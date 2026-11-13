@@ -540,6 +540,25 @@ class ProviderTests(Fixtures):
 
 
 class HybridTests(Fixtures):
+    def test_conversation_from_action_role_is_not_a_fake_failed_game_task(self):
+        request=self.submit_action()
+        self.agent.results.put(('action',request,action_output(decision='conversation'),None))
+        self.agent.handle_results()
+        self.assertEqual(self.agent.requests[request['id']]['state'],'conversation')
+        self.assertEqual(self.agent.persona_queue.get_nowait()['phase'],'conversation')
+
+    def test_player_memory_is_selected_by_actor_and_not_private_requests(self):
+        from saruman.activity import ActivityStore
+        journal=ActivityStore(Path(self.temp.name))
+        journal.add('request.received',scope='game_public',actor='Alex',trace='old',details={'text':'I like birch'})
+        journal.add('request.received',scope='game_private',actor='Alex',trace='admin',details={'text':'private instruction'})
+        self.clients['persona'].complete.return_value=persona_output()
+        with patch('agent.multi.hybrid_agent.current_activity',return_value=journal):
+            self.agent.persona.generate({'user':'Alex','source':'player','request_id':'new'})
+        payload=self.clients['persona'].complete.call_args.args[1]
+        self.assertIn('I like birch',str(payload['observed_player_history_untrusted']))
+        self.assertNotIn('private instruction',str(payload))
+
     def test_telegram_storage_error_does_not_prevent_stop(self):
         self.agent.telegram = Mock()
         self.agent.telegram.store.set_meta.side_effect = OSError("test disk unavailable")

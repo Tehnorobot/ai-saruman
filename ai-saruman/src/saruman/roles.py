@@ -116,6 +116,13 @@ class LabRoleProvider:
         trace.update(model=profile["model"], provider=profile["provider"], reasoning=profile["reasoning"])
         reserve = len((instructions + prompt + json.dumps(self.schema)).encode()) + profile["max_output"]
         identifier = self.models.store.begin(self.role, trace["session_id"], profile, reserve)
+        activity = getattr(self.models, 'activity', None)
+        activity_trace=trace.get('parent_id') or identifier
+        if activity:
+            activity.record('llm.request', status='running', trace=activity_trace,
+                scope=None if trace.get('parent_id') else 'lab_private',
+                details={'role':self.role,'provider':profile['provider'],'model':profile['model'],
+                         'request_id':identifier,'instructions':instructions,'input':prompt,'output_schema':self.schema})
         started, usage = time.monotonic(), {}
         try:
             if profile["provider"] == "codex":
@@ -130,12 +137,18 @@ class LabRoleProvider:
             if self.role == "lab_chat" and (set(value) != {"reply", "memories"} or not isinstance(value["reply"], str) or not isinstance(value["memories"], list)):
                 raise ValueError("Ответ модели не содержит корректные reply и memories.")
             self.models.store.finish(identifier, usage, model=trace.get("model"))
+            if activity:
+                activity.record('llm.result', status='completed', trace=activity_trace,
+                    details={'role':self.role,'output':value,'usage':usage})
             return value
         except Exception as error:
             usage = getattr(error, "usage", usage)
             if profile["provider"] == "codex":
                 usage = protocol.normalize_usage("codex", trace.get("usage"))
             self.models.store.finish(identifier, usage, type(error).__name__ + ": " + str(error))
+            if activity:
+                activity.record('llm.result', status='error', trace=activity_trace,
+                    details={'role':self.role,'error':type(error).__name__,'usage':usage})
             raise
         finally:
             if profile["provider"] != "codex":

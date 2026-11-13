@@ -1,5 +1,50 @@
 # Progress
 
+## 2026-11-12: End-to-end game activity, player memory and Telegram requests
+
+### Investigate
+- Examined the Minecraft log, native status/respawn discrepancy and durable intents.
+  The log contains 34 stopping_old_task and 150 retry_wait records (not death counts).
+  A living respawned player was held by a new native defense task. Manual follow
+  used generic command semantics and explicit cancellation excluded uncertain goals.
+- Intent row 515 explicitly refused a Telegram post because no game tool existed.
+  Lab Markdown memory was independent of real player interactions. Latest tree
+  attempts include an actual missing-sapling failure and a changed-world outcome.
+
+### Plan
+- Keep one private append-only operational journal, trace commands through existing
+  roles/tools/goals, page full evidence on demand and retain selected player context.
+- Bridge explicit public requests into existing Telegram workflows; no new LLM roles,
+  credentials or arbitrary recipients. Distinguish queued, sending and confirmed sent.
+- Recover living mod players independently of fresh native defense ownership;
+  retain safe legacy respawn behavior and native ownership checks.
+
+### Implement
+- Added Lab Journal with actor/trace/status filters, full event details, raw log
+  paging, automatic updates and stable scrolling. Logs cover decisions, tool calls,
+  goal results, control changes, respawn, chat delivery and speech playback.
+- Added historical read-only import and factual player Markdown projections with
+  links to full SQLite history; preserve owner edits/PERSONA and exclude private
+  Lab instructions. Persona/Action roles receive relevant player observations;
+  ActionAgent can page older public interactions via get_player_memory.
+- Added request_telegram_post: deterministic workflow/post identities, actual sent
+  receipts, photo world binding, cancellation reconciliation and independent body
+  scheduling. Existing intent history is never executed by the import process.
+- Mod respawn no longer waits for unrelated fresh tasks; literal @follow uses
+  existing resumable movement goals, and explicitly requested cancellation includes
+  uncertain owned goals. Ordinary conversation has its own non-game outcome.
+- Validation: 138 Lab checks (137 passed, one existing Windows skip); 57 native
+  runtime, 15 respawn, 66 role/agent, 8 speech playback, 16 bridge health and one
+  Telegram bridge check passed. Local javac checks require an unsandboxed run.
+  Isolated Chrome: pagination, one lazy detail fetch, trace navigation, retained
+  scroll/open state, mobile width and zero JavaScript errors. No live publication,
+  player death or public test chat was triggered.
+- Installed after the owner paused: runtime stays inactive, filter choice retained,
+  414 historical events imported, two actual player notes visible in Lab. No old
+  directive was replayed and the existing 20 sent Telegram posts remain unchanged.
+  Owner guide and findings:
+  [GAME_ACTIVITY_RU.md](../help/GAME_ACTIVITY_RU.md).
+
 ## 2026-11-12: Explicit public Minecraft messages from private Lab control
 
 ### Investigate

@@ -30,6 +30,7 @@ from saruman.mod_adapter import NativeMods
 from saruman.mod_runtime import AutomationRuntime
 from saruman.mod_supply import ModSupply
 from saruman.bridge_health import BridgeHealth, close_bridge
+from saruman.activity import emit
 from saruman.collection import read_user_task
 from saruman.world_rules import NativeWorldRules
 from saruman.peaceful import guard_command, guard_crop_inputs, install_native_guard
@@ -238,6 +239,7 @@ def chat_queue_handle(mc, ctx_swarm, navigation=None):
                                 # not precize, need precize options for another modes
                                 mc.ChatMessage(chat_msg)
                                 # print("FJSKG SDJG JFK GHJKFD JHFDJKH")
+                                emit('chat.sent', status='client_call_returned', details={'text': chat_msg})
                                 ctx_game["mc_last_chat_interact"] = eztime()
                     else:
                         print("[MC] CHAT MSG EMPTY:" + chat_msg)

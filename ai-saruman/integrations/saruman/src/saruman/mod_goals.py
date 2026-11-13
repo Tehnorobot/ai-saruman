@@ -10,6 +10,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 from saruman.role_settings import pid_alive
+from saruman.activity import emit
 
 ROOT = Path(__file__).resolve().parents[2]
 TERMINAL = {"completed", "failed", "cancelled", "uncertain"}
@@ -75,15 +76,18 @@ class GoalStore:
         finally:
             db.close()
 
-    def submit(self, kind, *, source, request_id=None, count=1, command=None, target=None, message=None, world=None):
+    def submit(self, kind, *, source, request_id=None, count=1, command=None, target=None, message=None, world=None, topic=None, include_photo=False):
         if source not in {"player", "operator", "planner"}:
             raise ValueError("Unknown goal source")
-        if kind not in {"trees", "command", "follow", "chat"} or source == "planner" and kind not in {"trees", "follow"}:
+        if kind not in {"trees", "command", "follow", "chat", "telegram"} or source == "planner" and kind not in {"trees", "follow"}:
             raise ValueError("Planner may only submit native mod skills")
         if kind == "chat":
             message = public_chat_text(message)
             if count != 1 or not isinstance(world, str) or not world:
                 raise ValueError("A public chat message requires one message and a current world")
+        if kind == 'telegram' and (not isinstance(topic, str) or not topic.strip()
+                or type(include_photo) is not bool or not isinstance(world, str) or not world):
+            raise ValueError('A Telegram request requires a public topic, photo flag and current world')
         if kind == "follow":
             if not isinstance(target, str) or not re.fullmatch(r"[A-Za-z0-9_]{1,16}", target):
                 raise ValueError("Expected an exact Minecraft player name")
@@ -119,6 +123,8 @@ class GoalStore:
         }
         if kind == "chat":
             body.update(message=message, world=world)
+        if kind == 'telegram':
+            body.update(topic=topic.strip(), include_photo=include_photo, world=world)
         with self.connection() as db:
             db.execute(
                 "INSERT OR IGNORE INTO goals VALUES (?,?,?,?,?,?,?,?)",
@@ -136,7 +142,9 @@ class GoalStore:
             row = db.execute(
                 "SELECT body FROM goals WHERE request=?", (request_id or goal_id,)
             ).fetchone()
-        return json.loads(row[0])
+        result = json.loads(row[0])
+        emit('goal.queued', status=result['state'], trace=result.get('context_id'), details={'goal': result}, key='goal:'+result['id'])
+        return result
 
     def list(self, active=False, limit=100):
         with self.connection() as db:
@@ -164,6 +172,7 @@ class GoalStore:
                 "SELECT body FROM goals WHERE id=?", (goal["id"],)
             ).fetchone()
             body = json.loads(row[0])
+            previous = {field: body.get(field) for field in ('state', 'completed', 'reason')}
             if (
                 body["state"] in {"cancelled", "cancel_requested"}
                 and changes.get("state") != "cancelled"
@@ -174,10 +183,16 @@ class GoalStore:
                 "UPDATE goals SET state=?,updated=?,body=? WHERE id=?",
                 (body["state"], body["updated"], json.dumps(body), body["id"]),
             )
+        if any(previous[field] != body.get(field) for field in previous):
+            emit('goal.result', status=body['state'], trace=body.get('context_id'), details={'goal': body})
         return body
 
     def cancel(self, goal_id=None, source=None, *, reason="Cancelled by operator/player"):
-        for goal in self.list(active=True, limit=-1):
+        for goal in self.list(limit=-1):
+            if goal["state"] in {"completed", "failed", "cancelled"}:
+                continue
+            if goal['kind'] == 'telegram' and goal_id is None:
+                continue  # Pausing a game body does not cancel an authorized publication.
             if (goal_id is None or goal["id"] == goal_id) and (
                 source is None or goal["source"] == source
             ):
@@ -237,10 +252,12 @@ def submit_command(game, command, request_token=None):
     from saruman.peaceful import guard_command
 
     guard_command(command)
+    follow = re.fullmatch(r"@follow\s+([A-Za-z0-9_]{1,16})", command)
     result = GoalStore().submit(
-        "command",
+        "follow" if follow else "command",
         source=context.get("source", "player"),
         command=command,
+        target=follow[1] if follow else None,
         request_id=f"{context['id']}:command:{request_token or command}",
     )
     return {"status": "accepted", "goal": result}

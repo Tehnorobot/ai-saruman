@@ -31,6 +31,8 @@ class Fixture(unittest.TestCase):
         self.workplace = Workplace(self.root)
 
     def tearDown(self):
+        for app in getattr(self, '_apps', []):app.runtime.close()
+        if getattr(self,'app',None):self.app.runtime.close()
         self.temporary.cleanup()
 
     def fact(self, entity_id="alex", related=None):
@@ -109,7 +111,9 @@ class FakeProvider:
 
 class ApplicationTests(Fixture):
     def make_app(self, provider=None):
-        return Application(self.root, provider=provider or FakeProvider())
+        app=Application(self.root, provider=provider or FakeProvider())
+        self._apps=getattr(self,'_apps',[])+[app]
+        return app
 
     def test_dialogue_persists_without_modifying_memory_when_disabled(self):
         app = self.make_app()
@@ -232,6 +236,20 @@ class ProviderTests(unittest.TestCase):
 
 
 class HttpTests(Fixture):
+    def test_journal_api_full_detail_filters_and_invalid_cursor(self):
+        self.app.activity.add('request.received',actor='Alex',trace='req',scope='game_public',details={'text':'message'})
+        with urlopen(self.base+'/api/activity?actor=Alex&trace=req') as response:page=json.load(response)
+        self.assertEqual(len(page['events']),1);identifier=page['events'][0]['id']
+        self.assertNotIn('details',page['events'][0])
+        with urlopen(self.base+'/api/activity/event?id='+str(identifier)) as response:detail=json.load(response)
+        self.assertEqual(detail['details']['text'],'message')
+        with self.assertRaises(HTTPError) as error:urlopen(self.base+'/api/activity?before=invalid')
+        self.assertEqual(error.exception.code,400)
+
+    def test_raw_log_endpoint_cannot_select_another_file(self):
+        with urlopen(self.base+'/api/activity/log?path=PERSONA.md') as response:value=json.load(response)
+        self.assertEqual(value['size'],0);self.assertNotIn('Саруман',value['text'])
+
     def setUp(self):
         super().setUp()
         self.app = Application(self.root, provider=FakeProvider())

@@ -30,3 +30,11 @@
 @media(max-width:950px){.role-grid{grid-template-columns:1fr}}
 @media(prefers-reduced-motion:reduce){.role-grid *{transition:none!important}}
  .workflow-steps{padding-left:1.5rem}.workflow-steps li{padding:.5rem 0}.workflow-photo{display:block;max-width:100%;max-height:320px;border-radius:10px;margin-top:.5rem}
+.activity-tools{display:flex;gap:12px;flex-wrap:wrap;align-items:end}.activity-tools label{display:grid;gap:7px;font-size:13px}
+.activity-tools input,.activity-tools select{padding:9px;border:1px solid var(--line);border-radius:8px;background:var(--paper);color:var(--ink);font:inherit;max-width:220px}
+.activity-tools label:has(input[type=checkbox]){display:flex;align-items:center;padding:10px 0}
+.activity-stream{max-height:65vh;overflow:auto;overflow-anchor:none}.activity-entry{border-top:1px solid var(--line)}
+.activity-entry summary{display:flex;gap:12px;flex-wrap:wrap;align-items:center;padding:14px 20px;cursor:pointer;font-size:13px}
+.activity-entry summary strong{min-width:130px}.activity-summary{flex:1 1 220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.activity-entry .note-preview{white-space:pre-wrap;overflow-wrap:anywhere;max-height:420px}.activity-entry[open]{background:var(--paper)}
+@media(max-width:640px){.activity-tools label{width:100%}.activity-tools input,.activity-tools select{max-width:none}.activity-entry summary{gap:7px}}

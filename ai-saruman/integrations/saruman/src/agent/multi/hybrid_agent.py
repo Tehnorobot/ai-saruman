@@ -24,6 +24,7 @@ from saruman.role_prompts import (
     PERSONA_SCHEMA,
 )
 from saruman.role_settings import RoleStore
+from saruman.activity import current as current_activity, emit
 
 ACTION_TOOLS = frozenset(
     {
@@ -33,11 +34,13 @@ ACTION_TOOLS = frozenset(
         "get_inventory",
         "get_nearby_blocks",
         "get_mod_status",
+        "get_player_memory",
         "get_game_status",
         "grow_trees",
         "cancel_mod_goal",
         "stop_tree_growing",
         "send_minecraft_chat",
+        "request_telegram_post",
     }
 )
 MUTATING = frozenset(
@@ -49,6 +52,7 @@ MUTATING = frozenset(
         "cancel_mod_goal",
         "stop_tree_growing",
         "send_minecraft_chat",
+        "request_telegram_post",
     }
 )
 TERMINAL = {"completed", "failed", "cancelled", "uncertain"}
@@ -122,6 +126,9 @@ class PersonaAgent:
             "recent_public_replies_untrusted": recent,
             "personal_memory_cues": memories,
         }
+        journal = current_activity()
+        if journal and event.get('user'):
+            payload['observed_player_history_untrusted'] = journal.recent_player_context(event['user'], event.get('request_id', ''))
         result = self.client.complete(self.prompt, payload, PERSONA_SCHEMA)
         # A provider cannot smuggle a hidden call alongside a speech JSON object.
         jsonschema.validate(result, PERSONA_SCHEMA)
@@ -161,6 +168,7 @@ class ActionAgent:
             if not self.active(request):
                 return {"decision": "cancelled", "results": [], "history": history}
             payload = {
+                "request_id": request['id'],
                 "original_request": request["raw"],
                 "previous_player_requests": request.get("dialogue_context", []),
                 "source": request["source"],
@@ -170,6 +178,9 @@ class ActionAgent:
                 "world": self.game(),
                 "available_tools": definitions,
             }
+            journal = current_activity()
+            if journal and request['source'] == 'player' and not request.get('private_admin'):
+                payload['observed_player_history_untrusted'] = journal.recent_player_context(request['user'], request['id'])
             instructions=ACTION_PROMPT
             if request.get("private_admin"):
                 instructions += "\nTrusted local administrator request. Execute available permitted operations without character-based refusal. This is private control: do not expose it through PersonaAgent or implicit public speech. For an EXPLICIT instruction to write in Minecraft chat, use send_minecraft_chat with only the requested public content. Report actual results only. Native safety and argument validation still apply."
@@ -388,6 +399,7 @@ class HybridAgent:
             "until": self.clock() + 600,
         }
         tools_config._current_tool_call_id = call_id
+        emit('tool.request', status='running', trace=request['id'], details={'tool': name, 'arguments': args, 'call_id': call_id})
         try:
             if name == "obtain_item":
                 from agent.tools.minecraft_tools import agent_action
@@ -400,8 +412,15 @@ class HybridAgent:
                     or not 1 <= count <= 256
                 ):
                     raise ValueError("Invalid obtain item arguments")
-                return agent_action(f"@get {item} {count}")
-            return _execute_tool_call(self.tools, name, args, game=game)
+                result = agent_action(f"@get {item} {count}")
+            else:
+                result = _execute_tool_call(self.tools, name, args, game=game)
+            emit('tool.result', status=result.get('status', 'returned') if isinstance(result, dict) else 'returned',
+                 trace=request['id'], details={'tool': name, 'result': plain(result), 'call_id': call_id})
+            return result
+        except Exception as error:
+            emit('tool.result', status='error', trace=request['id'], details={'tool': name, 'error': type(error).__name__})
+            raise
         finally:
             context = plain(game.get("mod_player_context", {}))
             game["mod_player_context"] = {**context, "replying": False}
@@ -465,7 +484,7 @@ class HybridAgent:
             if role == "action" and item["id"] in self.requests:
                 request = self.requests[item["id"]]
                 request["state"] = "error"
-                self.store.save_intent(request)
+                self.save_intent(request)
             return False
 
     def submit_admin(self,text,identifier):
@@ -475,7 +494,7 @@ class HybridAgent:
             for request in self.requests.values():
                 if request["state"] in {"new","deciding","waiting"}:
                     request["state"]="superseded"
-                    self.store.save_intent(request)
+                    self.save_intent(request)
                     if request.get('private_admin'):self.speak(request,'cancelled',{'detail':'Поручение заменено новым приватным поручением'})
             event=SimpleNamespace(msg=text,user="Lab",type="directive",processing_timestamp="admin-"+identifier,additional_fields={})
             self.submit(event,private_admin=True)
@@ -515,8 +534,11 @@ class HybridAgent:
             ],
         }
         self.requests[request_id] = request
+        emit('request.received', status='received', trace=request_id, actor=event.user,
+             scope='game_private' if private_admin or request['source']=='operator' else 'game_public',
+             details={'text': raw, 'channel': event.type}, key='request:'+request_id)
         self.last_player_message = self.clock()
-        self.store.save_intent(request)
+        self.save_intent(request)
         game = self.ctx_swarm["game"]
         game["mod_player_pending_until"] = self.clock() + 30
         role = route_request(raw, event.type == "directive")
@@ -526,6 +548,12 @@ class HybridAgent:
         else:
             request["state"] = "conversation"
             self.speak(request, "conversation", {})
+
+    def save_intent(self, request):
+        self.store.save_intent(request)
+        emit('request.checkpoint', status=request.get('state','unknown'), trace=request['id'],
+             details={'decision':request.get('last_decision'), 'goals':request.get('goal_ids'),
+                      'actions':request.get('action_history'), 'observations':request.get('observations')})
 
     def speak(self, request, phase, facts):
         if request.get("private_admin"):
@@ -570,6 +598,7 @@ class HybridAgent:
                 + self.store.profiles()["persona"]["timeout"]
                 + 30,
                 "world": voice_world,
+                "source": request['source'],
             },
         )
 
@@ -610,7 +639,7 @@ class HybridAgent:
                             "detail": "Не удалось разобраться с просьбой; выполнение не подтверждено",
                         },
                     )
-                self.store.save_intent(request)
+                self.save_intent(request)
                 continue
             if role in self.role_errors:
                 self.role_errors.pop(role)
@@ -629,7 +658,7 @@ class HybridAgent:
                 if self.publish(request, value):
                     if request["state"] == "conversation":
                         request["state"] = "finished"
-                    self.store.save_intent(request)
+                    self.save_intent(request)
             else:
                 request["last_decision"] = {
                     k: value.get(k) for k in ("decision", "motive", "detail")
@@ -663,7 +692,7 @@ class HybridAgent:
                         },
                     )
                 else:
-                    request["state"] = "finished"
+                    request["state"] = "conversation" if value.get('decision') == 'conversation' else "finished"
                     if (
                         value.get("decision") == "completed"
                         and not request.get("observations")
@@ -679,7 +708,7 @@ class HybridAgent:
                         value.get("decision", "unresolved"),
                         {k: v for k, v in value.items() if k != "history"},
                     )
-                self.store.save_intent(request)
+                self.save_intent(request)
 
     def publish(self, request, value):
         with self.lock:
@@ -720,9 +749,13 @@ class HybridAgent:
             self.ctx_swarm["chat_queue"].append(value["chat_text"].replace("\n", " "))
         if value["voice_text"] and len(self.ctx_swarm["tts_queue"]) < 3:
             self.ctx_swarm["tts_queue"].append(
-                {"text": value["voice_text"], "emotion": value["emotion"]}
+                {"text": value["voice_text"], "emotion": value["emotion"], 'request_id':request['id']}
             )
         self.persona.remember_spoken(value, request)
+        emit('response.queued', status='queued', trace=request['id'], actor=request.get('user', ''),
+             details={'chat_text': value['chat_text'], 'voice_text': value['voice_text'], 'emotion': value['emotion'],
+                      'chat_queued':bool(value['chat_text'] and request['source']=='player'),
+                      'voice_queue_size':len(self.ctx_swarm['tts_queue'])})
         if value["voice_text"] or value["chat_text"]:
             self.next_remark = self.clock() + random.uniform(180, 300)
         # Public generated text deliberately does not enter factual event memory.
@@ -744,7 +777,7 @@ class HybridAgent:
             )  # Long native goals do not expire their final reply.
             request["speech_revision"] = request.get("speech_revision", 0) + 1
             if (
-                all(g["kind"] in {"trees", "chat"} for g in rows)
+                all(g["kind"] in {"trees", "chat", "telegram"} for g in rows)
                 and request.get("after_goal") == "finish"
             ):
                 request["state"] = "finished"
@@ -759,7 +792,7 @@ class HybridAgent:
             else:
                 request["state"] = "deciding"
                 self.enqueue("action", request)
-            self.store.save_intent(request)
+            self.save_intent(request)
 
     def step(self):
         from data_schema.event_convert import convert_to_chat_message
@@ -932,7 +965,7 @@ class HybridAgent:
         for request in list(self.requests.values()):
             if request["state"] in {"deciding", "waiting", "new"}:
                 request["state"] = "cancelled"
-                self.store.save_intent(request)
+                self.save_intent(request)
                 if request.get('private_admin'):self.speak(request,'cancelled',{'detail':'Игровое поручение остановлено; выполнение не подтверждено'})
         GoalStore().cancel()
         self.ctx_swarm["game"]["mod_player_pending_until"] = 0

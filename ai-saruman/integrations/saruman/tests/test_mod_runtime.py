@@ -74,6 +74,39 @@ class FakeMods:
 
 
 class NativeRuntimeTests(unittest.TestCase):
+    def test_telegram_goal_does_not_take_body_or_block_tree_work(self):
+        post=self.store.submit('telegram',source='player',world='world1',topic='a day',request_id='post:1')
+        tree=self.goal();self.tick()
+        self.assertEqual(self.read(post)['state'],'queued')
+        self.assertEqual(self.read(tree)['state'],'running')
+        self.assertFalse(any(args.get('command') is None for op,args in self.adapter.calls if op=='command'))
+
+    def test_uncertain_owned_goal_can_be_cancelled(self):
+        goal=self.goal();self.store.update(goal,state='uncertain',run_id='owned')
+        self.store.cancel(goal['id'])
+        self.assertEqual(self.read(goal)['state'],'cancel_requested')
+
+    def test_body_pause_does_not_cancel_authorized_telegram_request(self):
+        goal=self.store.submit('telegram',source='player',world='world1',topic='a day')
+        self.store.cancel();self.assertEqual(self.read(goal)['state'],'queued')
+
+    def test_player_follow_uses_resumable_movement_goal(self):
+        self.game['mod_player_context']={'id':'follow-request','source':'player','until':time.time()+60}
+        with patch('saruman.mod_goals.GoalStore',return_value=self.store):
+            result=submit_command(self.game,'@follow Alex','call')
+        self.assertEqual(result['goal']['kind'],'follow');self.assertEqual(result['goal']['target'],'Alex')
+
+    def test_public_telegram_tool_is_explicit_idempotent_and_not_autonomous(self):
+        from agent.tools import mod_tools,tools_config
+        self.game.update(mod_player_context={'id':'post','user':'Alex','source':'player','replying':True,'until':time.time()+60},
+                         mod_runtime={'world':'world1','in_world':True})
+        with patch.object(tools_config,'ctx_swarm',{'game':self.game}),patch.object(mod_tools,'GoalStore',return_value=self.store):
+            first=mod_tools.request_telegram_post('a day',False);second=mod_tools.request_telegram_post('a day',False)
+            self.assertEqual(first['goal']['id'],second['goal']['id'])
+            self.game['mod_player_context']['replying']=False
+            self.assertEqual(mod_tools.request_telegram_post('other')['status'],'rejected')
+        with self.assertRaises(ValueError):self.store.submit('telegram',source='planner',world='world1',topic='unauthorized')
+
     def test_literal_chat_is_delivered_once_even_while_physical_controls_are_busy(self):
         send, sink = Mock(), Mock()
         self.runtime.server_send, self.runtime.event_sink = send, sink

@@ -130,6 +130,10 @@ class Admin:
                     if old["input"]!=text:raise ValueError("request_id уже использован с другим текстом")
                     return self.current_message(dict(old),db)
                 db.execute("INSERT INTO admin_messages VALUES (?,?,'','interpreting',?)",(identifier,text,self.store.clock()))
+            observer=getattr(self.runtime,'observer',None)
+            if observer:
+                observer.journal.record('request.received', status='received', trace='admin-'+identifier, actor='Lab',
+                    scope='game_private', details={'text':text,'channel':'private_control'}, key='request:admin-'+identifier)
             try:
                 direct=payload.get("operation")
                 world=named_world(text) if not direct else None
@@ -137,7 +141,7 @@ class Admin:
                 if direct:plan={"operation":direct,"text":payload.get("argument","")}
                 elif world is not None:plan={"operation":"connect","text":world}
                 elif publish_current(text):plan={"operation":"publish","text":""}
-                else:plan=self.interpret({"message":text,"state":self.runtime.snapshot(),"previous_commands":previous,
+                else:plan=self.interpret({"message":text,"state":self.runtime.snapshot(),"previous_commands":previous,'_lab_trace':'admin-'+identifier,
                                           "telegram":self.store.publication_context(),
                                           'pending_workflows':self.runtime.workflows.context() if self.runtime.workflows else []})
                 if (not isinstance(plan,dict) or set(plan)-{"operation","text","steps"} or not {"operation","text"}<=set(plan) or plan["operation"] not in SCHEMA["properties"]["operation"]["enum"]
@@ -192,5 +196,8 @@ class Admin:
             except Exception as error:
                 result={"error":str(error)};status="error"
             with self.store.db() as db:db.execute("UPDATE admin_messages SET result=?,status=? WHERE id=?",(json.dumps(result,ensure_ascii=False),status,identifier))
+            if observer:
+                observer.journal.record('admin.result', status=status, trace='admin-'+identifier,
+                    scope='game_private', details={'result':result})
             return {"id":identifier,"input":text,"result":json.dumps(result,ensure_ascii=False),"status":status}
         finally:self.lock.release()

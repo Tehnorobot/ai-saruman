@@ -8,6 +8,8 @@ from uuid import uuid4
 from py4j.protocol import Py4JError
 
 from saruman.minecraft import _java_to_python
+from saruman.mod_goals import using_mods
+from saruman.activity import emit
 
 
 class RespawnController:
@@ -41,6 +43,7 @@ class RespawnController:
         if dict(previous.items()) != value:
             game["respawn"] = value
             print(f"[RESPAWN] {status} (attempts={self.attempts})")
+            emit('minecraft.respawn', status=status, trace=value.get('death_id', ''), details=value)
 
     def tick(self, entry, game, navigation, *, enabled):
         now = self.clock()
@@ -68,6 +71,11 @@ class RespawnController:
                 return False
             if hp > 0:
                 if self.death is not None:
+                    if using_mods(game):
+                        # Native goals/defense own their task identities. A new
+                        # defense task after respawn is not the pre-death task.
+                        navigation.after_death(game)
+                        self.stopped = True
                     # A queued stop is not confirmation that the old task ended.
                     if not self.stopped:
                         if not enabled:
@@ -79,7 +87,7 @@ class RespawnController:
                         elif not self._stop_old_task(entry, game, navigation):
                             self._publish(game, "stopping_old_task")
                             return False
-                    if entry.hasActiveTask():
+                    if not using_mods(game) and entry.hasActiveTask():
                         game["alive"] = False
                         self._publish(game, "stopping_old_task")
                         return False
@@ -128,7 +136,11 @@ class RespawnController:
                 # A dead player's scheduler may never report idle. Attempt one
                 # cancellation, but do not make respawning depend on its success.
                 try:
-                    self._stop_old_task(entry, game, navigation)
+                    if using_mods(game):
+                        navigation.after_death(game)
+                        self.stopped = True
+                    else:
+                        self._stop_old_task(entry, game, navigation)
                 except (Py4JError, OSError, ValueError, TypeError) as error:
                     self._publish(game, "dead", stop_error=type(error).__name__)
             if self.hardcore():

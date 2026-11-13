@@ -73,6 +73,7 @@ def native_runtime_status(game, running, clock=time.time):
     return {
         "agent_running": running,
         "world_ready": bool(available and native.get("in_world")),
+        "world_session": native.get('world') if available else None,
         "native_status": native.get("status", "connecting") if available else "unavailable",
         "native_error": error,
         "native_updated": updated,

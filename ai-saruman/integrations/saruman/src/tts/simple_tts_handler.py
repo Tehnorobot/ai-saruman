@@ -2,6 +2,7 @@ import asyncio
 import time
 import traceback
 from threading import Thread
+from saruman.activity import emit
 
 from config_schema.general import get_name
 from data_schema.tool_structures import SPELL_TO_EMOTION
@@ -99,6 +100,7 @@ def check_tts_queue(audio_processor, ctx_swarm, check_interrupt=False) -> bool:
     metadata = None
     try:
         voice["speak_entry"] = entry
+        emit('voice.synthesis',status='running',trace=entry.get('request_id',''),details={'text':entry.get('text'),'emotion':entry.get('emotion')})
         voice["text_chunk"] = entry["text"]
         if entry.get("voice_preview"):
             audio, sr = preview_audio(entry["voice_preview"])
@@ -129,10 +131,13 @@ def check_tts_queue(audio_processor, ctx_swarm, check_interrupt=False) -> bool:
                 audio_processor.interrupt_main_device()
                 raise TimeoutError("Speech output did not finish in time")
         playback.result()
+        emit('voice.playback',status='interrupted' if playback.interrupted else 'played',trace=entry.get('request_id',''),
+             details={'text':entry.get('text'),'seconds':len(audio)/sr})
         if metadata is not None:
             metadata["status"] = "interrupted" if playback.interrupted else "played"
             metadata["output_seconds"] = len(audio) / sr
     except Exception as error:  # noqa: BLE001 - keep the speech worker alive; report the failure
+        emit('voice.playback',status='error',trace=entry.get('request_id',''),details={'error':type(error).__name__})
         if playback is not None:
             audio_processor.interrupt_main_device()
         if metadata is not None:

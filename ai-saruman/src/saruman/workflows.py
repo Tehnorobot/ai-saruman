@@ -20,7 +20,7 @@ class Workflows:
         with store.db() as db:
             db.execute('CREATE TABLE IF NOT EXISTS workflows (id TEXT PRIMARY KEY,body TEXT NOT NULL,created REAL NOT NULL)')
 
-    def create(self,identifier,steps,original):
+    def create(self,identifier,steps,original,*,context_id=None,world_session=None):
         if not isinstance(steps,list) or not steps:raise ValueError('Нужен список действий')
         prepared=[];has_draft=False;photo_pending=False
         for i,step in enumerate(steps):
@@ -43,6 +43,8 @@ class Workflows:
         if photo_pending and any(s['operation']=='publish' for s in prepared):
             raise ValueError('Скриншот должен предшествовать своему посту')
         value={'id':identifier,'status':'queued','steps':prepared,'detail':'Цепочка сохранена'}
+        if context_id:value['context_id']=context_id
+        if world_session:value['world_session']=world_session
         with self.store.db() as db:
             db.execute('INSERT OR IGNORE INTO workflows VALUES (?,?,?)',(identifier,json.dumps(value,ensure_ascii=False),self.store.clock()))
         self.start()
@@ -72,6 +74,10 @@ class Workflows:
 
     def save(self,value):
         with self.store.db() as db:db.execute('UPDATE workflows SET body=? WHERE id=?',(json.dumps(value,ensure_ascii=False),value['id']))
+        observer=getattr(self.runtime,'observer',None)
+        if observer:
+            observer.journal.record('workflow.checkpoint', status=value['status'], trace=value.get('context_id') or value['id'],
+                details=value, key='workflow:'+value['id']+':'+hashlib.sha256(json.dumps(value,sort_keys=True).encode()).hexdigest())
 
     def start(self):
         if self.thread:return
@@ -139,7 +145,16 @@ class Workflows:
             if result.get('request_state') in {'finished','error','superseded','cancelled'} and result.get('status')!='completed':
                 return False,{**result,'status':'unresolved','reason':'Игровое поручение завершено без подтверждения успеха'}
             return result.get('status')=='completed',result
-        if op=='screenshot':return True,self.capture(identifier)
+        if op=='screenshot':
+            if value.get('world_session'):
+                state=self.runtime.game.read('status.json')
+                if not state.get('world_ready'):return False,{'status':'waiting_world'}
+                if state.get('world_session')!=value['world_session']:
+                    return False,{'status':'failed','reason':'Мир изменился до снимка'}
+            photo=self.capture(identifier)
+            if value.get('world_session') and self.runtime.game.read('status.json').get('world_session')!=value['world_session']:
+                return False,{'status':'failed','reason':'Мир изменился во время снимка'}
+            return True,photo
         if op=='draft':
             post_id='chain-'+identifier
             with self.store.db() as db:row=db.execute('SELECT id FROM posts WHERE id=?',(post_id,)).fetchone()
@@ -152,7 +167,7 @@ class Workflows:
                     facts.extend({'kind':g.get('kind'),'completed':g.get('completed'),'state':g.get('state')} for g in goals)
             media=next((s['result'] for s in reversed(previous) if s['operation']=='screenshot'),None)
             output=self.draft({'topic':step['text'],'confirmed_game_results':facts,'screenshot_attached':bool(media),
-                               'caption_limit':1024 if media else 3500})
+                               'caption_limit':1024 if media else 3500,'_lab_trace':value.get('context_id') or value['id']})
             if not self.runtime.active:return False,{'status':'waiting_start'}
             self.store.workflow_post(post_id,output.get('text'),media)
             step['post_id']=post_id

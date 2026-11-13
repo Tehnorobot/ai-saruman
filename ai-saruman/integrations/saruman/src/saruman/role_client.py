@@ -5,6 +5,7 @@ import time
 
 import httpx
 import jsonschema
+from saruman.activity import emit
 
 
 from saruman.role_protocol import (
@@ -73,6 +74,14 @@ class RoleClient:
             + profile["max_output"]
         )
         identifier = self.store.begin(self.role, self.session, profile, reserve)
+        request = json.loads(serialized)
+        if isinstance(request, dict):
+            request = request.get('original_input', request)
+        trace_id = request.get('request_id', identifier) if isinstance(request, dict) else identifier
+        emit('llm.request', status='running', trace=trace_id,
+             details={'request_id': identifier, 'role': self.role, 'provider': profile['provider'],
+                      'model': profile['model'], 'reasoning': profile['reasoning'],
+                      'instructions': instructions, 'input': request, 'output_schema': schema})
         usage = {}
         try:
             if profile["provider"] == "codex":
@@ -131,12 +140,16 @@ class RoleClient:
                 usage,
                 reason=detail,
             )
+            emit('llm.result', status='error', trace=trace_id,
+                 details={'request_id': identifier, 'role': self.role, 'error': detail, 'usage': usage})
             failure = RoleRequestError(f"Ошибка роли {self.role} ({profile['provider']} / {profile['model']}): {detail}")
             if invalid_output:
                 failure.output_issue = issue
                 failure.previous_output = value
             raise failure from None
         self.store.finish(identifier, usage, model=trace.get("model"))
+        emit('llm.result', status='completed', trace=trace_id,
+             details={'request_id': identifier, 'role': self.role, 'output': value, 'usage': usage})
         self.last_trace = {"provider": profile["provider"], "model": trace.get("model", profile["model"]),
                            "role": self.role, "usage": usage}
         return value

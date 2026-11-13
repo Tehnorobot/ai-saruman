@@ -38,7 +38,7 @@ class StartStopTests(unittest.TestCase):
         seen = []
         supervisor.run.side_effect = lambda: seen.append(ctx["env"]["agent_enabled"])
         supervisor.stop.side_effect = lambda: seen.append(ctx["env"]["agent_enabled"])
-        namespace = {"ctx": object(), "ctx_swarm": ctx, "Supervisor": supervisor}
+        namespace = {"ctx": object(), "ctx_swarm": ctx, "Supervisor": supervisor, 'reset_pending':lambda:False}
         exec(compile(callbacks, str(source), "exec"), namespace)  # noqa: S102 - trusted local callbacks only
         namespace["agent_start"]()
         namespace["activate_agent"]()
@@ -46,6 +46,17 @@ class StartStopTests(unittest.TestCase):
 
 
 class RespawnTests(unittest.TestCase):
+    def test_mod_player_recovers_even_when_new_defense_task_is_active(self):
+        self.game['automation_mode']='mods'
+        self.entry.hasActiveTask.return_value=True
+        self.tick(0);self.tick(2)
+        self.entry.getGameState.return_value['self']['hp']=20
+        self.assertTrue(self.tick(3))
+        self.assertTrue(self.game['alive'])
+        self.assertEqual(self.game['respawn']['status'],'respawned')
+        self.entry.stopPathing.assert_not_called()
+        self.assertTrue(self.tick(4));self.entry.respawnPlayer.assert_called_once()
+
     def setUp(self):
         self.now = 0
         self.entry = Mock()

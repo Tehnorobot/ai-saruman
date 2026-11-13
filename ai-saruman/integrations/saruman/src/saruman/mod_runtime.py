@@ -9,6 +9,7 @@ import uuid
 from saruman.action_speech import ActionSpeech
 from saruman.autonomy_settings import catalog, load_weights
 from saruman.mod_goals import GoalStore, player_context, public_chat_text
+from saruman.activity import emit
 
 
 class AutomationRuntime:
@@ -43,6 +44,7 @@ class AutomationRuntime:
         self.idle_since = None
         self.last_failed_activity = None
         self.activity = {"phase": "starting", "reason": "Проверка игрового состояния"}
+        self.last_control = None
 
     def hold(self, phase, reason):
         self.idle_since = None
@@ -167,6 +169,11 @@ class AutomationRuntime:
                 "status": "paused" if manual_paused else "running" if enabled else "stopped",
                 "activity": self.activity,
             }
+            control = {key:snapshot.get(key) for key in ('world','in_world','player_alive','defense_busy','native_busy','stop_kind')}
+            control.update(phase=self.activity.get('phase'), reason=self.activity.get('reason'))
+            if control != self.last_control:
+                emit('minecraft.control', status=self.activity.get('phase','observed'), details={'control':control,'snapshot':snapshot})
+                self.last_control = control
             game["mod_goals"] = self.store.list(limit=40)
         except Exception as error:  # noqa: BLE001 - boundary to an optional JVM plugin
             # A lost response is NOT permission to repeat a world action with a new id.
@@ -222,7 +229,7 @@ class AutomationRuntime:
     def reconcile(self, game, snapshot, enabled, tools):
         now, world = self.clock(), snapshot["world"]
         self.deliver_chat(snapshot, enabled)
-        goals = [goal for goal in self.store.list(active=True) if goal["kind"] != "chat"]
+        goals = [goal for goal in self.store.list(active=True) if goal["kind"] not in {"chat", "telegram"}]
         busy = snapshot["defense_busy"]
         tree = snapshot.get("tree", {})
         context = player_context(game)
@@ -453,7 +460,7 @@ class AutomationRuntime:
         ):
             self.hold("waiting", "Защита удерживает управление" if busy else "Ожидание возрождения" if snapshot.get("player_alive", game.get("alive")) is not True else "Игровые действия приостановлены")
             return
-        goals = self.store.list(active=True)
+        goals = [g for g in self.store.list(active=True) if g['kind'] not in {'chat','telegram'}]
         if any(
             g["state"]
             in {"starting", "running", "interrupted", "resuming", "cancel_requested"}

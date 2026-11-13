@@ -27,7 +27,7 @@ const scenarios = [
   {name:"Проверка памяти", icon:"memory", text:"Что ты помнишь обо мне из нашего диалога? Отдели известные тебе факты от предположений."},
   {name:"Неизвестные сведения", icon:"chat", text:"Сколько у меня сейчас алмазов в инвентаре? Если не знаешь, не выдумывай."}
 ];
-const views = {control:"Управление",chat:"Тестирование", memory:"Память", history:"Диалоги", analytics:"Аналитика", telegram:"Telegram", settings:"Настройки"};
+const views = {control:"Управление",activity:"Журнал",chat:"Тестирование", memory:"Память", history:"Диалоги", analytics:"Аналитика", telegram:"Telegram", settings:"Настройки"};
 const state = {data:null, view:location.hash.slice(1) || "chat", session:null, messages:[], draft:"",
   remember:false, busy:false, connecting:false, memoryView:"graph", entity:null, file:null,
   database:"sessions", databaseData:null, model:"", error:null};
@@ -41,6 +41,12 @@ state.runtimeBusy = false;
 state.minecraftChoice = null;
 state.filterChoice = null;
 state.admin = null;state.adminDraft='';state.adminBusy=false;state.dialogues=null;state.gameForm=null;
+state.activity=null;state.activityActor='';state.activityTrace='';state.activityStatus='';state.activityFollow=true;
+state.activityDetails={};state.activityOpen=new Set();state.rawLog=null;paths.activity=paths.history;
+const eventNames={'request.received':'Получена команда','request.checkpoint':'Решение и состояние','llm.request':'Запрос к модели','llm.result':'Ответ модели',
+  'tool.request':'Вызов инструмента','tool.result':'Результат инструмента','goal.queued':'Действие принято','goal.result':'Результат действия',
+  'response.queued':'Ответ в очереди','chat.sent':'Сообщение передано в игру','voice.synthesis':'Синтез речи','voice.playback':'Воспроизведение',
+  'minecraft.control':'Управление персонажем','minecraft.respawn':'Возрождение','telegram.request':'Публикация принята','workflow.checkpoint':'Этапы публикации','admin.result':'Результат управления'};
 let renderedView=null;
 function toast(text) {
   $("#toast").textContent = text;
@@ -96,6 +102,7 @@ function heading() {
   const subtitles = {chat:"Проверьте голос, решения и последовательность характера.",memory:"Воспоминания, сущности и связи — без скрытых слоёв.",history:"Каждый эксперимент сохраняется в последовательном диалоге.",analytics:"Измеренный расход и прозрачная оценка контекста.",settings:"Провайдер, модель и reasoning для каждой задачи персонажа."};
   subtitles.telegram='Подтверждённые события, черновики и публикации в канале.';
   subtitles.control='Приватные команды, состояние и подключение к миру.';
+  subtitles.activity='Сообщения, решения, инструменты и результаты. Полные данные раскрываются по событию.';
   return '<div class="page-heading"><div><div class="eyebrow">САРУМАН / CHARACTER EXPERIMENTS</div><h1>' + views[state.view] +
     '</h1><p class="subtitle">' + subtitles[state.view] + '</p></div>' +
     (state.view === "chat" ? button("Новый диалог","new-session","","plus") : button("Обновить","refresh","refresh","refresh")) + '</div>';
@@ -389,20 +396,39 @@ function telegramView() {
 async function refreshTelegram() {
   state.telegram=await api('/api/telegram?page='+state.telegramPage);
 }
+async function refreshActivity(older=false) {
+  const params=new URLSearchParams({actor:state.activityActor,trace:state.activityTrace,status:state.activityStatus});
+  if(older&&state.activity?.next_before)params.set('before',state.activity.next_before);
+  const value=await api('/api/activity?'+params);
+  if(older&&state.activity){value.events=state.activity.events.concat(value.events);state.activityFollow=false;}
+  state.activity=value;
+}
+function activityView() {
+  const data=state.activity;
+  const filters='<form id="activity-filter" class="activity-tools panel-body"><label>Игрок <select id="activity-actor"><option value="">Все</option>'+
+    (data?.actors||[]).map(actor=>'<option '+(actor===state.activityActor?'selected':'')+' value="'+e(actor)+'">'+e(actor)+'</option>').join('')+
+    '</select></label><label>Поток <input id="activity-trace" value="'+e(state.activityTrace)+'" placeholder="ID запроса"></label><label>Статус <input id="activity-status" value="'+e(state.activityStatus)+'" placeholder="Все"></label><button class="button">Применить</button><label><input id="activity-follow" type="checkbox" '+(state.activityFollow?'checked':'')+'> Автообновление</label></form>';
+  const rows=(data?.events||[]).map(item=>'<details class="activity-entry" data-activity-event="'+item.id+'" '+(state.activityOpen.has(String(item.id))?'open':'')+'><summary><span class="tiny">#'+item.id+' · '+e(date(item.created_at))+'</span><strong>'+e(eventNames[item.kind]||item.kind)+'</strong><span class="pill">'+e(item.status)+'</span><span>'+e(item.actor||'Система')+'</span><span class="activity-summary">'+e(item.summary)+'</span></summary>'+
+    '<div class="panel-body"><p class="tiny">'+e(item.scope)+' · поток '+e(item.trace||'—')+'</p>'+(item.trace?'<button class="button" data-activity-trace="'+e(item.trace)+'">Весь поток этой команды</button>':'')+'<pre class="note-preview" data-control-scroll="event-'+item.id+'">'+e(state.activityDetails[item.id]?JSON.stringify(state.activityDetails[item.id].details,null,2):'Загружаем полные данные…')+'</pre></div></details>').join('');
+  const raw=state.rawLog?'<p class="tiny">Байты '+number(state.rawLog.offset)+'–'+number(state.rawLog.next_offset)+' из '+number(state.rawLog.size)+'</p><pre class="note-preview" data-control-scroll="raw-game-log">'+e(state.rawLog.text)+'</pre>'+button('Ранее','activity-log-before')+' '+button('Далее','activity-log-after'):'';
+  return panel('Поток событий',filters+'<div class="activity-stream" data-control-scroll="activity-stream">'+(rows||'<div class="empty">Событий пока нет или фильтр не дал результатов.</div>')+'</div><div class="panel-body tiny">Всего сохранено: '+number(data?.total||0)+' · история хранится полностью. '+(data?.next_before?button('Более ранние события','activity-older'):'')+'</div>')+
+    panel('Журнал Minecraft', '<div class="panel-body">'+button('Последний фрагмент','activity-log')+raw+'</div>');
+}
 function render() {
   if (!state.data) return;
   if (!views[state.view]) state.view="chat";
-  const preserve=state.view==='control'&&renderedView==='control';
+  const preserve=['control','activity','memory'].includes(state.view)&&renderedView===state.view;
   const pagePosition=preserve?{x:window.scrollX,y:window.scrollY}:null;
   const scrollPositions=new Map(preserve?Array.from(document.querySelectorAll('[data-control-scroll]'),node=>[
     node.dataset.controlScroll,{top:node.scrollTop,left:node.scrollLeft}]):[]);
   const provider=state.data.provider;
-  const bodies={control:controlView,chat:chatView,memory:memoryView,history:historyView,analytics:analyticsView,telegram:telegramView,settings:settingsView};
+  const bodies={control:controlView,activity:activityView,chat:chatView,memory:memoryView,history:historyView,analytics:analyticsView,telegram:telegramView,settings:settingsView};
   $("#app").innerHTML='<div class="shell">'+sidebar()+'<main class="main"><header class="topbar"><div class="breadcrumb"><span>Рабочее пространство</span><span>/</span><strong>Саруман</strong></div><div class="top-actions"><span class="pill"><span class="dot '+
     (chatReady()?'online':'')+'"></span>'+e(providerNames[chatProfile().provider])+' / '+e(chatProfile().model)+
     '</span>'+(state.view==='settings'?'':button(views.settings,'models-settings'))+
     '</div></header>'+heading()+runtimeControls()+bodies[state.view]()+'<footer class="page-foot"><span>ISENGARD LAB · Реальные файлы, наблюдаемые данные</span><span>Память: Markdown · История: SQLite · Модели: по задачам</span></footer></main></div>';
   renderedView=state.view;
+  if(state.view==='memory')document.querySelectorAll('.note-preview').forEach((node,i)=>node.dataset.controlScroll='memory-'+state.memoryView+'-'+i);
   for(const node of document.querySelectorAll('[data-control-scroll]')){
     const position=scrollPositions.get(node.dataset.controlScroll);
     if(position){node.scrollTop=position.top;node.scrollLeft=position.left;}
@@ -491,6 +517,11 @@ document.addEventListener("change",async(event)=>{
   } catch(error){toast(error.message);}
 });
 document.addEventListener("submit",(event)=>{
+  if(event.target.id==='activity-filter'){
+    event.preventDefault();state.activityActor=$('#activity-actor').value;
+    state.activityTrace=$('#activity-trace').value.trim();state.activityStatus=$('#activity-status').value.trim();
+    refreshActivity().then(render).catch(error=>toast(error.message));return;
+  }
   if(event.target.id==='game-settings'){
     event.preventDefault();
     try{
@@ -539,6 +570,7 @@ document.addEventListener("click",async(event)=>{
   const target=event.target.closest("button,[data-node]");
   if(!target)return;
   try {
+    if(target.dataset.activityTrace){state.activityTrace=target.dataset.activityTrace;await refreshActivity();render();return;}
     if(target.dataset.tgAction){await api('/api/telegram/action',{id:target.dataset.tgId,action:target.dataset.tgAction});await refreshTelegram();render();return;}
     if(target.dataset.view){location.hash=target.dataset.view;return;}
     if(target.dataset.memoryView){state.memoryView=target.dataset.memoryView;render();if(state.memoryView==="database")await database();return;}
@@ -552,6 +584,11 @@ document.addEventListener("click",async(event)=>{
       $("#message-input").focus();return;
     }
     const action=target.dataset.action;
+    if(action==='activity-older'){await refreshActivity(true);render();return;}
+    if(action?.startsWith('activity-log')){
+      const offset=action==='activity-log-before'?Math.max(0,(state.rawLog?.offset||0)-49152):action==='activity-log-after'?state.rawLog?.next_offset:null;
+      state.rawLog=await api('/api/activity/log'+(offset==null?'':'?offset='+offset));render();return;
+    }
     if(action==='game-connect'){
       await api('/api/admin',{text:'Войти в настроенный мир',operation:'connect',request_id:crypto.randomUUID()});
       state.admin=await api('/api/admin');await refresh();render();return;
@@ -575,7 +612,7 @@ document.addEventListener("click",async(event)=>{
     if(action==='tg-check'){const r=await api('/api/telegram/check',{});await refreshTelegram();render();toast(r.can_post?'Бот имеет право публикации.':r.error||'Проверьте подключение и права.');return;}
     if(action==='tg-prev'||action==='tg-next'){state.telegramPage=Math.max(0,state.telegramPage+(action==='tg-next'?1:-1));await refreshTelegram();render();return;}
     if(action==="new-session"){if(state.busy)return;await loadSession(null);state.draft="";render();}
-    if(action==="refresh"){await refresh();render();if(state.memoryView==="database"&&state.view==="memory")await database();toast("Данные обновлены.");}
+    if(action==="refresh"){await refresh();if(state.view==='activity')await refreshActivity();render();if(state.memoryView==="database"&&state.view==="memory")await database();toast("Данные обновлены.");}
     if(action==="connect"){
       if(state.connecting)return;
       state.connecting=true;render();
@@ -594,9 +631,9 @@ document.addEventListener("click",async(event)=>{
     }
   } catch(error){toast(error.message);}
 });
-window.addEventListener("hashchange",async()=>{state.view=location.hash.slice(1);render();try{if(state.view==='telegram')await refreshTelegram();if(state.view==='control')state.admin=await api('/api/admin');render();}catch(error){toast(error.message);}});
+window.addEventListener("hashchange",async()=>{state.view=location.hash.slice(1);render();try{if(state.view==='activity')await refreshActivity();if(state.view==='memory')await refresh();if(state.view==='telegram')await refreshTelegram();if(state.view==='control')state.admin=await api('/api/admin');render();}catch(error){toast(error.message);}});
 (async()=>{
-  try{await refresh();if(state.data.sessions.length)await loadSession(state.data.sessions[0].id);if(state.view==='telegram')await refreshTelegram();if(state.view==='control')state.admin=await api('/api/admin');render();}
+  try{await refresh();if(state.data.sessions.length)await loadSession(state.data.sessions[0].id);if(state.view==='activity')await refreshActivity();if(state.view==='telegram')await refreshTelegram();if(state.view==='control')state.admin=await api('/api/admin');render();}
   catch(error){$("#app").innerHTML='<div class="boot"><strong>Лаборатория недоступна</strong><p>'+e(error.message)+'</p><p>Запустите сервер и обновите страницу.</p></div>';}
 })();
 setInterval(async()=>{
@@ -610,6 +647,7 @@ setInterval(async()=>{
   catch(error){/* Preserve the last confirmed workflow state during reconnect. */}
 },3000);
 document.addEventListener('change',event=>{
+  if(event.target.id==='activity-follow')state.activityFollow=event.target.checked;
   if(event.target.id==='runtime-minecraft')state.minecraftChoice=event.target.checked;
   if(event.target.id==='runtime-filter')state.filterChoice=event.target.checked;
 });
@@ -624,3 +662,24 @@ setInterval(async()=>{
     if(controls&&!controls.contains(document.activeElement))controls.outerHTML=runtimeControls();
   }catch(error){/* Keep the last confirmed state; the refresh action reports connection errors. */}
 },3000);
+
+document.addEventListener('toggle',async event=>{
+  const item=event.target;if(!item.matches?.('[data-activity-event]'))return;
+  const id=item.dataset.activityEvent;
+  if(!item.open){state.activityOpen.delete(id);return;}
+  state.activityOpen.add(id);
+  if(state.activityDetails[id])return;
+  try{
+    state.activityDetails[id]=await api('/api/activity/event?id='+id);
+    if(state.view==='activity'&&state.activityOpen.has(id))render();
+  }catch(error){toast(error.message);}
+},true);
+setInterval(async()=>{
+  if(state.view!=='activity'||!state.activityFollow||!state.data||document.activeElement.closest('form')||String(window.getSelection()).trim())return;
+  try{await refreshActivity();render();}catch(error){/* Retain the last confirmed journal page. */}
+},3000);
+setInterval(async()=>{
+  if(state.view!=='memory'||!state.data||document.activeElement.closest('form')||String(window.getSelection()).trim())return;
+  try{const previous=JSON.stringify(state.data.memory);await refresh();if(previous!==JSON.stringify(state.data.memory))render();}
+  catch(error){/* Keep the last confirmed memory graph during reconnect. */}
+},5000);

@@ -189,6 +189,7 @@ class CharacterRuntime:
         self.connection = GameConnection(project,store,clock)
         self.replies = None
         self.workflows = None
+        self.observer = None
 
     def publish(self):
         self.store.set_meta("character_runtime", {"active": self.active, "updated": self.clock(),
@@ -291,6 +292,7 @@ class CharacterRuntime:
 
     def close(self):
         self.stop()
+        if self.observer:self.observer.close()
         if self.workflows:self.workflows.close()
         if self.owner.file:
             self.game.shutdown()

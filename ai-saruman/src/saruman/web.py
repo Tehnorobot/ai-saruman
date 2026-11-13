@@ -22,6 +22,7 @@ from .telegram import Director, Store as TelegramStore, POST_PROMPT, POST_SCHEMA
 from .runtime import CharacterRuntime
 from .admin import Admin, SCHEMA as ADMIN_SCHEMA, PROMPT as ADMIN_PROMPT
 from .workflows import Workflows
+from .game_activity import GameActivity, ActivityStore
 
 MAX_BODY = 64 * 1024
 
@@ -34,6 +35,8 @@ class Application:
         self.codex = provider or CodexProvider()
         self.provider = provider or LabRoleProvider(self.models, self.codex)
         self.custom_provider = provider is not None
+        self.activity = ActivityStore(project)
+        self.models.activity = self.activity
         self.provider_status = {"connected": False, "models": [], "limits": None,
                                 "note": "Нажми «Подключить Codex», чтобы проверить аккаунт и лимиты."}
         self.token = secrets.token_urlsafe(32)
@@ -50,21 +53,29 @@ class Application:
         caption_provider=LabRoleProvider(self.models,self.codex,role='telegram',schema={
             'type':'object','additionalProperties':False,'required':['text'],'properties':{'text':{'type':'string'}}})
         def caption(payload):
+            payload=dict(payload);parent_id=payload.pop('_lab_trace',None)
             prompt=(self.workplace.read('PERSONA.md')+'\nWrite one concise Russian diary post. '
                     'Use only confirmed_game_results as evidence of game achievements. A topic is not evidence. '
                     'Do not reveal private orders, coordinates, player names or technical IDs. '
                     'A screenshot is a current Minecraft frame, not proof that a requested action succeeded. '
                     'Never invent actions. Respect caption_limit in UTF-16 units. Return only {"text":"..."}.')
             return caption_provider.complete(prompt,json.dumps(payload,ensure_ascii=False),'',
-                {'session_id':'telegram:workflow:'+role_session})
+                {'session_id':'telegram:workflow:'+role_session,'parent_id':parent_id})
         self.runtime.workflows=Workflows(project,telegram_store,self.runtime,caption)
         reply_provider=LabRoleProvider(self.models,self.codex,role="telegram_reply",schema=REPLY_SCHEMA)
         self.replies=Conversations(telegram_store,lambda payload:reply_provider.complete(
             self.workplace.read("PERSONA.md")+REPLY_PROMPT,json.dumps(payload,ensure_ascii=False),"",{"session_id":"telegram:reply:"+role_session}),self.telegram)
         self.runtime.replies=self.replies
         admin_provider=LabRoleProvider(self.models,self.codex,role="admin",schema=ADMIN_SCHEMA)
-        self.admin=Admin(telegram_store,self.runtime,lambda payload:admin_provider.complete(
-            ADMIN_PROMPT,json.dumps(payload,ensure_ascii=False),"",{"session_id":"admin:private:"+role_session}))
+        def interpret(payload):
+            payload=dict(payload);parent_id=payload.pop('_lab_trace',None)
+            return admin_provider.complete(ADMIN_PROMPT,json.dumps(payload,ensure_ascii=False),'',
+                {'session_id':'admin:private:'+role_session,'parent_id':parent_id})
+        self.admin=Admin(telegram_store,self.runtime,interpret)
+        self.game_activity = GameActivity(project, self.runtime, telegram_store, self.models.store.path, self.activity,
+                                          memory_lock=self.workplace.lock)
+        self.runtime.observer = self.game_activity
+        self.game_activity.start()
 
     def overview(self):
         return {"csrf_token": self.token, "memory": self.workplace.snapshot(),
@@ -158,6 +169,13 @@ class Handler(BaseHTTPRequestHandler):
             params = parse_qs(parsed.query)
             if parsed.path == "/api/overview":
                 return self.respond(self.app.overview())
+            if parsed.path == '/api/activity':
+                return self.respond(self.app.activity.page(before=params.get('before',[None])[0],
+                    trace=params.get('trace',[''])[0],actor=params.get('actor',[''])[0],status=params.get('status',[''])[0]))
+            if parsed.path == '/api/activity/event':
+                return self.respond(self.app.activity.event(params.get('id',['0'])[0]))
+            if parsed.path == '/api/activity/log':
+                return self.respond(self.app.game_activity.raw_log(params.get('offset',[None])[0]))
             if parsed.path.startswith('/api/media/'):
                 digest=parsed.path.removeprefix('/api/media/')
                 try:
