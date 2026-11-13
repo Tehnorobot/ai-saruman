@@ -1,5 +1,41 @@
 # Progress
 
+## 2026-11-12: Restore TreeGrow acquisition after native defense
+
+### Investigate
+- Compared failed Lab workflows with the installed TreeGrow source/JAR and the
+  Minecraft log. At 18:08:19, 18:09:10 and 18:12:42 the scheduler interrupted
+  sapling acquisition; resuming the same root then reported missing saplings
+  immediately. Direct /treegrow start constructs a fresh acquisition object.
+- GrowTreeTask checks acquisition.stopped() before returning that child for its
+  next tick. The shim cleared the root's terminal outcome, leaving its stopped
+  acquisition behind. The same lifecycle defect affected sapling reacquisition
+  after abandoning a planted site. UnionClef Task.reset bytecode clears only
+  first/active/stopped; it does not recreate the task or its resource budget.
+
+### Plan
+- Rearm only the owned acquisition through its public Task.reset lifecycle,
+  inside the existing eligible-resume/reacquisition gates. Retain task identity,
+  origin, search, elapsed acquisition/run time, planting progress and GrowthBudget.
+- Surface the actual failed-goal reason in the Lab chain instead of replacing it
+  with a generic unresolved message. Preserve success-only publication ordering.
+
+### Implement
+- Added the lifecycle fix to ModGateway, with no JAR or specification changes.
+  Cached resume receipts cannot reset the child twice. Manual cancellation,
+  expired runs, actual acquisition failure and changed worlds remain ineligible.
+- Strengthened the old Java contract fixture to model stopped child acquisition
+  and added it to automated tests. It failed before the fix and passes after it;
+  both supported API contract variants pass. Updated stale world/command doubles.
+- Validation: 2 Java-contract, 57 native-runtime, 6 preflight, 21 workflow,
+  28 admin/connection and 14 activity checks passed. Exact installed JAR fields
+  and public Task.reset lifecycle were checked; new adapter cache is compiled.
+  Live gateway validation could not run: Minecraft's port 25333 was closed.
+  No real planting, world edits or Telegram publication was triggered.
+- Installation: native worker loads the new source-hashed adapter on next Start.
+  Paused API restarted and healthy; old failed chains are not replayed. Runtime
+  remains inactive, with the owner's filter choice unchanged.
+
 ## 2026-11-12: End-to-end game activity, player memory and Telegram requests
 
 ### Investigate

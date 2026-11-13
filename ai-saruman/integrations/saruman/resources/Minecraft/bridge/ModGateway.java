@@ -99,6 +99,15 @@ public final class ModGateway implements Supplier<Map<String,Object>> {
             && String.valueOf(call(owned,"result")).startsWith("Отменено: задача UnionClef прервана")
             && !String.valueOf(call(owned,"interruption")).isBlank();
     }
+    private static void rearmAcquisition() throws Exception {
+        Object acquisition=field(owned,"acquisition");
+        // GrowTreeTask reads child.stopped() BEFORE returning that child for its
+        // next tick. Task.stop() sets stopped=true even for scheduler preemption;
+        // leaving it set would report an exhausted search before it can resume.
+        // Public Task.reset() restores only first/active/stopped. Keep the SAME
+        // acquisition, search, origin, started/acquiredAt and GrowthBudget.
+        if (Boolean.TRUE.equals(call(acquisition,"stopped"))) call(acquisition,"reset");
+    }
     @Override public Map<String,Object> get() {
         try {
             Class<?> alto=type("adris.altoclef.AltoClef");
@@ -173,6 +182,7 @@ public final class ModGateway implements Supplier<Map<String,Object>> {
                 if (!busy && owned != null && call(chain,"getCurrentTask") == owned
                     && !Boolean.TRUE.equals(call(owned,"isFinished")) && call(owned,"site") == null
                     && field(owned,"species") != null && Integer.valueOf(0).equals(call(owned,"count",call(owned,"sapling")))) {
+                    rearmAcquisition();
                     put(owned,"species",null); put(owned,"acquiring",true);
                 }
                 // UnionClef may retain a terminal root. Release only the exact
@@ -228,6 +238,7 @@ public final class ModGateway implements Supplier<Map<String,Object>> {
                 receipt=result("started",null); receipt.put("run_id",run);
             } else if ("tree_resume".equals(op)) {
                 if (!run.equals(args.get("run_id")) || !resumableTree()) return result("rejected","resume_unsupported");
+                if (field(owned,"species")==null) rearmAcquisition();
                 // Same task, original site/search/budget/start time; never a new tree or allowance.
                 put(owned,"terminal",false); put(owned,"success",false); put(owned,"result","");
                 put(owned,"outcome","running"); put(owned,"interruption","");

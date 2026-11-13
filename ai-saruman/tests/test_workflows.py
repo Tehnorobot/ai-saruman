@@ -75,6 +75,16 @@ class WorkflowTests(unittest.TestCase):
         for _ in range(4):self.flow.step()
         self.assertEqual(self.flow.get('command')['status'],'failed')
         self.assertIn('no sapling',str(self.flow.get('command')))
+        self.assertIn('no sapling',self.flow.get('command')['detail'])
+        self.capture.assert_not_called();self.writer.assert_not_called()
+
+    def test_exact_failed_goal_reason_reaches_the_chain_summary(self):
+        value=self.chain();identifier=value['steps'][0]['id']
+        self.results['results/'+identifier+'.json']={'command_id':identifier,'status':'unresolved','request_state':'finished',
+            'facts':{'goals':[{'state':'completed','reason':'unrelated earlier success'},
+                              {'state':'failed','reason':'native acquisition timed out'}]}}
+        self.flow.step()
+        self.assertEqual(self.flow.get('command')['detail'],'native acquisition timed out')
         self.capture.assert_not_called();self.writer.assert_not_called()
 
     def test_stop_and_reconstruction_keep_checkpoints_without_repeating_completed_actions(self):

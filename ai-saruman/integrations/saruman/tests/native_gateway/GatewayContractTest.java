@@ -38,11 +38,14 @@ public final class GatewayContractTest {
         Object original=TreeGrowClient.current();
         require(invoke("tree_resume",Map.of("world",world,"run_id","a","request_id","resume-a")).get("status").equals("resumed"),"resume");
         require(TreeGrowClient.current()==original && TreeGrowClient.current().boneUses()==7,"same task and budget");
+        require(!TreeGrowClient.current().firstTickWouldReportNoSapling(),"stopped acquisition mistaken for search failure on resume");
+        require(TreeGrowClient.current().acquisitionResets()==2,"acquisition lifecycle reset once per transition");
         require(TreeGrowClient.current().outcome().equals("running") && TreeGrowClient.current().interruption().isEmpty(),"new status fields reset on resume");
         Map<?,?> resumedTree=(Map<?,?>)invoke("snapshot",Map.of()).get("tree");
         require(resumedTree.get("sites").equals(2) && resumedTree.get("giveSends").equals(1),"new counters preserved");
         invoke("tree_resume",Map.of("world",world,"run_id","a","request_id","resume-a"));
         require(TreeGrowClient.starts==1,"resume receipt does not create new tree");
+        require(TreeGrowClient.current().acquisitionResets()==2,"cached resume must not reset acquisition again");
         TreeGrowClient.current().ended("Отменено пользователем", "cancelled");
         require(invoke("tree_resume",Map.of("world",world,"run_id","a","request_id","manual-retry")).get("reason").equals("resume_unsupported"),"manual cancellation cannot resume");
         TreeGrowClient.current().interrupted(); TreeGrowClient.current().expired=true;
@@ -65,7 +68,7 @@ public final class GatewayContractTest {
         AltoClef.getInstance().player.alive=false;
         require(invoke("command",Map.of("world",world,"request_id","dead","command","@goto 1 2 3")).get("reason").equals("player_not_alive"),"dead player guard");
         AltoClef.getInstance().player.alive=true;
-        AltoClef.getInstance().world=new Object();
+        AltoClef.getInstance().world=new AltoClef.World();
         snapshot=invoke("snapshot",Map.of());
         require(!world.equals(snapshot.get("world")),"world generation");
         require(((Map<?,?>)snapshot.get("tree")).get("run_id").equals(""),"no stale tree");

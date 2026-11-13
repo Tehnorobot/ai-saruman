@@ -3,7 +3,7 @@ package adris.altoclef;
 public final class AltoClef {
     private static final AltoClef INSTANCE=new AltoClef();
     public static AltoClef getInstance() { return INSTANCE; }
-    public Object world=new Object();
+    public Object world=new World();
     public final Chain chain=new Chain();
     public final Commands commands=new Commands();
     public final Player player=new Player();
@@ -26,12 +26,19 @@ public final class AltoClef {
         public String last;
         public void execute(String line) {
             if (!line.startsWith("@")) return;
-            sent++; last=line; AltoClef.getInstance().chain.setTask(new Object());
+            sent++; last=line; AltoClef.getInstance().chain.setTask(new CommandTask());
         }
         public void executeWithPrefix(String line) { execute(line.startsWith("@")?line:"@"+line); }
+    }
+    public static final class CommandTask {
+        public boolean isFinished() { return false; }
+        public boolean stopped() { return false; }
     }
     public static final class Player {
         public boolean alive=true;
         public boolean method_5805() { return alive; }
+    }
+    public static final class World {
+        public java.util.List<Player> method_18456() { return java.util.List.of(INSTANCE.player); }
     }
 }

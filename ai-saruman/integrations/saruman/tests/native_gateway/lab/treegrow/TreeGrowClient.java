@@ -14,6 +14,7 @@ public final class TreeGrowClient {
         private String result="", outcome="running", interruption="";
         public boolean expired;
         private Object species=new Object();
+        private final Acquisition acquisition=new Acquisition();
         public boolean isFinished() { return terminal; }
         public boolean success() { return success; }
         public boolean planted() { return true; }
@@ -24,7 +25,9 @@ public final class TreeGrowClient {
         public Object site() { return null; }
         private Object sapling() { return "sapling"; }
         private int count(Object item) { return 0; }
-        public boolean acquisitionRearmed() { return species==null && acquiring; }
+        public boolean acquisitionRearmed() { return species==null && acquiring && !acquisition.stopped(); }
+        public int acquisitionResets() { return acquisition.resets; }
+        public boolean firstTickWouldReportNoSapling() { return species==null && acquisition.stopped(); }
         public String outcome() { return outcome; }
         public String reason() { return terminal ? result : ""; }
         public String interruption() { return interruption; }
@@ -33,6 +36,13 @@ public final class TreeGrowClient {
         public int giveSends() { return 1; }
         public long remainingNanos() { return 100; }
         public void ended(String reason, String state) { terminal=true; result=reason; outcome=state; }
-        public void interrupted() { ended("Отменено: задача UnionClef прервана (scheduler)","cancelled"); interruption="scheduler"; }
+        public void interrupted() { ended("Отменено: задача UnionClef прервана (scheduler)","cancelled"); interruption="scheduler"; acquisition.stopped=true; }
+    }
+    /** Task.stop leaves first=true and stopped=true; reset clears only its lifecycle. */
+    public static final class Acquisition {
+        private boolean stopped=true;
+        private int resets;
+        public boolean stopped() { return stopped; }
+        public void reset() { stopped=false; resets++; }
     }
 }

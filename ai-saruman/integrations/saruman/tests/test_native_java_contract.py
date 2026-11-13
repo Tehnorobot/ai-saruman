@@ -158,6 +158,20 @@ public class Harness {
 
 
 class JavaContractTests(unittest.TestCase):
+    @unittest.skipUnless(shutil.which('javac') and shutil.which('java'), 'JDK required')
+    def test_resume_and_sapling_reacquisition_keep_task_and_budget(self):
+        with tempfile.TemporaryDirectory(prefix='saruman-tree-resume-') as directory:
+            folder=Path(directory)
+            sources=[str(ROOT/'resources/Minecraft/bridge/ModGateway.java')]
+            sources.extend(str(p) for p in (ROOT/'tests/native_gateway').rglob('*.java'))
+            built=subprocess.run([shutil.which('javac'),'--release','21','-encoding','UTF-8','-d',str(folder),*sources],
+                capture_output=True,text=True,encoding='utf-8',timeout=40)
+            self.assertEqual(built.returncode,0,built.stderr)
+            result=subprocess.run([shutil.which('java'),'-cp',str(folder),'GatewayContractTest'],
+                capture_output=True,text=True,encoding='utf-8',timeout=15)
+            self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+            self.assertIn('PASS',result.stdout)
+
     @unittest.skipUnless(shutil.which("javac") and shutil.which("java"), "JDK required")
     def test_real_shim_against_both_isolated_contracts(self):
         for modern in (True, False):

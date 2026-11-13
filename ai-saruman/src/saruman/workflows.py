@@ -142,8 +142,13 @@ class Workflows:
                 return False,{'status':'waiting_game','detail':'Ожидание результата игрового агента'}
             if result.get('status')=='completed' and not result.get('facts'):
                 return False,{'status':'unresolved','reason':'Игровой агент не приложил данные результата'}
-            if result.get('request_state') in {'finished','error','superseded','cancelled'} and result.get('status')!='completed':
-                return False,{**result,'status':'unresolved','reason':'Игровое поручение завершено без подтверждения успеха'}
+            if result.get('status')!='completed':
+                facts=result.get('facts',{})
+                failed=[g.get('reason') for g in facts.get('goals',[]) if g.get('state') in {'failed','cancelled','uncertain'} and g.get('reason')]
+                reason=result.get('reason') or '; '.join(failed) or facts.get('reason') or facts.get('detail')
+                if reason:result={**result,'reason':reason}
+                if result.get('request_state') in {'finished','error','superseded','cancelled'}:
+                    return False,{**result,'status':'unresolved','reason':reason or 'Игровое поручение завершено без подтверждения успеха'}
             return result.get('status')=='completed',result
         if op=='screenshot':
             if value.get('world_session'):
