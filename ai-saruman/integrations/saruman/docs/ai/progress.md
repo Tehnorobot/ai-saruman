@@ -1,5 +1,39 @@
 # Progress
 
+## 2026-11-13: Keep the tree workflow pending during native scheduler recovery
+
+### Investigate
+- Latest private workflow c2dba6de entered test_3 and started TreeGrow. Native
+  Unstuck Chain (priority 55) interrupted the user task (50). Auto Defense was
+  not the interrupter; the saw_defense prerequisite marked this scheduler
+  cancellation as failure. The later photo/publication steps correctly stayed pending.
+- Native live read confirms scheduler interruptions with zero planted trees and
+  remaining native budget. Idle Mob Defense may be selected with priority zero;
+  treating every active foreign chain as busy would deadlock resumption.
+
+### Plan
+- Use native resumability plus actual scheduler selection/priority, without
+  naming special-case recovery chains. Wait for higher-priority ownership and
+  resume the exact same run after release; preserve budgets and cancellation.
+
+### Implement
+- Java snapshot exposes scheduler ownership/priority and native resumable state.
+  Read cached scheduler priorities rather than invoking foreign getPriority,
+  which can itself run survival/stuck detection. Low-priority idle chains do not
+  block; unknown active ownership waits for a confirmed selection. Java also
+  guards mutations against priority changes after Python's snapshot.
+- Controller accepts scheduler interruptions without a saw_defense prerequisite,
+  retains the goal as interrupted, and logs the actual control owner. No new
+  tree, refreshed budget, blind command replay or success claim is introduced.
+- Tests cover Unstuck release, unobserved Auto Defense, manual/expired/denied
+  resume, low/unknown priority, stable task identity, receipt and budget. One
+  older generic-failure fixture was corrected to use an actual failed outcome;
+  its no-new-start/no-resume/no-growth assertions are preserved.
+- Validation: 108 checks passed: 62 native-runtime, 6 preflight, 16 bridge,
+  2 Java and 22 workflow checks. New Java contract also passed a read-only
+  snapshot in the actual Minecraft JVM; no movement/cancel/plant/publication was invoked.
+- Installation requires a native worker restart; current character remains active.
+
 ## 2026-11-13: One public reply in chat and speech, without truncation
 
 ### Investigate

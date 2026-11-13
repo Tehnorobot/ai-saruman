@@ -89,7 +89,27 @@ public final class ModGateway implements Supplier<Map<String,Object>> {
         for (String name : List.of("isFinished","success","result","planted","boneUses","plantSends","expired","outcome","reason","interruption","sites","uses","giveSends","remainingNanos")) r.put(name,call(owned,name));
         r.put("stage",owned.toString());
         Object p=call(owned,"site"); r.put("site",p==null?null:p.toString());
+        r.put("resumable",resumableTree());
         return r;
+    }
+    private Map<String,Object> scheduler(Object mod,Object userChain) throws Exception {
+        Object runner=call(mod,"getTaskRunner");
+        Object selected=call(runner,"getCurrentTaskChain");
+        String name=selected==null?"":String.valueOf(call(selected,"getName"));
+        // Use the runner's last selection, not getPriority() on foreign chains:
+        // priority evaluation itself can run stuck detection or survival logic.
+        Map<?,?> priorities=(Map<?,?>)field(runner,"lastPriority");
+        Object cached=priorities.get(name);
+        double threshold=((Number)call(userChain,"getPriority")).doubleValue();
+        Double priority=cached instanceof Number n?n.doubleValue():null;
+        boolean foreignActive=selected!=null && selected!=userChain
+            && Boolean.TRUE.equals(call(runner,"isActive")) && Boolean.TRUE.equals(call(selected,"isActive"));
+        boolean blocked=foreignActive && (priority==null || Double.isNaN(priority) || priority>threshold);
+        Map<String,Object> value=new LinkedHashMap<>();
+        value.put("busy",blocked);value.put("owner",name);
+        value.put("priority",priority==null?null:Double.isFinite(priority)?priority:priority.toString());
+        value.put("user_priority",Double.isFinite(threshold)?threshold:Double.toString(threshold));
+        return value;
     }
     // Only scheduler cancellation is resumable. Manual stop/death/world/limits are not.
     private boolean resumableTree() throws Exception {
@@ -126,6 +146,8 @@ public final class ModGateway implements Supplier<Map<String,Object>> {
                 : !Set.of("IDLE","OFF").contains(String.valueOf(call(handover,"state")));
             Object chain=call(mod,"getUserTaskChain");
             boolean nativeBusy=Boolean.TRUE.equals(call(chain,"isActive"));
+            Map<String,Object> scheduler=scheduler(mod,chain);
+            boolean schedulerBusy=Boolean.TRUE.equals(scheduler.get("busy"));
             boolean enabled=Boolean.TRUE.equals(call(runtime,addonApi?"isEnabled":"enabled"));
             boolean manualStop=addonApi?Boolean.TRUE.equals(call(runtime,"manualStop")):Boolean.TRUE.equals(field(field(runtime,"bridge"),"cancelledSinceCapture"));
             if (!manualStop) stopAcknowledged=false;
@@ -145,6 +167,8 @@ public final class ModGateway implements Supplier<Map<String,Object>> {
                 r.put("defense_api",addonApi?"addon-0.1":"legacy-1.0");
                 r.put("defense_busy",busy); r.put("defense_enabled",enabled);
                 r.put("native_busy",nativeBusy); r.put("tree",tree());
+                r.put("scheduler_busy",schedulerBusy);r.put("scheduler_owner",scheduler.get("owner"));
+                r.put("scheduler",scheduler);
                 r.put("manual_stop",manualStop && !stopAcknowledged);
                 r.put("manual_stop_latched",addonApi && manualStop);
                 r.put("stop_kind",manualStop ? addonApi && "RESET".equals(String.valueOf(call(runtime,"action"))) ? "reset" : "manual" : "none");
@@ -179,7 +203,7 @@ public final class ModGateway implements Supplier<Map<String,Object>> {
                 // Pinned TreeGrow 0.1.0 forgets to reacquire a consumed sapling after
                 // abandoning a site. Re-enter its OWN acquisition branch, retaining
                 // search position, deadline and GrowthBudget. No Python planting AI.
-                if (!busy && owned != null && call(chain,"getCurrentTask") == owned
+                if (!busy && !schedulerBusy && owned != null && call(chain,"getCurrentTask") == owned
                     && !Boolean.TRUE.equals(call(owned,"isFinished")) && call(owned,"site") == null
                     && field(owned,"species") != null && Integer.valueOf(0).equals(call(owned,"count",call(owned,"sapling")))) {
                     rearmAcquisition();
@@ -196,6 +220,7 @@ public final class ModGateway implements Supplier<Map<String,Object>> {
                 return result("applied",null);
             }
             if (busy) return result("busy","native_defense");
+            if (schedulerBusy) return result("busy","native_scheduler");
             if ("cancel".equals(op)) {
                 if (owned != null && run.equals(args.get("run_id"))) {
                     // TreeGrowClient.cancel also disables the global runner.

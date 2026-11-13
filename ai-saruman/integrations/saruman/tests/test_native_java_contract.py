@@ -11,12 +11,13 @@ ALTO = r'''
 package adris.altoclef;
 public class AltoClef {
  public static final AltoClef INSTANCE=new AltoClef();
- public final World world=new World(); public final Player player=new Player();public final Chain chain=new Chain(); public final Executor executor=new Executor();public boolean runnerEnabled=true;
+ public final World world=new World(); public final Player player=new Player();public final Chain chain=new Chain(); public final Runner runner=new Runner(); public final Executor executor=new Executor();public boolean runnerEnabled=true;
  public static AltoClef getInstance(){return INSTANCE;} public Object getWorld(){return world;}
- public Chain getUserTaskChain(){return chain;} public Executor getCommandExecutor(){return executor;}
+ public Chain getUserTaskChain(){return chain;} public Runner getTaskRunner(){return runner;} public Executor getCommandExecutor(){return executor;}
  public Player getPlayer(){return player;} public boolean isPaused(){return false;}
  public void runUserTask(Object task){chain.setTask(task);} public void cancelUserTask(){runnerEnabled=false;chain.setTask(null);}
- public static class Chain { public Object task; public boolean isActive(){return task!=null;} public Object getCurrentTask(){return task;} public void setTask(Object t){task=t;} }
+ public static class Chain { public Object task; public boolean isActive(){return task!=null;} public Object getCurrentTask(){return task;} public void setTask(Object t){task=t;} public String getName(){return "UserTaskChain";} public float getPriority(){return 50;} }
+ public static class Runner {private final java.util.Map<String,Float> lastPriority=java.util.Map.of();public Chain getCurrentTaskChain(){return INSTANCE.chain;}public boolean isActive(){return true;} }
  public static class World {public java.util.List<Player> method_18456(){return java.util.List.of(INSTANCE.player,new Player("Alex",true),new Player("Steve",false));}}
  public static class Task {public boolean done,stopped;public boolean isFinished(){return done;}public boolean stopped(){return stopped;}}
  public static class Executor {public int calls; public void executeWithPrefix(String command){calls++; INSTANCE.chain.setTask(new Task());}}

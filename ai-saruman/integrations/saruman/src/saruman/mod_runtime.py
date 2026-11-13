@@ -169,7 +169,7 @@ class AutomationRuntime:
                 "status": "paused" if manual_paused else "running" if enabled else "stopped",
                 "activity": self.activity,
             }
-            control = {key:snapshot.get(key) for key in ('world','in_world','player_alive','defense_busy','native_busy','stop_kind')}
+            control = {key:snapshot.get(key) for key in ('world','in_world','player_alive','defense_busy','native_busy','stop_kind','scheduler_busy','scheduler_owner')}
             control.update(phase=self.activity.get('phase'), reason=self.activity.get('reason'))
             if control != self.last_control:
                 emit('minecraft.control', status=self.activity.get('phase','observed'), details={'control':control,'snapshot':snapshot})
@@ -230,7 +230,10 @@ class AutomationRuntime:
         now, world = self.clock(), snapshot["world"]
         self.deliver_chat(snapshot, enabled)
         goals = [goal for goal in self.store.list(active=True) if goal["kind"] not in {"chat", "telegram"}]
-        busy = snapshot["defense_busy"]
+        defense_busy = bool(snapshot['defense_busy'])
+        scheduler_busy = bool(snapshot.get('scheduler_busy'))
+        busy = defense_busy or scheduler_busy
+        owner = 'Защита' if defense_busy else 'UnionClef: '+str(snapshot.get('scheduler_owner') or 'приоритетная задача')
         tree = snapshot.get("tree", {})
         context = player_context(game)
         replying = bool(
@@ -260,7 +263,7 @@ class AutomationRuntime:
                 and player_waiting
             ):
                 if busy:
-                    self.hold("defense", "Защита удерживает управление; поручение игрока сохранено")
+                    self.hold("defense" if defense_busy else "recovery", owner+" удерживает управление; поручение игрока сохранено")
                     continue
                 if goal["run_id"]:
                     response = self.call("cancel" if goal["kind"] == "trees" else "stop_command", snapshot,
@@ -298,8 +301,9 @@ class AutomationRuntime:
                 if snapshot.get("player_alive", game.get("alive")) is not True:
                     return
                 if busy:
-                    self.store.update(goal, state="interrupted", saw_defense=True)
-                    self.hold("defense", "Занятие прервано защитой")
+                    self.store.update(goal, state="interrupted", saw_defense=bool(goal.get('saw_defense') or defense_busy),
+                                      interrupted_by=owner)
+                    self.hold("defense" if defense_busy else "recovery", owner+" удерживает управление; текущая попытка сохранена")
                     continue
                 if goal["kind"] == "trees":
                     if tree.get("run_id") != goal["run_id"]:
@@ -351,13 +355,13 @@ class AutomationRuntime:
                                 reason=tree.get("result"),
                             )
                         elif (
-                            goal.get("saw_defense")
-                            and not tree.get("expired")
+                            not tree.get("expired")
                             and tree.get("outcome") == "cancelled"
                             and bool(tree.get("interruption"))
                             and str(tree.get("result", "")).startswith(
                                 "Отменено: задача UnionClef прервана"
                             )
+                            and tree.get('resumable',True) is True
                         ):
                             resumes = goal.get("resumes", 0) + 1
                             pending = f"resume:{goal['run_id']}:{resumes}"
@@ -458,7 +462,7 @@ class AutomationRuntime:
             or not snapshot["in_world"]
             or snapshot.get("player_alive", game.get("alive")) is not True
         ):
-            self.hold("waiting", "Защита удерживает управление" if busy else "Ожидание возрождения" if snapshot.get("player_alive", game.get("alive")) is not True else "Игровые действия приостановлены")
+            self.hold("recovery" if scheduler_busy and not defense_busy else "waiting", owner+" удерживает управление" if busy else "Ожидание возрождения" if snapshot.get("player_alive", game.get("alive")) is not True else "Игровые действия приостановлены")
             return
         goals = [g for g in self.store.list(active=True) if g['kind'] not in {'chat','telegram'}]
         if any(

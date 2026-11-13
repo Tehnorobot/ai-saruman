@@ -5,11 +5,13 @@ public final class AltoClef {
     public static AltoClef getInstance() { return INSTANCE; }
     public Object world=new World();
     public final Chain chain=new Chain();
+    public final Runner runner=new Runner();
     public final Commands commands=new Commands();
     public final Player player=new Player();
     public Object getWorld() { return world; }
     public Player getPlayer() { return player; }
     public Chain getUserTaskChain() { return chain; }
+    public Runner getTaskRunner() { return runner; }
     public boolean isPaused() { return false; }
     public void runUserTask(Object task) { chain.task=task; chain.active=true; }
     public void cancelUserTask() { chain.active=false; chain.task=null; }
@@ -20,6 +22,22 @@ public final class AltoClef {
         public boolean isActive() { return active; }
         public Object getCurrentTask() { return task; }
         public void setTask(Object value) { task=value; active=value!=null; }
+        public String getName() { return "UserTaskChain"; }
+        public float getPriority() { return 50; }
+    }
+    public static final class PriorityChain {
+        public final String name;
+        public boolean active=true;
+        public PriorityChain(String name) { this.name=name; }
+        public String getName() { return name; }
+        public boolean isActive() { return active; }
+    }
+    public static final class Runner {
+        public Object current;
+        private final java.util.Map<String,Float> lastPriority=new java.util.HashMap<>();
+        public Object getCurrentTaskChain() { return current==null?INSTANCE.chain:current; }
+        public boolean isActive() { return true; }
+        public void select(PriorityChain chain,float priority) { current=chain;lastPriority.put(chain.getName(),priority); }
     }
     public static final class Commands {
         public int sent;

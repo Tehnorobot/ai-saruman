@@ -74,6 +74,44 @@ class FakeMods:
 
 
 class NativeRuntimeTests(unittest.TestCase):
+    def test_unstuck_preemption_keeps_goal_until_recovery_releases_control(self):
+        goal=self.goal();self.tick();run=self.read(goal)['run_id'];deadline=self.read(goal)['deadline']
+        self.adapter.finish(False)
+        self.adapter.snapshot.update(scheduler_busy=True,scheduler_owner='Unstuck Chain')
+        self.tick();self.assertEqual(self.read(goal)['state'],'interrupted')
+        self.assertFalse(any(op=='tree_resume' for op,_ in self.adapter.calls))
+        self.adapter.snapshot.update(scheduler_busy=False,scheduler_owner='Mob Defense')
+        self.tick()
+        self.assertEqual(self.read(goal)['state'],'running')
+        self.assertEqual(self.read(goal)['run_id'],run);self.assertEqual(self.read(goal)['deadline'],deadline)
+        self.assertEqual(sum(op=='tree_start' for op,_ in self.adapter.calls),1)
+        self.adapter.finish(True);self.tick()
+        self.assertEqual(self.read(goal)['state'],'completed');self.assertEqual(self.read(goal)['completed'],1)
+
+    def test_scheduler_interruption_does_not_require_observing_auto_defense(self):
+        goal=self.goal();self.tick();self.adapter.finish(False)
+        self.tick()
+        self.assertEqual(self.read(goal)['state'],'running')
+        self.assertEqual(sum(op=='tree_resume' for op,_ in self.adapter.calls),1)
+
+    def test_manual_cancel_with_old_interruption_detail_is_not_resumed(self):
+        goal=self.goal();self.tick();self.adapter.finish(False)
+        self.adapter.snapshot['tree']['result']='Отменено пользователем'
+        self.tick();self.assertEqual(self.read(goal)['state'],'failed')
+        self.assertFalse(any(op=='tree_resume' for op,_ in self.adapter.calls))
+
+    def test_expired_scheduler_interruption_cannot_refresh_native_budget(self):
+        goal=self.goal();self.tick();self.adapter.finish(False)
+        self.adapter.snapshot['tree']['expired']=True
+        self.tick();self.assertEqual(self.read(goal)['state'],'failed')
+        self.assertFalse(any(op=='tree_resume' for op,_ in self.adapter.calls))
+
+    def test_native_resume_denial_is_preserved_even_with_scheduler_reason(self):
+        goal=self.goal();self.tick();self.adapter.finish(False)
+        self.adapter.snapshot['tree']['resumable']=False
+        self.tick();self.assertEqual(self.read(goal)['state'],'failed')
+        self.assertFalse(any(op=='tree_resume' for op,_ in self.adapter.calls))
+
     def test_telegram_goal_does_not_take_body_or_block_tree_work(self):
         post=self.store.submit('telegram',source='player',world='world1',topic='a day',request_id='post:1')
         tree=self.goal();self.tick()
@@ -257,11 +295,13 @@ class NativeRuntimeTests(unittest.TestCase):
         goal = self.goal(count=2)
         self.tick()
         self.adapter.finish(False)
+        self.adapter.snapshot['tree'].update(outcome='failed',interruption='',result='No sapling found')
         self.tick()
         self.tick()
         self.assertEqual(self.read(goal)["state"], "failed")
         self.assertEqual(self.read(goal)["completed"], 0)
         self.assertEqual(sum(op == "tree_start" for op, _ in self.adapter.calls), 1)
+        self.assertFalse(any(op=='tree_resume' for op,_ in self.adapter.calls))
 
     def test_player_preempts_planner_and_preserves_observed_count(self):
         background = self.goal("planner", 2)

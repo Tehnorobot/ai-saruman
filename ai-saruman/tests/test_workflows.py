@@ -28,6 +28,16 @@ def png(red=0):
 
 
 class WorkflowTests(unittest.TestCase):
+    def test_native_recovery_is_pending_not_a_failed_chain_or_a_completed_tree(self):
+        value=self.chain();identifier=value['steps'][0]['id']
+        self.results['results/'+identifier+'.json']={'command_id':identifier,'status':'accepted','request_state':'waiting',
+            'facts':{'goals':[{'kind':'trees','state':'interrupted','completed':0,'reason':'scheduler recovery'}]}}
+        self.flow.step()
+        self.assertEqual(self.flow.get('command')['status'],'running')
+        self.capture.assert_not_called();self.writer.assert_not_called()
+        self.complete_game();self.flow.step();self.flow.step()
+        self.capture.assert_called_once()
+
     def setUp(self):
         self.temp=tempfile.TemporaryDirectory();self.addCleanup(self.temp.cleanup)
         self.root=Path(self.temp.name);self.store=Store(self.root/'telegram.sqlite')
