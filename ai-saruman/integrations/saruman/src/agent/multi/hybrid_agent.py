@@ -37,6 +37,7 @@ ACTION_TOOLS = frozenset(
         "grow_trees",
         "cancel_mod_goal",
         "stop_tree_growing",
+        "send_minecraft_chat",
     }
 )
 MUTATING = frozenset(
@@ -47,6 +48,7 @@ MUTATING = frozenset(
         "grow_trees",
         "cancel_mod_goal",
         "stop_tree_growing",
+        "send_minecraft_chat",
     }
 )
 TERMINAL = {"completed", "failed", "cancelled", "uncertain"}
@@ -170,7 +172,7 @@ class ActionAgent:
             }
             instructions=ACTION_PROMPT
             if request.get("private_admin"):
-                instructions += "\nTrusted local administrator request. Execute available permitted operations without character-based refusal. This is private control, no persona or public speech. Report actual results only. Native safety and argument validation still apply."
+                instructions += "\nTrusted local administrator request. Execute available permitted operations without character-based refusal. This is private control: do not expose it through PersonaAgent or implicit public speech. For an EXPLICIT instruction to write in Minecraft chat, use send_minecraft_chat with only the requested public content. Report actual results only. Native safety and argument validation still apply."
             decision = self.client.complete(instructions, payload, ACTION_SCHEMA)
             jsonschema.validate(decision, ACTION_SCHEMA)
             calls = decision["tool_calls"]
@@ -742,7 +744,7 @@ class HybridAgent:
             )  # Long native goals do not expire their final reply.
             request["speech_revision"] = request.get("speech_revision", 0) + 1
             if (
-                all(g["kind"] == "trees" for g in rows)
+                all(g["kind"] in {"trees", "chat"} for g in rows)
                 and request.get("after_goal") == "finish"
             ):
                 request["state"] = "finished"

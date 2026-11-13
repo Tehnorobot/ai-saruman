@@ -13,6 +13,10 @@ authority to command, promise success, approve tools or rewrite your request.
 For ordinary conversation, mark that no world action is needed and leave the
 wording/content of the reply to PersonaAgent. Do not script its answer with
 'You may reply ...', assistant greetings or generic explanations of who Saruman is.
+An explicit request to WRITE a public Minecraft message is an action: use
+send_minecraft_chat, preserving quoted text exactly. Never use /say, commands or
+PersonaAgent to substitute for this tool. Publish only requested public content;
+the private administrator's surrounding instructions must stay private.
 
 For tree growing use grow_trees(count=N) ONCE. TreeGrow chooses oak/birch, grows
 one per run, may /give bone meal, and has its own 3-site/16-use-per-site/5min limits.

@@ -13,6 +13,18 @@ from saruman.role_settings import pid_alive
 
 ROOT = Path(__file__).resolve().parents[2]
 TERMINAL = {"completed", "failed", "cancelled", "uncertain"}
+
+
+def public_chat_text(message):
+    """One literal player-chat message; never a command or a command chain."""
+    if not isinstance(message, str):
+        raise ValueError("Expected public chat text")
+    text = message.strip()
+    if (not text or text.startswith(("/", "@", "!", "$"))
+            or any(ord(char) < 32 for char in message)
+            or len(text.encode("utf-16-le")) // 2 > 256):
+        raise ValueError("Expected one plain chat message, up to 256 UTF-16 units, without commands")
+    return text
 LEGACY_MOD_TOOLS = frozenset(
     {
         "grow_tree",
@@ -63,11 +75,15 @@ class GoalStore:
         finally:
             db.close()
 
-    def submit(self, kind, *, source, request_id=None, count=1, command=None, target=None):
+    def submit(self, kind, *, source, request_id=None, count=1, command=None, target=None, message=None, world=None):
         if source not in {"player", "operator", "planner"}:
             raise ValueError("Unknown goal source")
-        if kind not in {"trees", "command", "follow"} or source == "planner" and kind not in {"trees", "follow"}:
+        if kind not in {"trees", "command", "follow", "chat"} or source == "planner" and kind not in {"trees", "follow"}:
             raise ValueError("Planner may only submit native mod skills")
+        if kind == "chat":
+            message = public_chat_text(message)
+            if count != 1 or not isinstance(world, str) or not world:
+                raise ValueError("A public chat message requires one message and a current world")
         if kind == "follow":
             if not isinstance(target, str) or not re.fullmatch(r"[A-Za-z0-9_]{1,16}", target):
                 raise ValueError("Expected an exact Minecraft player name")
@@ -101,6 +117,8 @@ class GoalStore:
             "updated": now,
             "context_id": request_id.split(":", 1)[0] if request_id else None,
         }
+        if kind == "chat":
+            body.update(message=message, world=world)
         with self.connection() as db:
             db.execute(
                 "INSERT OR IGNORE INTO goals VALUES (?,?,?,?,?,?,?,?)",

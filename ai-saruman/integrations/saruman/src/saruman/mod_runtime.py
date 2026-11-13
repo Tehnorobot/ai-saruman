@@ -8,7 +8,7 @@ import uuid
 
 from saruman.action_speech import ActionSpeech
 from saruman.autonomy_settings import catalog, load_weights
-from saruman.mod_goals import GoalStore, player_context
+from saruman.mod_goals import GoalStore, player_context, public_chat_text
 
 
 class AutomationRuntime:
@@ -85,7 +85,7 @@ class AutomationRuntime:
                 # Prefer another available hobby after a failure, without an
                 # extra cooldown or delaying a player's accepted request.
                 self.last_failed_activity = result["kind"]
-        if self.event_sink:
+        if self.event_sink and goal["kind"] != "chat":
             try:
                 self.event_sink(goal, result)
                 self.event_error = None
@@ -178,9 +178,51 @@ class AutomationRuntime:
                 "updated": now,
             }
 
+    def deliver_chat(self, snapshot, enabled):
+        """Deliver public text once, independently of physical control ownership."""
+        for goal in self.store.list(active=True):
+            if goal["kind"] != "chat":
+                continue
+            if goal["state"] == "cancel_requested":
+                self.change(goal, state="cancelled", reason=goal.get("reason") or "Cancelled")
+                continue
+            if goal["world"] != snapshot["world"]:
+                self.change(goal, state="uncertain", reason="World changed; message was not resent")
+                continue
+            if goal["state"] != "queued":
+                self.change(goal, state="uncertain", reason="Chat delivery was interrupted; no automatic resend")
+                continue
+            if not enabled or not snapshot["in_world"]:
+                continue
+            try:
+                text = public_chat_text(goal.get("message"))
+            except ValueError as error:
+                self.change(goal, state="failed", reason=str(error))
+                continue
+            if self.server_send is None:
+                self.change(goal, state="failed", reason="Minecraft chat transport unavailable")
+                continue
+            # Reserve before the side effect. Neither a crash nor a lost API
+            # response is permission to publish the same message a second time.
+            reserved = self.store.update(goal, state="starting", sent_at=self.clock())
+            if reserved["state"] != "starting":
+                continue
+            try:
+                if not self.store.lease(self.owner, self.clock()):
+                    self.change(reserved, state="uncertain", reason="Chat dispatcher ownership changed")
+                    continue
+                self.server_send(text)
+            except Exception as error:
+                self.change(reserved, state="uncertain", reason="Chat delivery unconfirmed: " + type(error).__name__)
+            else:
+                self.change(reserved, state="completed", completed=1,
+                    reason="Сообщение передано игровому клиенту; чтение другими игроками не проверялось",
+                    delivery="client_call_returned")
+
     def reconcile(self, game, snapshot, enabled, tools):
         now, world = self.clock(), snapshot["world"]
-        goals = self.store.list(active=True)
+        self.deliver_chat(snapshot, enabled)
+        goals = [goal for goal in self.store.list(active=True) if goal["kind"] != "chat"]
         busy = snapshot["defense_busy"]
         tree = snapshot.get("tree", {})
         context = player_context(game)

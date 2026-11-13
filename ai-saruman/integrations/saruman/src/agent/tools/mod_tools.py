@@ -1,10 +1,37 @@
 """Goal-level native mod tools. Source and deduplication belong to runtime, not LLM."""
 
 import time
+import hashlib
 
 from agent.tools import tools_config
 from saruman.autonomy_settings import load_weights, save_weights
-from saruman.mod_goals import GoalStore, player_context, using_mods
+from saruman.mod_goals import GoalStore, player_context, public_chat_text, using_mods
+
+
+def send_minecraft_chat(message: str) -> dict:
+    """Send an explicitly requested public message as the Minecraft player.
+
+    Use the exact text if the player/operator quoted it. Publish only the requested
+    public content, never private Lab instructions. This sends no voice or Telegram
+    post. Acceptance queues delivery; inspect the goal result for the actual outcome.
+
+    Args:
+        message: One literal public chat message, not a slash or UnionClef command.
+    """
+    game = tools_config.ctx_swarm.get("game", {})
+    context = player_context(game)
+    native = game.get("mod_runtime", {})
+    if (not using_mods(game) or context.get("replying") is not True or context.get("until", 0) < time.time()
+            or not context.get("id") or not native.get("in_world") or not native.get("world")):
+        return {"status": "rejected", "reason": "Requires current player/operator request and an open Minecraft world"}
+    try:
+        text = public_chat_text(message)
+    except ValueError as error:
+        return {"status": "rejected", "reason": str(error)}
+    digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
+    goal = GoalStore().submit("chat", source=context.get("source", "player"),
+        message=text, world=native["world"], request_id=f"{context['id']}:chat:{digest}")
+    return {"status": "accepted", "goal": goal, "executor": "Minecraft chat"}
 
 
 def grow_trees(count: int = 1) -> dict:

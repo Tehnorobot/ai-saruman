@@ -857,6 +857,41 @@ class HybridTests(Fixtures):
         self.assertEqual(saved["state"], "finished")
         self.clients["action"].complete.assert_called_once()
 
+    def test_explicit_private_request_can_publish_only_authorized_chat_content(self):
+        from agent.tools import tools_config
+        from agent.tools.mod_tools import send_minecraft_chat
+        from saruman.mod_runtime import AutomationRuntime
+        from tests.test_mod_runtime import FakeMods
+        self.agent.tools['send_minecraft_chat'] = {'function': send_minecraft_chat}
+        self.ctx['game']['mod_runtime'] = {'world': 'world1', 'in_world': True}
+        self.agent.submit(self.event('Напиши в чате «Привет всем!»', event_type='directive'), private_admin=True)
+        request = self.agent.action_queue.get_nowait()
+        self.clients['action'].complete.return_value = action_output('send_minecraft_chat', {'message': 'Привет всем!'})
+        with patch.object(tools_config, 'ctx_swarm', self.ctx):
+            value = self.agent.action.decide(request)
+            first = value['results'][0]['result']['goal']
+            repeated = self.agent.execute(self.agent.requests['1'], 'send_minecraft_chat', {'message': 'Привет всем!'}, 'same-request-again')
+            self.assertEqual(repeated['goal']['id'], first['id'])
+            duplicate = send_minecraft_chat('Привет всем!')
+        self.assertEqual(duplicate['status'], 'rejected')  # no active tool context outside execute
+        self.agent.results.put(('action', request, value, None))
+        self.agent.handle_results()
+        self.assertEqual(self.agent.requests['1']['state'], 'waiting')
+        self.assertEqual(first['message'], 'Привет всем!')
+        self.assertEqual(first['source'], 'operator')
+        self.assertEqual(first['context_id'], '1')
+        self.assertTrue(self.agent.persona_queue.empty())
+        self.assertEqual(self.ctx['tts_queue'], [])
+        sender = Mock()
+        runtime = AutomationRuntime(FakeMods(), server_send=sender, clock=lambda: self.now)
+        runtime.tick(self.ctx['game'], enabled=True)
+        self.agent.poll_goals()
+        sender.assert_called_once_with('Привет всем!')
+        self.assertEqual(self.agent.requests['1']['state'], 'finished')
+        self.assertTrue(self.agent.persona_queue.empty())
+        self.assertEqual(self.ctx['chat_queue'], [])
+        self.assertEqual(self.ctx['tts_queue'], [])
+
     def test_compound_tree_then_command_returns_to_action_specialist(self):
         self.submit_action("вырасти два дерева, а потом подойди ко мне")
         goal = GoalStore().submit(

@@ -1,5 +1,44 @@
 # Progress
 
+## 2026-11-12: Explicit public Minecraft messages from private Lab control
+
+### Investigate
+- The actual failed command was "enter test_3 and write Hello in chat" from Lab.
+  ActionAgent had no plain-chat tool, so it proposed passing the task to PersonaAgent.
+  The private-control boundary correctly suppressed that implicit public reply.
+  A prior attempt also rejected /say as a substitute for a player chat message.
+- The latest post-update speech clips were native action commentary. They did not
+  prove an ordinary player conversation or this private-to-public chat operation.
+
+### Plan
+- Add an explicit literal-message tool to the existing action role; retain the
+  private boundary and normal player PersonaAgent chat/voice paths.
+- Reuse durable goals, world binding and the existing Minecraft client transport.
+  Acceptance must wait for delivery; uncertain calls must never be blindly replayed.
+
+### Implement
+- Added send_minecraft_chat, available only inside a current player/operator tool
+  request with an observed open world. Quoted public content stays literal; command
+  prefixes, control characters and oversized messages are rejected. Autonomous
+  planner goals cannot publish public chat.
+- Native dispatcher reserves delivery before calling the Minecraft transport. A
+  successful client call is recorded explicitly as client_call_returned; this does
+  not claim that another player read it. World changes, cancellation, interrupted
+  delivery and lost replies cannot cause an automatic duplicate. Chat does not
+  compete for movement controls and does not create a Telegram event.
+- Private tasks receive their normal durable result without using PersonaAgent,
+  TTS or publishing the private control dialogue. Existing compound workflows can
+  observe the goal without another model decision for a completed chat-only task.
+- Validation: 132 role/dispatcher/bridge checks passed. A real configured action
+  model selected send_minecraft_chat with the exact requested text in a synthetic
+  probe whose executor was replaced; no public message was sent by the probe.
+- Applied after the owner stopped the character and all active goals/model requests
+  finished. Terminated only the verified native worker tree; Lab remains stopped
+  and healthy, Minecraft retains the same live gateway/process. New role/tool code
+  loads on the next Start. Old failed chat requests remain historical outcomes and
+  are not replayed. No message to real players was sent during installation.
+- Evidence: .saruman/audit/public-chat-recovery-2026-11-12/.
+
 ## 2026-11-12: Recover player replies and separate voice-chat playback from the microphone
 
 ### Investigate

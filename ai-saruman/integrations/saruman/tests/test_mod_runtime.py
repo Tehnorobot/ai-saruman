@@ -74,6 +74,56 @@ class FakeMods:
 
 
 class NativeRuntimeTests(unittest.TestCase):
+    def test_literal_chat_is_delivered_once_even_while_physical_controls_are_busy(self):
+        send, sink = Mock(), Mock()
+        self.runtime.server_send, self.runtime.event_sink = send, sink
+        self.adapter.snapshot.update(defense_busy=True, native_busy=True)
+        text = 'Привет всем!'
+        goal = self.store.submit('chat', source='operator', message=text, world='world1', request_id='admin:chat:1')
+        self.tick(); self.tick()
+        send.assert_called_once_with(text)
+        self.assertEqual(self.read(goal)['state'], 'completed')
+        self.assertEqual(self.read(goal)['delivery'], 'client_call_returned')
+        self.assertEqual(self.read(goal)['completed'], 1)
+        sink.assert_not_called()
+        self.assertFalse(any(op in {'command','tree_start','stop_command','cancel'} for op,_ in self.adapter.calls))
+
+    def test_chat_transport_failure_is_uncertain_and_never_replayed(self):
+        self.runtime.server_send = Mock(side_effect=ConnectionError('disconnected'))
+        goal = self.store.submit('chat', source='operator', message='Hello', world='world1', request_id='admin:chat:1')
+        self.tick(); self.tick()
+        self.runtime.server_send.assert_called_once()
+        self.assertEqual(self.read(goal)['state'], 'uncertain')
+        self.assertEqual(self.read(goal)['completed'], 0)
+
+    def test_chat_reserved_before_crash_is_not_sent_again(self):
+        send = self.runtime.server_send = Mock()
+        goal = self.store.submit('chat', source='operator', message='Hello', world='world1')
+        self.store.update(goal, state='starting')
+        self.tick()
+        send.assert_not_called()
+        self.assertEqual(self.read(goal)['state'], 'uncertain')
+
+    def test_cancelled_chat_and_chat_for_another_world_are_not_published(self):
+        send = self.runtime.server_send = Mock()
+        cancelled = self.store.submit('chat', source='operator', message='Hello', world='world1')
+        changed = self.store.submit('chat', source='operator', message='Hello', world='old-world')
+        self.store.cancel(cancelled['id'])
+        self.tick()
+        send.assert_not_called()
+        self.assertEqual(self.read(cancelled)['state'], 'cancelled')
+        self.assertEqual(self.read(changed)['state'], 'uncertain')
+
+    def test_public_chat_rejects_commands_controls_and_autonomous_publications(self):
+        for text in ['/say hello', '  @get diamond 1', '!message', '$goto 0 0 0', 'Hi\n/say hidden', 'Hi\x00there', '']:
+            with self.subTest(text=text), self.assertRaises(ValueError):
+                self.store.submit('chat', source='operator', message=text, world='world1')
+        with self.assertRaises(ValueError):
+            self.store.submit('chat', source='planner', message='Hello', world='world1')
+        with self.assertRaises(ValueError):
+            self.store.submit('chat', source='operator', message='Hello')
+        self.assertEqual(self.store.list(), [])
+
     def test_cancellation_rejects_unknown_id_and_resolves_real_run_id(self):
         from agent.tools import tools_config
         from agent.tools.mod_tools import cancel_mod_goal
