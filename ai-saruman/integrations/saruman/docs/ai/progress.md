@@ -1,5 +1,29 @@
 # Progress
 
+## 2026-11-12: Standalone Mage Home finalization handoff
+
+### Investigate
+- Compared the owner's installed round-10 JAR with the current paused Mage Home
+  workspace, round-12 acceptance/checkpoint results and manual fix records.
+- Separated product placement failures from unexecuted fixture checks. Confirmed
+  that title-screen dependency initialization and automatic world entry belong to
+  the Lab fixture infrastructure, not to the addon or Gradle scenario flag alone.
+
+### Plan
+- Provide one self-contained Russian Markdown with the complete current spec,
+  approved bounded-repair clarification, observed failures, existing fixes and
+  independent development-client instructions for another model.
+
+### Implement
+- Added docs/mod-development/mage-home/MAGE_HOME_FINALIZATION_HANDOFF_RU.md.
+  Included version/hash provenance, source/dependency transfer requirements,
+  code map, fixture portability, isolated run commands and completion evidence.
+- Preserved the owner's edited original spec, active workspace, installed JAR
+  and historical acceptance. No Minecraft run, LLM call or deployment performed.
+- Validation: embedded all eight original spec sections; checked UTF-8, fenced
+  examples and referenced source/fixture paths. Product status remains unverified
+  for a complete house; this documentation does not claim a new gameplay PASS.
+
 ## 2026-11-12: Target exclusion crash and disconnected bridge recovery
 
 ### Investigate
