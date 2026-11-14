@@ -42,8 +42,14 @@
   diagnostic edit, spec, canonical acceptance/verification and USER_PAUSED state.
   Memory event M-0000000000003592-30477804c4c3557321f1f77fbfd322d909abf3fe7dcf10dc094b6646efcd5dda
   links the diagnostics. No condition was relabelled PASS from maintenance tests.
-- Installation pending owner closing Minecraft. Old JAR/worker remain active until
-  safe replacement and worker reload; no launcher/world/other mod was modified.
+- Owner closed Minecraft and authorized installation. Replaced only Auto Defense
+  after exclusive-handle/hash checks; the prior bdc14448 JAR is backed up in the audit.
+  Installed SHA-256 is 3ab5e109545c52a6a5592b414e16299211f387c138c811a563c0336ccd8dd16a.
+- Gracefully shut down verified paused worker 20668 through its managed IPC; its
+  launcher 38556 also exited. Compiled shim c112ed7c25f22e45. The next explicit
+  Start creates a fresh worker with the new Python/shim code; none was auto-started.
+  Lab is healthy/inactive, Minecraft and Telegram components stopped, API error null.
+  No launcher/world/other mod was modified. Live owner gameplay retest remains pending.
 
 ## 2026-11-13: TreeGrow mining from Lab and exclusive input ownership
 
