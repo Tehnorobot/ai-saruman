@@ -1,0 +1,552 @@
+--- a/build.gradle
++++ b/build.gradle
+@@ -120,9 +120,13 @@
+ }
+ tasks.named('check') { dependsOn 'verifyClientScenarioGuards' }
+ 
+-def selectedScenario = providers.gradleProperty('labAcceptanceScenario')
++def selectedScenario = providers.gradleProperty('labNativeDefenseLifecycleProbe').isPresent()
++    ? providers.provider { 'native-defense-lifecycle' }
++    : providers.gradleProperty('labAcceptanceScenario')
+ def reportFile = layout.buildDirectory.file(selectedScenario.map { scenario ->
+-    scenario == 'null-target-exclusion'
++    scenario == 'native-defense-lifecycle'
++        ? 'test-results/native-defense-lifecycle/TEST-dev.autodefense.combat.NativeDefenseLifecycleProbe.xml'
++        : scenario == 'null-target-exclusion'
+         ? 'test-results/null-target-exclusion/TEST-dev.autodefense.combat.NullTargetExclusionTest.xml'
+         : scenario == 'self-defense-radius-boundary'
+         ? 'test-results/acceptSelfDefenseRadiusBoundary/TEST-dev.autodefense.acceptance.SelfDefenseRadiusBoundaryTest.xml'
+@@ -234,7 +238,7 @@
+     dependsOn 'verifyUnionClefArtifact'
+     doFirst {
+         if (!(selectedScenario.getOrElse('') in ['goal-client-boot', 'goal-melee-stop', 'goal-shield-defense', 'goal-tools-passage', 'search-32-nearest', 'search-peaceful-exclusion', 'self-defense-guardian', 'self-defense-nearest', 'self-defense-radius-boundary', 'self-defense-confirmation-window', 'retarget-5tick', 'keybind-toggle-f8', 'mode-switch', 'manual-stop-no-restart', 'death-reset', 'disconnect-reset', 'world-change-reset', 'supply-issue', 'bow-engagement', 'bow-no-ammo', 'bow-unsafe-line', 'bow-shot-release', 'survival-retreat', 'item-use-consumption', 'potion-drink-baseline', 'ender-pearl-use', 'ender-pearl-rejected', 'unsafe-route-refusal', 'airborne-target', 'projectile-threat', 'shield-bow-defense', 'underwater-pursuit', 'underground-detour'])) {
+-            if (selectedScenario.getOrElse('') != 'null-target-exclusion') {
++            if (!(selectedScenario.getOrElse('') in ['null-target-exclusion', 'native-defense-lifecycle'])) {
+                 throw new GradleException('Select a registered client acceptance scenario explicitly')
+             }
+         }
+--- /dev/null
++++ b/src/test/java/dev/autodefense/combat/NativeDefenseLifecycleTest.java
+@@ -0,0 +1,87 @@
++package dev.autodefense.combat;
++
++import java.io.IOException;
++import java.util.Map;
++import org.junit.jupiter.api.Test;
++import org.objectweb.asm.ClassReader;
++import org.objectweb.asm.tree.ClassNode;
++import org.objectweb.asm.tree.MethodInsnNode;
++import static org.junit.jupiter.api.Assertions.*;
++
++/** Identity and exact pinned ABI checks; these do not claim gameplay verification. */
++final class NativeDefenseLifecycleTest {
++    @Test void unchangedWorldAndBodyRetainTheirScope() {
++        var scope = new NativeWorldScope();
++        Object world = new Object(), body = new Object();
++        assertFalse(scope.changed(null, null));
++        assertTrue(scope.changed(world, body));
++        assertFalse(scope.changed(world, body));
++    }
++
++    @Test void disconnectAndReentryAreDifferentEvenWhenNamesWouldMatch() {
++        var scope = new NativeWorldScope();
++        Object world = new String("same-world"), body = new Object();
++        scope.changed(world, body);
++        assertTrue(scope.changed(null, null));
++        assertFalse(scope.changed(null, null));
++        assertTrue(scope.changed(new String("same-world"), body));
++    }
++
++    @Test void respawnAndDimensionChangeInvalidateTheScopeSeparately() {
++        var scope = new NativeWorldScope();
++        Object world = new Object(), body = new Object();
++        scope.changed(world, body);
++        Object respawn = new Object();
++        assertTrue(scope.changed(world, respawn));
++        assertTrue(scope.changed(new Object(), respawn));
++    }
++
++    @Test void pinnedNativeFieldsMatchTheTypedReset() throws IOException {
++        var node = read("adris/altoclef/chains/MobDefenseChain");
++        for (var entry : Map.ofEntries(
++                Map.entry("_killTask", "Ladris/altoclef/tasksystem/Task;"),
++                Map.entry("targetEntity", "Lnet/minecraft/entity/Entity;"),
++                Map.entry("lockedOnEntity", "Lnet/minecraft/entity/Entity;"),
++                Map.entry("runAwayTask", "Ladris/altoclef/tasks/movement/CustomBaritoneGoalTask;"),
++                Map.entry("fleeAnchor", "Lnet/minecraft/util/math/BlockPos;"),
++                Map.entry("needsChangeOnAttack", "Z"), Map.entry("doingFunkyStuff", "Z"),
++                Map.entry("wasPuttingOutFire", "Z"), Map.entry("shielding", "Z"),
++                Map.entry("suggestedArrowPos", "Lnet/minecraft/util/math/Vec3d;"),
++                Map.entry("suggestedArrowVel", "Lnet/minecraft/util/math/Vec3d;"),
++                Map.entry("suggestedDodgeTicks", "I"), Map.entry("tungstenDrivingMs", "J"),
++                Map.entry("cachedLastPriority", "F")).entrySet()) {
++            assertTrue(node.fields.stream().anyMatch(f -> f.name.equals(entry.getKey())
++                    && f.desc.equals(entry.getValue())), "Changed native ABI: " + entry);
++        }
++        assertEquals("adris/altoclef/chains/SingleTaskChain", node.superName);
++        var parent = read(node.superName);
++        assertTrue(parent.fields.stream().anyMatch(f -> f.name.equals("mainTask")
++                && f.desc.equals("Ladris/altoclef/tasksystem/Task;")));
++        assertTrue(read("adris/altoclef/tasksystem/TaskChain").methods.stream()
++                .anyMatch(m -> m.name.equals("stop") && m.desc.equals("()V")));
++    }
++
++    @Test void resetRunsBeforeTheAddonInstallsItsNewTask() throws IOException {
++        var combat = read("dev/autodefense/combat/AutoCombat");
++        var acquire = combat.methods.stream().filter(m -> m.name.equals("acquire")).findFirst().orElseThrow();
++        int reset = -1, publish = -1, index = 0;
++        for (var instruction : acquire.instructions) {
++            if (instruction instanceof MethodInsnNode method) {
++                if (method.name.equals("resetNativeDefense")) reset = index;
++                if (method.name.equals("setChainTask")) publish = index;
++            }
++            index++;
++        }
++        assertTrue(reset >= 0 && publish > reset,
++                "The old native task must release navigation before the addon publishes its task");
++    }
++
++    private static ClassNode read(String name) throws IOException {
++        try (var stream = NativeDefenseLifecycleTest.class.getClassLoader().getResourceAsStream(name + ".class")) {
++            assertNotNull(stream, name);
++            var node = new ClassNode();
++            new ClassReader(stream).accept(node, 0);
++            return node;
++        }
++    }
++}
+--- a/src/main/java/dev/autodefense/AutoDefenseClient.java
++++ b/src/main/java/dev/autodefense/AutoDefenseClient.java
+@@ -4,6 +4,7 @@
+ import com.google.gson.JsonObject;
+ import dev.autodefense.api.AutoDefenseApi;
+ import dev.autodefense.combat.AutoCombat;
++import dev.autodefense.combat.NativeDefenseReset;
+ import dev.autodefense.combat.PearlPolicy;
+ import dev.autodefense.combat.RouteControl;
+ import dev.autodefense.combat.UnsafeRoutePolicy;
+@@ -54,7 +55,15 @@
+         COMBAT.applyPearlSettings(pearlSettings(config));
+         COMBAT.applyUnsafeRouteSettings(unsafeRouteSettings(config));
+         COMBAT.applyAirReserve(config.airReserve());
+-        ClientTickEvents.START_CLIENT_TICK.register(COMBAT::tick);
++        ClientTickEvents.START_CLIENT_TICK.register(client -> {
++            // This observer must run while disabled too: native survival is independent of
++            // the addon's CombatSession and otherwise retains work across world changes.
++            var mod = adris.altoclef.AltoClef.getInstance();
++            if (mod != null && mod.getMobDefenseChain() instanceof NativeDefenseReset reset) {
++                reset.autoDefenseObserveWorld(client.world, client.player);
++            }
++            COMBAT.tick(client);
++        });
+         ClientTickEvents.END_CLIENT_TICK.register(AutoDefenseClient::onEndTick);
+         // A reset of the addon drops the pending commands of the supply: they belong to the world
+         // that is left.
+@@ -96,6 +105,14 @@
+                         return 1;
+                     }))));
+         initialized = true;
++    }
++
++    /** Client-thread stop hook used by Lab; does not stop unrelated user tasks or the runner. */
++    public static void resetNativeDefense() {
++        var mod = adris.altoclef.AltoClef.getInstance();
++        if (mod != null && mod.getMobDefenseChain() instanceof NativeDefenseReset reset) {
++            reset.autoDefenseResetNativeState();
++        }
+     }
+ 
+     /** F8 switches the automatic work of the addon on and off. */
+--- a/src/main/java/dev/autodefense/combat/AutoCombat.java
++++ b/src/main/java/dev/autodefense/combat/AutoCombat.java
+@@ -1083,6 +1083,7 @@
+         // The reason is recorded before the state is cleared, so that the cause of the reset stays
+         // observable even when the reset itself is reported from the network thread.
+         resets.record(reason);
++        dev.autodefense.AutoDefenseClient.resetNativeDefense();
+         state.reset();
+         survival.reset();
+         stopFight(client, reason);
+@@ -2661,6 +2662,8 @@
+         if (!ownsControls) {
+             enabledRunner = !mod.getTaskRunner().isActive();
+             // End previous movement before handing input to the dedicated chain.
++            // Stop native mob-defense's old root BEFORE the new owner installs navigation.
++            dev.autodefense.AutoDefenseClient.resetNativeDefense();
+             releaseControls(client, mod);
+             ownsControls = true;
+         }
+--- /dev/null
++++ b/src/main/java/dev/autodefense/combat/NativeDefenseReset.java
+@@ -0,0 +1,10 @@
++package dev.autodefense.combat;
++
++/** Client-thread lifecycle boundary implemented by the pinned MobDefenseChain mixin. */
++public interface NativeDefenseReset {
++    /** Stop only native mob-defense work and forget targets/routes from its previous session. */
++    void autoDefenseResetNativeState();
++
++    /** Observe world/body identity even when the addon is disabled and no runner is ticking. */
++    void autoDefenseObserveWorld(Object world, Object player);
++}
+--- /dev/null
++++ b/src/main/java/dev/autodefense/combat/NativeWorldScope.java
+@@ -0,0 +1,14 @@
++package dev.autodefense.combat;
++
++/** Identity, not world name or coordinates, determines whether native work can be retained. */
++public final class NativeWorldScope {
++    private Object world;
++    private Object player;
++
++    public boolean changed(Object nextWorld, Object nextPlayer) {
++        if (world == nextWorld && player == nextPlayer) return false;
++        world = nextWorld;
++        player = nextPlayer;
++        return true;
++    }
++}
+--- a/src/main/java/dev/autodefense/mixin/MobDefenseOwnershipMixin.java
++++ b/src/main/java/dev/autodefense/mixin/MobDefenseOwnershipMixin.java
+@@ -1,17 +1,101 @@
+ package dev.autodefense.mixin;
+ 
++import adris.altoclef.AltoClef;
+ import adris.altoclef.chains.MobDefenseChain;
++import adris.altoclef.chains.SingleTaskChain;
++import adris.altoclef.tasks.movement.CustomBaritoneGoalTask;
++import adris.altoclef.tasksystem.Task;
++import adris.altoclef.tasksystem.TaskRunner;
+ import dev.autodefense.AutoDefenseClient;
++import dev.autodefense.combat.NativeDefenseReset;
++import dev.autodefense.combat.NativeWorldScope;
++import net.minecraft.entity.Entity;
++import net.minecraft.util.math.BlockPos;
++import net.minecraft.util.math.Vec3d;
+ import org.spongepowered.asm.mixin.Mixin;
++import org.spongepowered.asm.mixin.Shadow;
++import org.spongepowered.asm.mixin.Unique;
+ import org.spongepowered.asm.mixin.injection.At;
+ import org.spongepowered.asm.mixin.injection.Inject;
+ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
+ 
+ /** getPriority itself drives combat in this pinned UnionClef, before chain arbitration. */
+ @Mixin(value = MobDefenseChain.class, remap = false)
+-public abstract class MobDefenseOwnershipMixin {
++public abstract class MobDefenseOwnershipMixin extends SingleTaskChain implements NativeDefenseReset {
++    @Shadow public Task _killTask;
++    @Shadow private Entity targetEntity;
++    @Shadow private Entity lockedOnEntity;
++    @Shadow private CustomBaritoneGoalTask runAwayTask;
++    @Shadow private BlockPos fleeAnchor;
++    @Shadow private boolean needsChangeOnAttack;
++    @Shadow private boolean doingFunkyStuff;
++    @Shadow private boolean wasPuttingOutFire;
++    @Shadow private Vec3d suggestedArrowPos;
++    @Shadow private Vec3d suggestedArrowVel;
++    @Shadow private int suggestedDodgeTicks;
++    @Shadow private long tungstenDrivingMs;
++    @Shadow private float cachedLastPriority;
++    @Shadow private static boolean shielding;
++    @Unique private final NativeWorldScope autoDefenseScope = new NativeWorldScope();
++
++    protected MobDefenseOwnershipMixin(TaskRunner runner) { super(runner); }
++
+     @Inject(method = "getPriority", at = @At("HEAD"), cancellable = true, require = 1)
+     private void autoDefenseOwnsControls(CallbackInfoReturnable<Float> result) {
++        // START tick registration order is not an ownership guarantee. The dependency may
++        // evaluate priority before our independent world observer on the first new-world tick.
++        var mod = AltoClef.getInstance();
++        if (mod != null) autoDefenseObserveWorld(mod.getWorld(), mod.getPlayer());
+         if (AutoDefenseClient.combat().ownsControls()) result.setReturnValue(Float.NEGATIVE_INFINITY);
+     }
++
++    @Inject(method = "getPriority", at = @At("RETURN"), require = 1)
++    private void autoDefenseDropIdleTask(CallbackInfoReturnable<Float> result) {
++        // MobDefenseChain.isActive() is always true in this pinned dependency. A zero-priority
++        // chain can therefore keep ticking its previous KillEntitiesTask, whose missing-target
++        // child wanders forever. No current threat means no retained physical task.
++        if (result.getReturnValue() <= 0 && mainTask != null) autoDefenseDetachTask();
++    }
++
++    @Override public void autoDefenseObserveWorld(Object world, Object player) {
++        if (autoDefenseScope.changed(world, player)) autoDefenseResetNativeState();
++    }
++
++    @Override public void autoDefenseResetNativeState() {
++        try {
++            autoDefenseDetachTask();
++        } finally {
++            // These cached intents can reinstall a task after mainTask has been stopped.
++            // Resetting only the root does not prevent cross-world pursuit.
++            _killTask = null;
++            targetEntity = null;
++            lockedOnEntity = null;
++            runAwayTask = null;
++            fleeAnchor = null;
++            needsChangeOnAttack = false;
++            doingFunkyStuff = false;
++            wasPuttingOutFire = false;
++            suggestedArrowPos = null;
++            suggestedArrowVel = null;
++            suggestedDodgeTicks = 0;
++            tungstenDrivingMs = 0;
++            cachedLastPriority = 0;
++            shielding = false;
++        }
++    }
++
++    @Unique private void autoDefenseDetachTask() {
++        try {
++            // TaskChain.stop clears the visible child chain and calls native Task.stop(),
++            // retaining the dependency's normal release path for navigation and inputs.
++            stop();
++        } catch (Throwable failure) {
++            // Teardown may run after world unload. A failed stop must never retain its root.
++            System.out.println("LAB_CONTROL_TRACE event=native-defense-stop-failed error=" + failure);
++        } finally {
++            mainTask = null;
++            _killTask = null;
++            getTasks().clear();
++        }
++    }
+ }
+--- a/src/gametest/resources/fabric.mod.json
++++ b/src/gametest/resources/fabric.mod.json
+@@ -8,6 +8,7 @@
+   ],
+   "entrypoints": {
+     "fabric-client-gametest": [
++      "dev.autodefense.combat.NativeDefenseLifecycleProbe",
+       "dev.autodefense.combat.NullTargetExclusionTest",
+       "dev.autodefense.acceptance.GoalClientBootTest",
+       "dev.autodefense.acceptance.DistributionClientTest",
+--- a/src/gametest/java/dev/autodefense/acceptance/GoalClientBootTest.java
++++ b/src/gametest/java/dev/autodefense/acceptance/GoalClientBootTest.java
+@@ -16,6 +16,7 @@
+ 
+     @Override
+     public void runTest(ClientGameTestContext context) {
++        if ("native-defense-lifecycle".equals(System.getProperty("labAcceptanceScenario"))) return;
+         if ("null-target-exclusion".equals(System.getProperty("labAcceptanceScenario"))) return;
+         if ("self-defense-radius-boundary".equals(System.getProperty("labAcceptanceScenario"))
+                 || "self-defense-nearest".equals(System.getProperty("labAcceptanceScenario"))
+--- /dev/null
++++ b/src/gametest/java/dev/autodefense/combat/NativeDefenseLifecycleProbe.java
+@@ -0,0 +1,216 @@
++package dev.autodefense.combat;
++
++import adris.altoclef.AltoClef;
++import adris.altoclef.tasks.entity.KillEntitiesTask;
++import adris.altoclef.tasks.movement.RunAwayFromHostilesTask;
++import adris.altoclef.tasksystem.Task;
++import dev.autodefense.AutoDefenseClient;
++import dev.autodefense.acceptance.AddonControl;
++import dev.autodefense.acceptance.AssertionReport;
++import dev.autodefense.settings.AutoDefenseConfig;
++import java.nio.file.Path;
++import java.util.UUID;
++import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
++import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
++import net.fabricmc.fabric.api.client.gametest.v1.context.TestServerContext;
++import net.minecraft.block.Blocks;
++import net.minecraft.entity.Entity;
++import net.minecraft.entity.EntityType;
++import net.minecraft.entity.SpawnReason;
++import net.minecraft.entity.mob.HuskEntity;
++import net.minecraft.item.ItemStack;
++import net.minecraft.item.Items;
++import net.minecraft.util.math.BlockPos;
++import net.minecraft.world.GameMode;
++import net.minecraft.world.rule.GameRules;
++
++/** Isolated maintenance diagnostic, not a replacement for any canonical acceptance scenario. */
++@SuppressWarnings("UnstableApiUsage")
++public final class NativeDefenseLifecycleProbe implements FabricClientGameTest {
++    private static final String SCENARIO = "native-defense-lifecycle";
++
++    @Override public void runTest(ClientGameTestContext context) {
++        if (!SCENARIO.equals(System.getProperty("labAcceptanceScenario"))) return;
++        var report = new AssertionReport(getClass().getName());
++        report.writeTo(Path.of(System.getProperty("labAcceptanceReport")));
++        System.out.println("LAB_ACCEPTANCE_BEGIN:" + SCENARIO);
++        try {
++            try (var world = context.worldBuilder().create()) {
++                context.waitFor(client -> client.world != null && client.player != null);
++                prepare(world.getServer(), context.computeOnClient(client -> client.player.getUuid()));
++                world.getClientWorld().waitForChunksRender();
++                context.runOnClient(client -> {
++                    AutoDefenseClient.combat().disable(client);
++                    AutoDefenseClient.resetNativeDefense();
++                });
++                report.check("zeroPriorityStopsActualMissingTargetKillTask", () -> {
++                    context.runOnClient(client -> {
++                        var mod = AltoClef.getInstance();
++                        var chain = mod.getMobDefenseChain();
++                        chain.setTask(new KillEntitiesTask(entity -> false, HuskEntity.class));
++                        mod.getTaskRunner().enable();
++                        require(chain.getPriority() <= 0, "The no-threat fixture has positive priority");
++                        require(chain.getCurrentTask() == null, "Zero priority retained the real kill task");
++                    });
++                    for (int tick = 0; tick < 25; tick++) {
++                        context.waitTick();
++                        context.runOnClient(client -> require(
++                                AltoClef.getInstance().getMobDefenseChain().getCurrentTask() == null,
++                                "A missing-target wander task returned without a threat"));
++                    }
++                });
++                report.requireSuccess();
++                report.check("idleCleanupPreservesAnIndependentUserTask", () -> {
++                    var user = new CountingTask(false);
++                    context.runOnClient(client -> {
++                        var mod = AltoClef.getInstance();
++                        mod.getMobDefenseChain().setTask(new KillEntitiesTask(entity -> false, HuskEntity.class));
++                        mod.runUserTask(user);
++                    });
++                    for (int tick = 0; tick < 8; tick++) context.waitTick();
++                    context.runOnClient(client -> {
++                        var mod = AltoClef.getInstance();
++                        require(mod.getUserTaskChain().getCurrentTask() == user && user.ticks > 0,
++                                "Native cleanup cancelled the user's task or prevented its ticks");
++                        require(mod.getTaskRunner().isActive(), "Native idle cleanup disabled the runner");
++                        mod.getUserTaskChain().setTask(null);
++                    });
++                });
++                report.requireSuccess();
++                report.check("failedNativeStopStillDetachesRootAndCachedIntent", () -> {
++                    context.runOnClient(client -> {
++                        var mod = AltoClef.getInstance();
++                        mod.getTaskRunner().disable();
++                        var chain = mod.getMobDefenseChain();
++                        var broken = new CountingTask(true);
++                        chain.setTask(broken);
++                        chain._killTask = broken;
++                        put(chain, "runAwayTask", new RunAwayFromHostilesTask(30, true));
++                        AutoDefenseClient.resetNativeDefense();
++                        require(broken.stops == 1, "The failing native stop was never exercised");
++                        requireEmpty(chain);
++                    });
++                });
++                report.requireSuccess();
++                // Seed while the addon and runner are disabled. The disconnect/world observer,
++                // rather than ordinary priority evaluation, must remove these cached intents.
++                context.runOnClient(client -> {
++                    var chain = AltoClef.getInstance().getMobDefenseChain();
++                    chain.setTask(new KillEntitiesTask(entity -> false, HuskEntity.class));
++                    chain._killTask = chain.getCurrentTask();
++                    put(chain, "runAwayTask", new RunAwayFromHostilesTask(30, true));
++                    require(!AutoDefenseClient.combat().isEnabled(), "The fixture enabled the addon");
++                });
++            }
++            report.check("disconnectClearsNativeWorkWhileAddonIsDisabled", () -> {
++                context.waitFor(client -> client.world == null && client.player == null);
++                context.runOnClient(client -> requireEmpty(AltoClef.getInstance().getMobDefenseChain()));
++            });
++            report.requireSuccess();
++            try (var world = context.worldBuilder().create()) {
++                context.waitFor(client -> client.world != null && client.player != null);
++                UUID player = context.computeOnClient(client -> client.player.getUuid());
++                prepare(world.getServer(), player);
++                world.getClientWorld().waitForChunksRender();
++                report.check("newWorldHasNoInheritedNativeTask", () -> context.runOnClient(client -> {
++                    require(!AutoDefenseClient.combat().isEnabled(), "World entry rearmed the addon");
++                    requireEmpty(AltoClef.getInstance().getMobDefenseChain());
++                }));
++                report.requireSuccess();
++                UUID hostile = spawn(world.getServer(), player);
++                context.waitFor(client -> client.world.getEntity(hostile) != null);
++                report.check("explicitStartStillAttacksANewRealThreat", () -> {
++                    context.runOnClient(client -> {
++                        AddonControl.forceMode(client, AutoDefenseConfig.MODE_SEARCH);
++                        AutoDefenseClient.combat().enable(client);
++                    });
++                    context.waitFor(client -> hostile.equals(AutoDefenseClient.combat().targetId()), 200);
++                    context.waitFor(client -> {
++                        Entity target = client.world.getEntity(hostile);
++                        return target instanceof HuskEntity husk && husk.getHealth() < 20;
++                    }, 400);
++                    context.runOnClient(client -> AutoDefenseClient.combat().stop(client));
++                });
++            }
++        } catch (Throwable failure) {
++            report.lifecycleError(failure);
++        } finally {
++            System.out.println("LAB_ACCEPTANCE_END:" + SCENARIO);
++        }
++        report.requireSuccess();
++    }
++
++    private static void prepare(TestServerContext server, UUID playerId) {
++        server.runOnServer(game -> {
++            var player = game.getPlayerManager().getPlayer(playerId);
++            var level = player.getEntityWorld();
++            level.getGameRules().setValue(GameRules.DO_MOB_SPAWNING, false, game);
++            player.changeGameMode(GameMode.SURVIVAL);
++            player.setHealth(20);
++            player.getHungerManager().setFoodLevel(20);
++            player.getInventory().clear();
++            player.getInventory().setStack(0, new ItemStack(Items.IRON_SWORD));
++            player.getInventory().setStack(1, new ItemStack(Items.BREAD, 16));
++            BlockPos origin = player.getBlockPos();
++            for (int x = -8; x <= 8; x++) for (int z = -8; z <= 8; z++) {
++                level.setBlockState(origin.add(x, -1, z), Blocks.STONE.getDefaultState());
++                for (int y = 0; y < 4; y++) level.setBlockState(origin.add(x, y, z), Blocks.AIR.getDefaultState());
++            }
++            for (var entity : java.util.stream.StreamSupport.stream(level.iterateEntities().spliterator(), false).toList()) {
++                if (!(entity instanceof net.minecraft.server.network.ServerPlayerEntity)) entity.discard();
++            }
++        });
++    }
++
++    private static UUID spawn(TestServerContext server, UUID playerId) {
++        return server.computeOnServer(game -> {
++            var player = game.getPlayerManager().getPlayer(playerId);
++            var level = player.getEntityWorld();
++            var hostile = EntityType.HUSK.create(level, SpawnReason.COMMAND);
++            require(hostile != null, "No fixture hostile");
++            hostile.setAiDisabled(true);
++            hostile.refreshPositionAndAngles(player.getX() + 3, player.getY(), player.getZ(), 0, 0);
++            require(level.spawnEntity(hostile), "Hostile did not spawn");
++            return hostile.getUuid();
++        });
++    }
++
++    private static void requireEmpty(adris.altoclef.chains.MobDefenseChain chain) {
++        require(chain.getCurrentTask() == null && chain._killTask == null && chain.getTasks().isEmpty(),
++                "The native task/child chain was retained");
++        for (String name : new String[]{"runAwayTask", "lockedOnEntity", "targetEntity", "fleeAnchor",
++                "suggestedArrowPos", "suggestedArrowVel"}) require(read(chain, name) == null, "Retained intent: " + name);
++    }
++
++    private static Object read(Object value, String name) {
++        try {
++            var field = value.getClass().getDeclaredField(name);
++            field.setAccessible(true);
++            return field.get(value);
++        } catch (ReflectiveOperationException failure) { throw new AssertionError(failure); }
++    }
++
++    private static void put(Object value, String name, Object replacement) {
++        try {
++            var field = value.getClass().getDeclaredField(name);
++            field.setAccessible(true);
++            field.set(value, replacement);
++        } catch (ReflectiveOperationException failure) { throw new AssertionError(failure); }
++    }
++
++    private static void require(boolean condition, String message) {
++        if (!condition) throw new AssertionError(message);
++    }
++
++    private static final class CountingTask extends Task {
++        private final boolean failStop;
++        int ticks, stops;
++        CountingTask(boolean failStop) { this.failStop = failStop; }
++        @Override protected void onStart() { }
++        @Override protected Task onTick() { ticks++; return null; }
++        @Override public void stop() { stops++; if (failStop) throw new IllegalStateException("diagnostic-stop-failure"); super.stop(); }
++        @Override protected void onStop(Task next) { }
++        @Override protected boolean isEqual(Task other) { return this == other; }
++        @Override protected String toDebugString() { return "Native defense lifecycle diagnostic"; }
++    }
++}

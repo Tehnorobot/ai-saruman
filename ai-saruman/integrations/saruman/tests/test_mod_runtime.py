@@ -35,6 +35,10 @@ class FakeMods:
             self.snapshot["defense_enabled"] = args["enabled"]
             if args["enabled"]:
                 self.snapshot.update(manual_stop=False, manual_stop_latched=False, stop_kind="none")
+        if operation == "halt":
+            self.snapshot.update(defense_enabled=False, defense_busy=False, native_busy=False,
+                                 scheduler_busy=False, native_defense_task=None, runner_active=False)
+            return {"status": "halted"}
         if operation == "tree_start":
             request = args["request_id"]
             if request not in self.receipts:
@@ -450,6 +454,58 @@ class NativeRuntimeTests(unittest.TestCase):
         self.assertEqual(self.read(goal)["state"], "cancelled")
         self.assertEqual(self.read(goal)["reason"], "Automation stopped")
         self.assertFalse(self.adapter.snapshot["defense_enabled"])
+        self.assertEqual(sum(op == "halt" for op, _ in self.adapter.calls), 1)
+
+    def test_stop_halts_native_defense_even_when_addon_already_disabled(self):
+        self.adapter.snapshot.update(defense_enabled=False, native_defense_task="KillEntitiesTask",
+                                     runner_active=True, scheduler_owner="Mob Defense")
+        self.tick(False); self.tick(False)
+        self.assertFalse(self.adapter.snapshot["runner_active"])
+        self.assertIsNone(self.adapter.snapshot["native_defense_task"])
+        self.assertEqual(sum(op == "halt" for op, _ in self.adapter.calls), 1)
+
+    def test_reconnect_preserves_intent_but_explicit_shutdown_halts_native_runner(self):
+        goal=self.goal(); self.tick()
+        self.runtime.close(stop=False)
+        self.assertEqual(self.read(goal)["state"], "running")
+        self.assertFalse(any(op == "halt" for op, _ in self.adapter.calls))
+        self.runtime.close()
+        self.assertEqual(self.read(goal)["state"], "cancel_requested")
+        self.assertEqual(sum(op == "halt" for op, _ in self.adapter.calls), 1)
+
+    def test_shutdown_cancels_saved_goal_even_if_game_connection_is_unavailable(self):
+        goal=self.goal(); self.tick()
+        self.adapter.snapshot["status"]="unavailable"
+        self.runtime.close()
+        self.assertEqual(self.read(goal)["state"], "cancel_requested")
+
+    def test_player_goal_preemption_never_globally_halts_runner(self):
+        self.goal("planner"); self.tick(); self.goal("player"); self.tick()
+        self.assertFalse(any(op == "halt" for op, _ in self.adapter.calls))
+
+    def test_rejected_stop_is_visible_and_retried_with_the_new_world_snapshot(self):
+        self.goal(); self.tick()
+        original=self.adapter.call
+        def reject_old_stop(operation, **args):
+            return {"status":"rejected", "reason":"stale_world"} if operation=="halt" else original(operation, **args)
+        with patch.object(self.adapter, "call", side_effect=reject_old_stop):
+            self.tick(False)
+        self.assertIn("Native stop unconfirmed: stale_world", self.runtime.last_error)
+        self.assertTrue(self.runtime.was_enabled)
+        self.adapter.snapshot["world"]="world2"
+        self.tick(False)
+        self.assertIsNone(self.runtime.last_error)
+        self.assertFalse(self.runtime.was_enabled)
+        self.assertIn(("halt", {"world":"world2"}), self.adapter.calls)
+
+    def test_shutdown_surfaces_rejected_stop_and_retains_durable_cancellation(self):
+        goal=self.goal(); self.tick()
+        original=self.adapter.call
+        with patch.object(self.adapter,"call",side_effect=lambda op,**args:
+                          {"status":"rejected","reason":"stale_world"} if op=="halt" else original(op,**args)):
+            with self.assertRaisesRegex(RuntimeError,"Native stop unconfirmed: stale_world"):
+                self.runtime.close()
+        self.assertEqual(self.read(goal)["state"],"cancel_requested")
 
     def test_native_manual_stop_cancels_instead_of_resuming(self):
         goal = self.goal()

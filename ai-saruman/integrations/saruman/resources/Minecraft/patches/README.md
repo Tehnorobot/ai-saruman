@@ -1,4 +1,37 @@
-# TreeGrow background mining maintenance patch
+# Minecraft addon maintenance patches
+
+## Auto Defense: native Mob Defense lifecycle
+
+`native-defense-lifecycle.patch` applies to the source snapshot that built
+`bdc144486e720b9a31a58544883593c7f0412e9a8da8262c6bf34f618d38f736`.
+It removes stale built-in UnionClef kill/wander tasks at zero priority and resets
+their targets/routes across disconnect, world and player-body changes, including
+when Auto Defense is disabled. Explicit Lab Stop uses a separate scoped `halt`;
+ordinary player-goal preemption still stops only the owned goal.
+
+The adjacent `native-defense-lifecycle.json` contains before/after source hashes,
+the built artifact hash and validation scope. Exact patch replay was checked for
+all 10 files. The paused maintained project is `projects/20a4c385b26c4b/workspace`.
+Its prior removal of an old diagnostic boot guard was preserved during handoff.
+
+Evidence: `Codex-Development-Lab/audit/native-defense-lifecycle-2026-11-14`.
+Native checks: 76 unit/ABI/ordering and 6 actual Minecraft checks; the old mixin
+reproduced the retained real kill root in the same game diagnostic. The native
+game checks do not claim the full Lab/player/Telegram end-to-end workflow.
+
+```sh
+git -c core.autocrlf=false apply --check /path/to/native-defense-lifecycle.patch
+git -c core.autocrlf=false apply /path/to/native-defense-lifecycle.patch
+gradle --offline test --tests dev.autodefense.combat.NativeDefenseLifecycleTest gametestClasses remapJar
+gradle --offline runClientGameTest -PlabNativeDefenseLifecycleProbe
+```
+
+Use only the existing restricted runner and existing EULA authorization. The
+diagnostic has its own selector and report; it does not update product acceptance.
+Install only after Minecraft is closed, retaining the prior JAR outside `mods`.
+Reload the native Python worker so it loads the new shim and Stop implementation.
+
+## TreeGrow background mining
 
 `treegrow-background-mining.patch` applies to the TreeGrow 0.1.0 source used to
 build SHA-256 `ed50500c43293f614c632b65f9c31c3a116a35c7759f16d547c392c3ae5708bf`.

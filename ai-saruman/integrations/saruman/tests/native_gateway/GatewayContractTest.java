@@ -86,6 +86,14 @@ public final class GatewayContractTest {
         snapshot=invoke("snapshot",Map.of());
         require(!world.equals(snapshot.get("world")),"world generation");
         require(((Map<?,?>)snapshot.get("tree")).get("run_id").equals(""),"no stale tree");
+        world=(String)snapshot.get("world");
+        AltoClef.getInstance().defense.setTask(new AltoClef.CommandTask());
+        require(invoke("snapshot",Map.of()).get("native_defense_task")!=null,"native residual task must be visible");
+        require(invoke("halt",Map.of("world","old-world")).get("reason").equals("stale_world"),"stale Stop must not stop the new world");
+        require(AltoClef.getInstance().runner.isActive(),"stale Stop disabled runner");
+        require(invoke("halt",Map.of("world",world)).get("status").equals("halted"),"explicit global stop");
+        require(!AltoClef.getInstance().runner.isActive() && AltoClef.getInstance().defense.task==null,"native defense survived Stop");
+        require(invoke("halt",Map.of("world",world)).get("status").equals("halted"),"idempotent Stop");
         System.out.println("Native gateway contract: PASS (offline fixtures)");
     }
 }

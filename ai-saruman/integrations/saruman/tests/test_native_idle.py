@@ -148,7 +148,9 @@ class NativeIdleTests(unittest.TestCase):
 
     def test_failure_does_not_delay_new_player_request(self):
         self.tick(); self.tick(20); self.tick()
-        self.mods.finish(False); self.tick()
+        self.mods.finish(False)
+        self.mods.snapshot['tree'].update(outcome='failed',interruption='',result='No sapling found')
+        self.tick()
         self.assertEqual(self.store.list()[0]["state"], "failed")
         goal = self.store.submit("trees", source="player")
         self.tick()
@@ -156,7 +158,9 @@ class NativeIdleTests(unittest.TestCase):
 
     def test_failure_switches_activity_when_alternative_exists_without_extra_pause(self):
         self.tick(); self.tick(20); self.tick()
-        self.mods.finish(False); self.tick()
+        self.mods.finish(False)
+        self.mods.snapshot['tree'].update(outcome='failed',interruption='',result='No sapling found')
+        self.tick()
         self.mods.snapshot["players"] = ["Alex"]
         self.tick(20)
         background = self.store.list(active=True)

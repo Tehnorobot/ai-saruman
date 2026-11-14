@@ -6,12 +6,14 @@ public final class AltoClef {
     public Object world=new World();
     public final Chain chain=new Chain();
     public final Runner runner=new Runner();
+    public final Chain defense=new Chain();
     public final Commands commands=new Commands();
     public final Player player=new Player();
     public Object getWorld() { return world; }
     public Player getPlayer() { return player; }
     public Chain getUserTaskChain() { return chain; }
     public Runner getTaskRunner() { return runner; }
+    public Chain getMobDefenseChain() { return defense; }
     public boolean isPaused() { return false; }
     public void runUserTask(Object task) { chain.task=task; chain.active=true; }
     public void cancelUserTask() { chain.active=false; chain.task=null; }
@@ -34,9 +36,12 @@ public final class AltoClef {
     }
     public static final class Runner {
         public Object current;
+        private Object cachedCurrentTaskChain;
+        public boolean active=true;
         private final java.util.Map<String,Float> lastPriority=new java.util.HashMap<>();
         public Object getCurrentTaskChain() { return current==null?INSTANCE.chain:current; }
-        public boolean isActive() { return true; }
+        public boolean isActive() { return active; }
+        public void disable() { active=false;INSTANCE.chain.setTask(null);INSTANCE.defense.setTask(null);current=null; }
         public void select(PriorityChain chain,float priority) { current=chain;lastPriority.put(chain.getName(),priority); }
     }
     public static final class Commands {

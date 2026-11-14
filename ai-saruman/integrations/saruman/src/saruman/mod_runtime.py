@@ -108,6 +108,11 @@ class AutomationRuntime:
             raise RuntimeError(result.get("reason"))
         return result
 
+    def halt(self, snapshot):
+        result = self.call("halt", snapshot)
+        if result.get("status") != "halted":
+            raise RuntimeError("Native stop unconfirmed: " + str(result.get("reason") or result.get("status")))
+
     def tick(self, game, *, enabled, tools=None):
         now = self.clock()
         if now < self.next_tick:
@@ -125,6 +130,16 @@ class AutomationRuntime:
             snapshot = self.adapter.call("snapshot")
             if snapshot.get("status") != "ready":
                 raise RuntimeError(snapshot.get("reason", "Native mods unavailable"))
+            if not enabled and (self.was_enabled or snapshot.get("native_defense_task")):
+                # Stop Lab must also halt independent native chains. Ordinary
+                # player-goal preemption below still cancels only its exact root.
+                self.store.cancel(reason="Automation stopped")
+                self.halt(snapshot)
+                snapshot = self.adapter.call("snapshot")
+                if snapshot.get("status") != "ready":
+                    raise RuntimeError(snapshot.get("reason", "Native stop unconfirmed"))
+                if snapshot.get("runner_active") is True:
+                    raise RuntimeError("Native stop unconfirmed: runner is still active")
             # The addon latches an explicit native stop. Polling must not rearm it.
             # A new Stop -> Start is an explicit operator request to resume.
             reset = snapshot.get("stop_kind") == "reset"
@@ -532,14 +547,9 @@ class AutomationRuntime:
         try:
             if not stop:
                 return  # Reconnect retains the JVM receipts and durable intentions.
+            self.store.cancel(reason="Automation stopped")
             snapshot = self.adapter.call("snapshot")
             if snapshot.get("status") == "ready":
-                self.call("defense", snapshot, enabled=False)
-                self.store.cancel()
-                for goal in self.store.list(active=True):
-                    if goal["run_id"] and goal["kind"] == "trees":
-                        self.call("cancel", snapshot, run_id=goal["run_id"])
-                    elif goal["run_id"] and goal["kind"] in {"command", "follow"}:
-                        self.call("stop_command", snapshot, run_id=goal.get("native_command_run") or goal["run_id"])
+                self.halt(snapshot)
         finally:
             self.store.lease(self.owner, self.clock(), ttl=0)

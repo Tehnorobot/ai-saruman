@@ -33,7 +33,8 @@ public final class ModGateway implements Supplier<Map<String,Object>> {
         if (modern) verify(dc,"5e773d1e64f651943b5faf709aea3ef1458503a2a25910acd476ab6a457e25cb",
                               "6943228ddd690a24b5aad2e98bccb36e798c15b96c0a57a419979e42eeabe4ce",
                               "15af6beddd33e4388812a4502f629fdf08d73dd711017c3950612658bb094385",
-                              "bdc144486e720b9a31a58544883593c7f0412e9a8da8262c6bf34f618d38f736");
+                              "bdc144486e720b9a31a58544883593c7f0412e9a8da8262c6bf34f618d38f736",
+                              "3ab5e109545c52a6a5592b414e16299211f387c138c811a563c0336ccd8dd16a");
         else verify(dc,"e19d47caa2ae553ab81b5b84ab4fc11179595809797cee7d122cad5f2b1db43c");
         verify(type("lab.treegrow.TreeGrowClient"),"edd7a699318d0b18f46abe67db25046502e20ca400f4751c0ac0679664e5bee9",
                                                 "ed50500c43293f614c632b65f9c31c3a116a35c7759f16d547c392c3ae5708bf",
@@ -171,6 +172,10 @@ public final class ModGateway implements Supplier<Map<String,Object>> {
                 r.put("native_busy",nativeBusy); r.put("tree",tree());
                 r.put("scheduler_busy",schedulerBusy);r.put("scheduler_owner",scheduler.get("owner"));
                 r.put("scheduler",scheduler);
+                Object nativeDefense=call(mod,"getMobDefenseChain");
+                Object nativeDefenseTask=call(nativeDefense,"getCurrentTask");
+                r.put("native_defense_task",nativeDefenseTask==null?null:nativeDefenseTask.toString());
+                r.put("runner_active",call(call(mod,"getTaskRunner"),"isActive"));
                 r.put("manual_stop",manualStop && !stopAcknowledged);
                 r.put("manual_stop_latched",addonApi && manualStop);
                 r.put("stop_kind",manualStop ? addonApi && "RESET".equals(String.valueOf(call(runtime,"action"))) ? "reset" : "manual" : "none");
@@ -183,6 +188,7 @@ public final class ModGateway implements Supplier<Map<String,Object>> {
                 return r;
             }
             if ("defense".equals(op)) {
+                if (args.containsKey("world") && !session.equals(args.get("world"))) return result("rejected","stale_world");
                 if (enabled != Boolean.TRUE.equals(args.get("enabled"))) {
                     if (addonApi) {
                         call(runtime,Boolean.TRUE.equals(args.get("enabled"))?"enable":"disable",client);
@@ -192,6 +198,29 @@ public final class ModGateway implements Supplier<Map<String,Object>> {
                 return result("applied",null);
             }
             if (!session.equals(args.get("world"))) return result("rejected","stale_world");
+            if ("halt".equals(op)) {
+                // Explicit operator Stop owns the whole automation session, unlike
+                // preemption of one owned goal. Turning off just the addon leaves
+                // UnionClef's independent Mob Defense running.
+                if (enabled) {
+                    if (addonApi) call(runtime,"disable",client);
+                    else call(runtime,"toggle",client);
+                }
+                Object runner=call(mod,"getTaskRunner");
+                try {
+                    // Detach native defense first: a stale task's teardown can
+                    // throw after world unload, before runner.disable flips active.
+                    if (addonApi) {
+                        try { call(dc,"resetNativeDefense"); }
+                        catch (NoSuchMethodException historicalArtifact) { /* Older pinned JARs lack the lifecycle hook. */ }
+                    }
+                    call(runner,"disable");
+                    if (addonApi) call(dc,"publishSnapshot",client);
+                } finally {
+                    put(runner,"cachedCurrentTaskChain",null);
+                }
+                return result("halted",null);
+            }
             // This coordinator owns replay. Native defense must never replay a stale @command.
             if (!addonApi) {
                 put(field(runtime,"bridge"),"lastLine",null);

@@ -11,15 +11,16 @@ ALTO = r'''
 package adris.altoclef;
 public class AltoClef {
  public static final AltoClef INSTANCE=new AltoClef();
- public final World world=new World(); public final Player player=new Player();public final Chain chain=new Chain(); public final Runner runner=new Runner(); public final Executor executor=new Executor();public boolean runnerEnabled=true;
+ public final World world=new World(); public final Player player=new Player();public final Chain chain=new Chain(); public final Chain defense=new Chain(); public final Runner runner=new Runner(); public final Executor executor=new Executor();public boolean runnerEnabled=true;
  public static AltoClef getInstance(){return INSTANCE;} public Object getWorld(){return world;}
  public Chain getUserTaskChain(){return chain;} public Runner getTaskRunner(){return runner;} public Executor getCommandExecutor(){return executor;}
+ public Chain getMobDefenseChain(){return defense;}
  public Player getPlayer(){return player;} public boolean isPaused(){return false;}
  public void runUserTask(Object task){chain.setTask(task);} public void cancelUserTask(){runnerEnabled=false;chain.setTask(null);}
  public static class Chain { public Object task; public boolean isActive(){return task!=null;} public Object getCurrentTask(){return task;} public void setTask(Object t){task=t;} public String getName(){return "UserTaskChain";} public float getPriority(){return 50;} }
- public static class Runner {private final java.util.Map<String,Float> lastPriority=java.util.Map.of();public Chain getCurrentTaskChain(){return INSTANCE.chain;}public boolean isActive(){return true;} }
+ public static class Runner {private final java.util.Map<String,Float> lastPriority=java.util.Map.of();private Object cachedCurrentTaskChain;public Chain getCurrentTaskChain(){return INSTANCE.chain;}public boolean isActive(){return INSTANCE.runnerEnabled;}public void disable(){if(INSTANCE.defense.task instanceof Task t && t.failStop)throw new IllegalStateException("stale native teardown");INSTANCE.runnerEnabled=false;INSTANCE.chain.setTask(null);INSTANCE.defense.setTask(null);} }
  public static class World {public java.util.List<Player> method_18456(){return java.util.List.of(INSTANCE.player,new Player("Alex",true),new Player("Steve",false));}}
- public static class Task {public boolean done,stopped;public boolean isFinished(){return done;}public boolean stopped(){return stopped;}}
+ public static class Task {public boolean done,stopped,failStop;public boolean isFinished(){return done;}public boolean stopped(){return stopped;}}
  public static class Executor {public int calls; public void executeWithPrefix(String command){calls++; INSTANCE.chain.setTask(new Task());}}
  public static class Player {public final String name;public final boolean alive;public Player(){this("Saruman",true);}public Player(String n,boolean a){name=n;alive=a;}public boolean method_5805(){return alive;}public Name method_5477(){return new Name(name);}}
  public record Name(String value) {public String getString(){return value;}}
@@ -44,7 +45,8 @@ public class TreeGrowClient {
 MODERN = r'''
 package dev.autodefense;
 public class AutoDefenseClient {
- public static final Combat RUNTIME=new Combat();public static int publications;
+ public static final Combat RUNTIME=new Combat();public static int publications,nativeResets;
+ public static void resetNativeDefense(){nativeResets++;adris.altoclef.AltoClef.INSTANCE.defense.setTask(null);}
  public static Combat combat(){return RUNTIME;}public static void publishSnapshot(Object client){publications++;}
  public static class Combat {
   public boolean enabled=false,busy=false,manual=false,reset=false;public int changes;
@@ -153,6 +155,18 @@ public class Harness {
    runtime.getClass().getField("reset").setBoolean(runtime,false);
    check("manual".equals(snapshot().get("stop_kind")),"explicit stop lost");
   }
+  AltoClef.INSTANCE.defense.setTask(new AltoClef.Task());
+  if(modern)((AltoClef.Task)AltoClef.INSTANCE.defense.task).failStop=true;
+  check(snapshot().get("native_defense_task")!=null,"native residual task hidden");
+  check("stale_world".equals(apply("halt",Map.of("world","stale")).get("reason")),"old Stop accepted in new world");
+  check(AltoClef.INSTANCE.runnerEnabled,"old Stop disabled runner");
+  int changesBefore=runtime.getClass().getField("changes").getInt(runtime);
+  check("stale_world".equals(apply("defense",Map.of("world","stale","enabled",true)).get("reason")),"stale defense enable changed new world");
+  check(runtime.getClass().getField("changes").getInt(runtime)==changesBefore,"stale defense mutation");
+  check("halted".equals(apply("halt",Map.of("world",world)).get("status")),"Stop rejected");
+  check(!AltoClef.INSTANCE.runnerEnabled && AltoClef.INSTANCE.defense.task==null,"native task survived Stop");
+  if(modern)check(dc.getField("nativeResets").getInt(null)==1,"native lifecycle reset omitted");
+  check("halted".equals(apply("halt",Map.of("world",world)).get("status")),"Stop is not idempotent");
   System.out.println(modern?"MODERN PASS":"LEGACY PASS");
  }
 }'''

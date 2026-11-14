@@ -1,5 +1,50 @@
 # Progress
 
+## 2026-11-14: Native Mob Defense retained across Stop and world changes
+
+### Investigate
+- User screenshot shows UnionClef's built-in Mob Defense at priority 0, with a
+  retained KillEntitiesTask/TimeoutWanderTask, distinct from the Auto Defense addon.
+  Existing activity observations show that native chain selected while the addon
+  and Lab automation are disabled. No user world actions were issued to diagnose it.
+- Pinned native isActive is always true; no-threat priority 0 does not detach the
+  previous root. Native cached targets/retreat tasks can recreate the root after
+  disconnect. Addon session validation is bypassed while disabled. Lab Stop only
+  disabled the addon and its known goals, leaving the native chain independent.
+
+### Plan
+- Drop only native defense's stale root when no threat earns priority. Reset its
+  typed target/route references at world/body boundaries, also when disabled and
+  before priority evaluation can read stale references. Detach even after bad stop.
+- Separate explicit Lab Stop from ordinary goal preemption: halt the global runner
+  only for the former, preserve player-goal cancellation and durable same-world
+  reconnects. Scope mutations to the actual world and surface rejected Stop.
+
+### Implement
+- Added scoped halt in the reflection shim, native task/runner telemetry, durable
+  cancellation before unavailable-API cleanup, explicit halt response validation
+  and retry after a world-race rejection. The native reset hook precedes runner
+  disable; the cached selected chain is cleared in finally. Historical pins remain.
+- Native patch uses a typed mixin to release old root/children and cached combat
+  intent, with independent world/body observers and cleanup before addon acquisition.
+  It changes no global settings, movement rules or priority of real threats.
+- 113 Python/Java protocol, preflight, idle and bridge checks passed. Two old idle
+  fixtures now represent actual failed search rather than resumable preemption;
+  assertions remain intact. Native Gradle passed 76 selected unit/ABI/order checks.
+- Independent old-code Minecraft run failed at the retained real kill root. Fixed
+  run passed 6 checks: zero-priority release, ordinary task kept ticking, bad-stop
+  teardown, real disconnect while disabled, another world without inherited intent,
+  real Husk damaged after explicit Start. Full Lab/player/Stop E2E is not claimed.
+- Built JAR 3ab5e109545c52a6a5592b414e16299211f387c138c811a563c0336ccd8dd16a;
+  exact source patch replay matches all 10 files. Source patch/manifest retained in
+  resources/Minecraft/patches; audit evidence in native-defense-lifecycle-2026-11-14.
+- Updated the paused Auto Defense project under its lock, preserving its prior
+  diagnostic edit, spec, canonical acceptance/verification and USER_PAUSED state.
+  Memory event M-0000000000003592-30477804c4c3557321f1f77fbfd322d909abf3fe7dcf10dc094b6646efcd5dda
+  links the diagnostics. No condition was relabelled PASS from maintenance tests.
+- Installation pending owner closing Minecraft. Old JAR/worker remain active until
+  safe replacement and worker reload; no launcher/world/other mod was modified.
+
 ## 2026-11-13: TreeGrow mining from Lab and exclusive input ownership
 
 ### Investigate

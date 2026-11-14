@@ -1,0 +1,63 @@
+{
+  "base_jar_sha256": "bdc144486e720b9a31a58544883593c7f0412e9a8da8262c6bf34f618d38f736",
+  "fixed_jar_sha256": "3ab5e109545c52a6a5592b414e16299211f387c138c811a563c0336ccd8dd16a",
+  "files": [
+    {
+      "path": "build.gradle",
+      "before": "dfed61685ef274f8ebf5ca98ea66e8fe90aba4e0bfd7bd63ffc29dc9adc46bca",
+      "after": "7246effcdd0f457776218fe3aca573521adee83dde1a4b15b1a08c6fad17ee24"
+    },
+    {
+      "path": "src/test/java/dev/autodefense/combat/NativeDefenseLifecycleTest.java",
+      "before": null,
+      "after": "75725f69748e255d54b57f5512117dcae81ac30560e68416f7e81919dda55e42"
+    },
+    {
+      "path": "src/main/java/dev/autodefense/AutoDefenseClient.java",
+      "before": "46551fb72388dfe259084623b7978da8b62a732dd4da435e6828329364e00237",
+      "after": "26718ce1869a6b2c7eab8912cf706d1ee77b670b6bb40bdec7a6e7c422ad8652"
+    },
+    {
+      "path": "src/main/java/dev/autodefense/combat/AutoCombat.java",
+      "before": "58435b3286656bcdbc718bbe132e207a0364f9e68dff32b0a63c81d8d1bc231b",
+      "after": "cb002948580953c7c12de6c936ae53d802d2578f680280a8f3fb11a2aec36702"
+    },
+    {
+      "path": "src/main/java/dev/autodefense/combat/NativeDefenseReset.java",
+      "before": null,
+      "after": "43a47be90d5fc21f933593775922bc593fdd27234b5dc3500a9c4044e7018905"
+    },
+    {
+      "path": "src/main/java/dev/autodefense/combat/NativeWorldScope.java",
+      "before": null,
+      "after": "8493e088fe2a1f1f6d03b6dc1615cc6969a4d13b86508056b206d43a8e59e992"
+    },
+    {
+      "path": "src/main/java/dev/autodefense/mixin/MobDefenseOwnershipMixin.java",
+      "before": "a635eeccaec9ae98c47f02d37975e450b3d8a135d293a7b8a255486d81f83286",
+      "after": "7df9f028b4b4e42997a785ebe61647dd569da38be2952cdeb8e93c2751cee74b"
+    },
+    {
+      "path": "src/gametest/resources/fabric.mod.json",
+      "before": "265d8ef6de707fb3a84910b221b4ad8d7a8fefb7e2ee8934d7411c0982ac5fdc",
+      "after": "6cbbb8c104b2822d222be56570ff88118795cfa0957bb08d205bb9b9c60cf3f4"
+    },
+    {
+      "path": "src/gametest/java/dev/autodefense/acceptance/GoalClientBootTest.java",
+      "before": "1f0dc0b9c0b48d51b72e44382f95b8ea6199eb2282fb07c0ee0215f423dc246d",
+      "after": "542b8335e1e7bbfebf0843f951ec4c2351773ba716069c0e7f695bdc086ff52f"
+    },
+    {
+      "path": "src/gametest/java/dev/autodefense/combat/NativeDefenseLifecycleProbe.java",
+      "before": null,
+      "after": "f7ecf5d87672f54d7ed426b08b06cf59067c7fad08d292d7d1bf4b5a4dbdc0c1"
+    }
+  ],
+  "verification": {
+    "unit_checks": 76,
+    "native_game_checks": 6,
+    "baseline": "Zero priority retained the real kill task",
+    "full_lab_e2e": "not run"
+  },
+  "evidence": "Codex-Development-Lab\\audit\\native-defense-lifecycle-2026-11-14"
+}
