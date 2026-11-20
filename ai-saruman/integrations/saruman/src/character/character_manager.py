@@ -156,25 +156,3 @@ class CharacterManager:
             cls._cache.pop(character_name, None)
         else:
             cls._cache.clear()
-
-
-if __name__ == "__main__":
-    from tests.framework.test_helper import TestHelper
-
-    TestHelper.announce_testing(__file__)
-
-    char_name = Settings.get().main_character.name
-
-    print(f"Кэш персонажей: {CharacterManager._cache}")
-
-    character = CharacterManager.get_cached_instance(char_name)
-    print(f"Кэш персонажей: {CharacterManager._cache}")
-
-    print(f"Базовый промпт для персонажа {character.character_name}:")
-    print(character.read_character_prompt())
-
-    char2 = CharacterManager.get_cached_instance(char_name)
-    print(f"Кэш персонажей: {CharacterManager._cache}")
-
-    TestHelper.test(char2).should_be(character, "Проверка кэша")
-    TestHelper.test(char2.character_name).should_equal(character.character_name, "Проверка кэша")

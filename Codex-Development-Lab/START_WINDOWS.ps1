@@ -41,7 +41,7 @@ if (-not (Test-Path -LiteralPath '.env')) {
     Write-Host 'Created .env from .env.example. Set S3 credentials there when needed.' -ForegroundColor Yellow
 }
 
-. (Join-Path $PSScriptRoot 'Test-LabIsolation.ps1')
+. (Join-Path $PSScriptRoot 'LabIsolation.ps1')
 $effectiveConfig = & docker compose config --format json
 if ($LASTEXITCODE -ne 0) { throw 'Cannot validate the effective Compose configuration.' }
 $checkedConfig = $effectiveConfig | ConvertFrom-Json

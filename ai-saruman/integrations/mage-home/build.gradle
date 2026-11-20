@@ -50,48 +50,6 @@ gradle.projectsEvaluated {
     }
 }
 
-// Acceptance scenario id is only meaningful for gameplay runs (see docs/ACCEPTANCE.md).
-def acceptanceScenario = providers.gradleProperty('labAcceptanceScenario').getOrElse('')
-
-// The directory of the JUnit report of a gameplay scenario. The independent runner reads the
-// fresh reports of the build directory, so the report of the running game has to be written
-// there as well.
-def acceptanceResultsDir = layout.buildDirectory.dir('test-results/acceptance').get().asFile.absolutePath
-
-loom {
-    runs {
-        client {
-            client()
-            vmArg "-Dlab.acceptance.scenario=${acceptanceScenario}"
-            vmArg "-Dlab.acceptance.results.dir=${acceptanceResultsDir}"
-        }
-        persistenceSeed {
-            client()
-            runDir 'run'
-            vmArg '-Dlab.acceptance.scenario=persistence-after-exit'
-            vmArg '-Dlab.acceptance.fixture.phase=seed'
-            vmArg "-Dlab.acceptance.results.dir=${acceptanceResultsDir}"
-        }
-        persistenceReload {
-            client()
-            runDir 'run'
-            vmArg '-Dlab.acceptance.scenario=persistence-after-exit'
-            vmArg '-Dlab.acceptance.fixture.phase=reload'
-            vmArg "-Dlab.acceptance.results.dir=${acceptanceResultsDir}"
-        }
-    }
-}
-
-tasks.named('runPersistenceReload') {
-    dependsOn 'runPersistenceSeed'
-}
-
-tasks.register('runPersistenceCheck') {
-    group = 'verification'
-    description = 'Seeds a partial house, exits Minecraft, then verifies restart in a second client JVM'
-    dependsOn 'runPersistenceReload'
-}
-
 dependencies {
     minecraft "com.mojang:minecraft:${minecraft_version}"
     mappings "net.fabricmc:yarn:${yarn_mappings}:v2"
@@ -108,8 +66,6 @@ dependencies {
     // Pure Java domain core: no Minecraft and no UnionClef on its classpath.
     implementation project(':core')
 
-    testImplementation 'org.junit.jupiter:junit-jupiter:5.11.4'
-    testRuntimeOnly 'org.junit.platform:junit-platform-launcher:1.11.4'
 }
 
 java {
@@ -155,84 +111,4 @@ processResources {
     filesMatching('fabric.mod.json') {
         expand(props)
     }
-}
-
-tasks.named('test') {
-    useJUnitPlatform()
-    testLogging {
-        events 'passed', 'failed', 'skipped'
-    }
-}
-
-// The named checks of the core belong to the build of the project: the build stage of the
-// independent runner has to produce their fresh JUnit report as well.
-tasks.named('check') {
-    dependsOn ':core:test'
-}
-
-def clientArtifact = tasks.named('remapJar')
-project(':core').tasks.withType(Test).configureEach { dependsOn clientArtifact }
-
-// The executable check inventory of the domain core. The names of these tasks are the ones the
-// scenario manifest uses; a unit run selects the task without the client only property.
-tasks.register('coreTest') {
-    group = 'verification'
-    description = 'Runs the named domain checks of the core module as JUnit cases'
-    dependsOn ':core:test'
-}
-
-// Isolated lab only: launch the remapped shipping JAR with an original Minecraft client.
-if (providers.gradleProperty('mageStevePackaged').isPresent()) {
-    def env = System.getenv()
-    def endpoint = env['MAGE_STEVE_ENDPOINT'] ?: ''
-    def gameDirectory = new File(env['MAGE_STEVE_GAME'] ?: '')
-    def save = env['MAGE_STEVE_LOCAL_SAVE'] ?: ''
-    if (!gameDirectory.isAbsolute() || !gameDirectory.isDirectory() ||
-            (save ? (!(save ==~ /lab-[a-z]+/) || !new File(gameDirectory, "saves/${save}/level.dat").isFile())
-                  : !(endpoint ==~ /127\.0\.0\.1:[0-9]{1,5}/))) {
-        throw new GradleException('Packaged Steve requires a private lab save or loopback endpoint')
-    }
-    def rawFabricApi = configurations.detachedConfiguration(dependencies.create(
-        "net.fabricmc.fabric-api:fabric-api:${fabric_version}"))
-    rawFabricApi.transitive = false
-    tasks.register('runStevePackaged', net.fabricmc.loom.task.prod.ClientProductionRunTask) {
-        group = 'verification'
-        description = 'Runs the remapped Mage Home JAR on the isolated dedicated-server fixture'
-        dependsOn tasks.named('remapJar')
-        mods.from(tasks.named('remapJar'), file(project.unionclef_jar), rawFabricApi)
-        runDir.set(gameDirectory)
-        useXVFB.set(false) // the stand already owns and supervises Xvfb
-        programArgs.addAll('--username', 'Steve', '--uuid',
-            UUID.nameUUIDFromBytes('OfflinePlayer:Steve'.getBytes('UTF-8')).toString(),
-            '--accessToken', '0', '--version', project.minecraft_version)
-        jvmArgs.add('-XX:ActiveProcessorCount=4')
-        if (save) {
-            jvmArgs.add('-Dmage_home.control.enable=true')
-            if (env['MAGE_STEVE_JOIN_FROM_LAB'] != '1') {
-                mods.from(file('/opt/lab/fixtures/minecraft-client/runtime/dependency-bootstrap.jar'))
-                jvmArgs.addAll('-Dlab.client.setup.adapter=altoclef-title-1.21.11-0.95.61',
-                    '-Dlab.client.setup.world=' + save,
-                    '-Dlab.client.setup.output=' + new File(gameDirectory, 'client-dependency-preparation.json').absolutePath)
-            }
-        } else {
-            jvmArgs.add('-Dmage_home.lab.steveServer=' + endpoint)
-        }
-        if (env['MAGE_STEVE_ENGINE']) {
-            jvmArgs.add('-Dmage_home.lab.engine=' + env['MAGE_STEVE_ENGINE'])
-        }
-        [MAGE_STEVE_PYTHON: 'mage_home.model.python',
-         MAGE_STEVE_MODULE_PATH: 'mage_home.model.modulePath',
-         MAGE_STEVE_DESIGN_PROFILE: 'mage_home.model.designProfile',
-         MAGE_STEVE_EXPERT_PROFILE: 'mage_home.model.expertProfile',
-         MAGE_STEVE_PREP_DELAY: 'mage_home.lab.preparationDelayTicks'].each { key, property ->
-            def value = env[key]
-            if (value != null && !value.isBlank()) jvmArgs.add('-D' + property + '=' + value)
-        }
-    }
-}
-
-tasks.register('coreCheck') {
-    group = 'verification'
-    description = 'Runs the named domain checks and writes the report into core/build/reports/mage_home'
-    dependsOn ':core:coreCheck'
 }

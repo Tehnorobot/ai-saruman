@@ -21,13 +21,3 @@ class PromptHelper:
         yaml_path = os.path.join(PromptHelper.BASE_PROMPTS_DIR, f"{tool_prompt_file}.yml")
         prompt = YamlReader.read_yaml(yaml_path)[prompt_name]
         return prompt
-
-
-if __name__ == "__main__":
-    from tests.framework.test_helper import TestHelper
-
-    TestHelper.announce_testing(__file__)
-
-    insrtuctions = PromptHelper.load_tool_prompt("instructions", "nickname_analyzer_task")
-    print("Nickname analyzer propmt:")
-    print(insrtuctions)

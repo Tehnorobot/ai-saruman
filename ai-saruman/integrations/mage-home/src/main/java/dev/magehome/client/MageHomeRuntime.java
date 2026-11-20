@@ -44,7 +44,6 @@ public final class MageHomeRuntime implements NavigationRequest {
     private final PlacementExecutor placement;
     private final MageHomeTask task;
     private final Queue<Runnable> pendingActions = new ConcurrentLinkedQueue<>();
-    private final AcceptanceRunner acceptance = new AcceptanceRunner();
 
     /** Number of the client ticks between two observations in the log. */
     private static final int OBSERVATION_INTERVAL_TICKS = 100;
@@ -101,10 +100,6 @@ public final class MageHomeRuntime implements NavigationRequest {
         return registryService;
     }
 
-    public AcceptanceRunner acceptance() {
-        return acceptance;
-    }
-
     /** The placement of the mod; it counts the interactions with the world. */
     public PlacementExecutor placement() {
         return placement;
@@ -115,17 +110,8 @@ public final class MageHomeRuntime implements NavigationRequest {
     /** One client tick of the mod. */
     public void onClientTick() {
         MinecraftClient client = MinecraftClient.getInstance();
-        // The preparation of the stand of the laboratory runs before the world is loaded: the
-        // laboratory of the platform opens the world through the lifecycle of the dependency
-        // (the title screen of Minecraft for the dependency altoclef 1.21.11-0.95.61, see
-        // LabStand), and UnionClef initializes itself there. The preparation of the platform
-        // lets that lifecycle run for the dependency; the stand of the add-on only observes the
-        // facts of the readiness. Without a scenario of the laboratory nothing happens here.
-        acceptance.prepareStand();
         if (client.world == null || client.player == null) {
             placement.releaseControls();
-            // A scenario of the acceptance run waits for the world of the stand.
-            acceptance.standWaiting();
             updateSnapshots();
             return;
         }
@@ -152,7 +138,6 @@ public final class MageHomeRuntime implements NavigationRequest {
         }
         updateSnapshots();
         observeRuntime();
-        acceptance.tick(this);
     }
 
     /**

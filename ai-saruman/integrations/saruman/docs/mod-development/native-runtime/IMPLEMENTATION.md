@@ -229,4 +229,3 @@ Read-only подключение к `127.0.0.1:25333` во время реали
 следующем явном Start в Lab. Сам персонаж оставлен остановленным.
 
 Воспроизводимый патч и хеши: `resources/Minecraft/patches/native-defense-lifecycle.*`.
-Полный отчёт: `Codex-Development-Lab/audit/native-defense-lifecycle-2026-11-14/REPORT_RU.md`.

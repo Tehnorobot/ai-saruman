@@ -119,5 +119,3 @@ powershell -ExecutionPolicy Bypass -File .\START_WINDOWS.ps1
 результат последней проверки, ещё не перенесённый в `projects/`.
 Журнал `.lab-workspace-swap.json` и каталоги `.lab-incoming-*`/`.lab-previous-*`
 также принадлежат восстановлению; не удаляй их вручную при незавершённом переносе.
-
-Результаты независимой проверки: [RUNNER_VALIDATION_RU.md](RUNNER_VALIDATION_RU.md).

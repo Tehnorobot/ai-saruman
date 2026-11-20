@@ -81,16 +81,6 @@ probability, found = moderation.has_banned_words(text)
 print(probability, found)  # Вернёт: (0.8, True)
 ```
 
-## Запустите тесты с помощью unittest:
-
-python -m unittest discover tests
-
-python310.15 -m unittest discover tests
-
-Запуск с подробным выводом   
-python310.15 -m unittest discover -s tests -v
-
-
 project/
 ├── src/
 │   ├── transliteration_map.py

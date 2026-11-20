@@ -1,9 +1,0 @@
-{
-  "projectId": "example-courtyard",
-  "description": "Одноэтажный Г-образный дом вокруг открытого дворика. Мастерская с верстаком и сундуком, спальня с кроватью и выход из коридора во двор.",
-  "context": {
-    "world": {"server":"localhost:25565", "dimension":"minecraft:overworld"},
-    "anchor": {"x":10, "y":-60, "z":20},
-    "capabilities": {"canPlace":true,"canBreak":true,"canUseItems":true,"canUseCommands":true}
-  }
-}

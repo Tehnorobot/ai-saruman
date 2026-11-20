@@ -11,3 +11,4 @@ backup-requests
 backups
 **/__pycache__
 *.zip
+tests

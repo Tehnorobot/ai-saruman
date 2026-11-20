@@ -60,30 +60,6 @@ JSON для машинных действий, свободный Markdown дл�
 
 ### MiniMax Explore / M Plan
 
-Отдельный тест модели: [test_minimax.py](test_minimax.py), Python 3.10+, без
-установки библиотек. Из корня проекта:
-
-```powershell
-python test_minimax.py --dry-run
-python test_minimax.py --run --verify-code
-```
-
-Первый запуск только показывает задания. Второй отправляет 15 запросов:
-планировщик, кодер и ревьюер × `low`, `medium`, `high`, `xhigh`, `max`.
-Используются `MINIMAX_API_KEY` и `MINIMAX_BASE_URL` из `.env` или окружения;
-ключ не передаётся через аргументы командной строки. `--verify-code` требует
-запущенный Docker и существующий локальный `codex-lab-worker:local`:
-Java-код проверяется без сети, секретов и подключённых папок хоста.
-Ответы, время API, токены/кеш и таблица сравнения сохраняются в
-`minimax-probe-results/<дата>/results.json` и `results.html` после каждого ответа.
-Это отдельные прямые запросы: в счётчик панели Lab они не входят.
-План и замечания ревьюера нужно оценить по смыслу; автоматические проверки
-формата не доказывают их правильность. Minecraft этот скрипт не запускает.
-Один пробный вариант: `python test_minimax.py --run --roles planner --efforts low high`.
-Для повторов добавьте `--repeats 3`; лимит ответа задаётся `--max-tokens 16384`
-(включает thinking), таймаут — `--timeout 900`. Усечённый ответ показан отдельно,
-автоматических повторов нет. `--self-test` проверяет скрипт без сети и ключа.
-
 В выборе провайдера проекта и моделей по ролям доступен **MiniMax / Explore**.
 Документированная текстовая модель подписки — `MiniMax-M3.1-Flash`.
 Reasoning: `low`, `medium`, `high`, `xhigh`, `max`; `default` означает `max`.
@@ -187,7 +163,7 @@ powershell -ExecutionPolicy Bypass -File .\START_WINDOWS.ps1
 ```powershell
 Copy-Item .env.example .env
 # В .env при необходимости заполните Yandex S3 ключи.
-. .\Test-LabIsolation.ps1
+. .\LabIsolation.ps1
 $config = docker compose config --format json | ConvertFrom-Json
 Assert-LabIsolation -Configuration $config -LabRoot $PWD.Path
 Assert-LabVolumeMetadata -Configuration $config
@@ -339,8 +315,7 @@ workspace одного проекта, защищённый каталог эк�
 Только `runner` имеет Docker socket; папки проектов и учётные данные ему не
 подключены. Это доверенная часть системы, которая управляет Docker.
 Обновление, границы доступа и восстановление: [ISOLATION_RU.md](ISOLATION_RU.md).
-Ускорение, сетевые ограничения и результаты замеров: [PERFORMANCE_SECURITY_RU.md](PERFORMANCE_SECURITY_RU.md).
-История предыдущих исправлений: [FIXES_RU.md](FIXES_RU.md).
+Сетевые ограничения описаны в [руководстве изоляции](ISOLATION_RU.md).
 
 Codex выполняется в отдельном контейнере `agent`: он видит каталог проектов лаборатории, собственный task-mailbox, Codex login volume и кэш Gradle; `data/`, `artifacts/`, бэкапы и S3 credentials туда не монтируются. Агент и тесты используют изолированные сети без шлюза к хосту. Интернет доступен через фильтрующий HTTP/HTTPS-прокси, который запрещает локальные и частные адреса. Из-за ограничений вложенного sandbox внутри Docker Codex работает с `danger-full-access` **только внутри изолированного контейнера**, не на Windows-хосте. Не помещайте посторонние конфиденциальные файлы в каталог проектов лаборатории.
 
@@ -362,10 +337,8 @@ Skills и `AGENTS.md` копируются внутрь нового проек�
 
 Встроенные тестовые профили сейчас распознают Gradle, Maven, pytest и npm (если объявлен тестовый скрипт). Новые runner'ы можно добавлять в `worker/engine.py`. **Запуск произвольного недоверенного кода** происходит в изолированном контейнере, но Docker — не абсолютная песочница. Не храните в смонтированных папках конфиденциальные материалы. Веб-панель привязана исключительно к `127.0.0.1`; не открывайте её в интернет без отдельной авторизации.
 
-## Тесты самой лаборатории
+## Контекст и настройки агентов
 
-Настройки контекста и времени агентов, найденные ограничения и исправления:
-[EXECUTION_LIMITS_REVIEW_RU.md](audit/EXECUTION_LIMITS_REVIEW_RU.md).
 Ошибки и заметки сохраняются в полном архиве со ссылками из рабочей сводки:
 [DURABLE_MEMORY_RU.md](audit/DURABLE_MEMORY_RU.md).
 Схема и допустимые форматы ответа планировщика находятся в `schemas/`:
@@ -376,20 +349,9 @@ API-агенты используют `API_CONTEXT_BYTES=524288` (512 КиБ).
 `PLANNER_TIMEOUT_SECONDS` и `REVIEWER_TIMEOUT_SECONDS` задают отдельные мягкие сроки.
 Скрытого принудительного предела 600 или 3600 секунд для работы модели нет.
 
-```powershell
-docker compose run --rm dashboard python3 -m unittest discover -s tests -v
-```
+## Проверка конфигурации
 
-Локально на компьютере с Python и установленными зависимостями: `python -m unittest discover -s tests -v`. Не считать эти тесты проверкой Minecraft gameplay.
-
-## Проверка сборки и файлов
-
-Результаты проверки нового ограниченного запуска находятся в
-[RUNNER_VALIDATION_RU.md](RUNNER_VALIDATION_RU.md); предыдущего аудита — в
-[FIX_VALIDATION_RU.md](FIX_VALIDATION_RU.md). `VALIDATION_REPORT.md` сохраняет
-историю проверки исходной упаковки проекта.
-
-`docker compose config` проверяет конфигурацию Compose (без запуска). Первый Docker build требует сети. В `VALIDATION_REPORT.md` указано, что реально удалось проверить в среде создания архива, а что остаётся непроверенным. Yandex S3 credentials и Docker Desktop пользователя недоступны в среде генерации ZIP, поэтому реальный облачный upload и запуск Minecraft будут проверены при твоём первом запуске.
+`docker compose config` проверяет конфигурацию Compose. Для запуска используйте `START_WINDOWS.ps1`.
 
 ## Исправление первого запуска Docker Compose (pull access denied)
 

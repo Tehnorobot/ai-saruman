@@ -86,14 +86,9 @@ Codex предлагает вызовы инструментов в JSON; про
 `saruman-runtime` — прямой вход в движок с его аргументами; для обычного запуска
 используй launcher. Команда `saruman` в корневом окружении относится к лаборатории.
 
-## Проверки и границы готовности
+## Диагностика
 
-```powershell
-$env:PYTHONPATH='src'
-.\.venv\Scripts\python.exe -B -m unittest discover -s tests -p test_saruman.py -v
-```
-
-Тесты используют подставные RPC и gateway. Реальную слышимость, движение в Minecraft,
+Реальную слышимость, движение в Minecraft,
 GPU и голосовой маршрут проверяй по checklist в Windows-инструкции.
 Runtime пока работает на Windows-хосте; контейнеры обслуживают вспомогательные сервисы.
 МАС, оркестратор, Telegram-агенты и автоматическая синхронизация памяти лаборатории
@@ -105,7 +100,6 @@ Runtime пока работает на Windows-хосте; контейнеры 
 - [Настройки](docs/help/1_CONFIG.md)
 - [Запуск](docs/help/2_USAGE.md)
 - [Свои звуки и голос](docs/help/instructions/SOUNDS.md)
-- [Аудит переименования](docs/ai/RENAME_AUDIT.md)
 - [Происхождение кода](SOURCE.md)
 
 ## Лицензия

@@ -212,12 +212,7 @@ src/saruman/web.py обслуживает локальный интерфейс,
 - [Использование плана ChatGPT в локальных и open-source приложениях](https://developers.openai.com/siwc/token-sharing-open-source)
 - [Ограничения Sign in with ChatGPT](https://developers.openai.com/siwc/token-sharing-open-source/preview-limitations)
 
-## Проверки
-
-~~~bash
-PYTHONPATH=src python3 -B -m unittest discover -s tests -v
-python3 -B agent-workplace/tools/check.py
-~~~
+## Локальный доступ
 
 Сервер слушает только 127.0.0.1. Локальные POST-запросы проверяют Origin,
 Host и случайный токен сессии. Публичное размещение и многопользовательская

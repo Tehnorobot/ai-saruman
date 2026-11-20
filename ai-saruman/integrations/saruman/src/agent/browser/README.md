@@ -126,19 +126,7 @@ config = get_browser_agent_config()
 agent = BrowserAgent(ctx=config)
 ```
 
-## Testing
-
-### Run Tests
-
-```bash
-# Run all tests
-python -m pytest tests/test_browser_agent.py -v
-
-# Run specific test
-python tests/test_browser_agent.py
-```
-
-### Mock Mode
+## Mock Mode
 
 For testing without actual browser interaction:
 

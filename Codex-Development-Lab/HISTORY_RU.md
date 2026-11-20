@@ -65,5 +65,3 @@ docker compose up -d --no-build --force-recreate
 
 Не запускай создание проекта повторно ради обновления интерфейса.
 Обычное обновление вкладки состояние задания не меняет.
-
-Результаты независимой проверки: [HISTORY_VALIDATION_RU.md](HISTORY_VALIDATION_RU.md).

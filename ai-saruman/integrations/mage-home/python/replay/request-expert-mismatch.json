@@ -1,9 +1,0 @@
-{
-  "requestId":"request-mismatch", "runId":"run-example", "generation":3, "schemaRevision":1, "permitGeneration":7,
-  "incident":{"id":"mismatch-1", "kind":"world_plan_mismatch", "goal":{"cell":{"x":10,"y":-58,"z":20},"expectedBlock":"minecraft:stone_bricks","expectedState":{}},"symptoms":["a different block was observed on the goal"],"attemptsBudgetUsed":0,"attemptsBudgetTotal":3},
-  "worldSnapshot":{"anchor":{"x":10,"y":-60,"z":20},"revision":"world-r42","known":[],"cells":[{"x":10,"y":-58,"z":20,"block":"minecraft:gravel","state":{}}]},
-  "ownership":{"inputOwner":"none","controlHeld":false,"availableActions":["break_block","place_block","send_command","observe"],"commandReserveAllowed":true},
-  "attemptLedger":{"records":[]},
-  "plan":{"currentStepId":"building-goal","steps":[{"id":"building-goal","kind":"place_block","cells":[{"x":10,"y":-58,"z":20}],"dependsOn":[],"cleanupIds":[]}]},
-  "options":{"allowCommandReserve":true,"deadlineMillis":3000}
-}

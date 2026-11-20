@@ -7,15 +7,18 @@ Python 3.10+, нет runtime-зависимостей и зависимости 
 Из этой папки (или через `PYTHONPATH` / после установки wheel):
 
 ```text
-python -m mage_home design --profile profiles/replay.json
-python -m mage_home expert --profile profiles/replay.json
-python -m unittest discover -s tests -v
+python -m mage_home design --profile profiles/live.local.json
+python -m mage_home expert --profile profiles/live.local.json
 python -m pip wheel --no-deps . --wheel-dir dist
 ```
 
-На stdin передать **один объект JSON UTF-8** и закрыть поток. На stdout будет одна строка JSON UTF-8; не смешивать её с журналом. Процесс возвращает 0 и для доменных ошибок: проверяйте `ok`. `design` принимает `{description, context, projectId}`, возвращает `{ok:true, blueprint:{…}}`. `expert` принимает `expertRequest` из общей схемы, возвращает `{ok:true, proposal:{…}}`; `ok:false` означает `{error:{code,message}}`, не готовый план. Пример текстового входа: `replay/request-courtyard.json`; примеры инцидентов: `replay/request-expert-access.json`, `replay/request-expert-mismatch.json`.
-
-Replay поиска дома совпадает по точному описанию, экспертного сценария — по виду инцидента. В `designs.json` записано **архитектурное намерение**, а не финальный blueprint. Компилятор выводит детерминированные клетки, обязательный воздух, пары, зависимости, вход и ведомость. Зафиксированные экспертные тактики привязываются только к наблюдаемой текущей цели и проходят те же проверки, что и ответы модели. `delayMillis` в отдельной replay-записи позволяет воспроизвести таймаут; `response` позволяет записать статический ответ, в т. ч. для негативного теста.
+На stdin передайте **один объект JSON UTF-8** и закройте поток. На stdout
+процесс возвращает одну строку JSON UTF-8. Проверяйте поле `ok`, поскольку
+доменные ошибки также могут иметь код выхода 0. `design` принимает
+`{description, context, projectId}` и возвращает `{ok:true, blueprint:{…}}`.
+`expert` принимает `expertRequest` и возвращает `{ok:true, proposal:{…}}`.
+В случае ошибки возвращается `{ok:false, error:{code,message}}`.
+[Контракт и примеры запросов](../docs/API_RU.md).
 
 ## Самостоятельный профиль
 

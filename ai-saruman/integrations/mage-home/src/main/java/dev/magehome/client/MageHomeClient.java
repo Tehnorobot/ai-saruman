@@ -16,10 +16,8 @@ import java.nio.file.Path;
  * The client entry point of the addon. The mod works on the client only; on a server and for
  * other players it is not needed.
  *
- * <p>Two lifecycles live here. The inherited lifecycle of the laboratory drives the acceptance
- * scenarios of the stand. The public contract {@code mage_home.api/1} starts the local control
- * server, publishes its port in {@code <gameDir>/config/mage_home/control-port.json} and drives
- * the runs of the building module.
+ * <p>The public contract {@code mage_home.api/1} can expose a local control server
+ * and publish its port in {@code <gameDir>/config/mage_home/control-port.json}.
  */
 public final class MageHomeClient implements ClientModInitializer {
 
@@ -29,7 +27,6 @@ public final class MageHomeClient implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
         MageHomeRuntime runtime = MageHomeRuntime.create();
-        String steveEndpoint = System.getProperty("mage_home.lab.steveServer", "");
         MageHomeCommands.register(runtime);
         ClientTickEvents.START_CLIENT_TICK.register(client -> {
             var v5 = V5Runtime.get();
@@ -44,12 +41,7 @@ public final class MageHomeClient implements ClientModInitializer {
             V5Runtime.get().onDisconnect();
             runtime.onWorldLeft();
         });
-        runtime.acceptance().install(System.getProperty("lab.acceptance.scenario", ""));
-        if (!steveEndpoint.isBlank()) {
-            var steve = new SteveLabLauncher(steveEndpoint);
-            ClientTickEvents.END_CLIENT_TICK.register(steve::tick);
-        }
-        if (!steveEndpoint.isBlank() || Boolean.getBoolean("mage_home.control.enable")) {
+        if (Boolean.getBoolean("mage_home.control.enable")) {
             startControlServer();
         }
         ClientLifecycleEvents.CLIENT_STOPPING.register(client -> {
@@ -60,8 +52,7 @@ public final class MageHomeClient implements ClientModInitializer {
     /**
      * Starts the control server of the public contract.
      *
-     * <p>The server is the program boundary that the Steve controller and a future character
-     * adapter use. It binds the loopback interface only.
+     * <p>The server binds the loopback interface only.
      */
     private static void startControlServer() {
         try {

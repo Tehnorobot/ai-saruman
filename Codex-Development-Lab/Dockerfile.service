@@ -10,7 +10,6 @@ COPY schemas /opt/lab/schemas
 COPY app /opt/lab/app
 COPY backup /opt/lab/backup
 COPY storage /opt/lab/storage
-COPY tests /opt/lab/tests
 COPY agent /opt/lab/agent
 COPY worker /opt/lab/worker
 COPY fixtures/minecraft-client/*.gradle /opt/lab/fixtures/minecraft-client/

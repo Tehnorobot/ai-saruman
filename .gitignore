@@ -94,6 +94,7 @@ id_ed25519
 *.log.[0-9]*
 
 # Test/browser reports and local model caches
+tests/
 test-results/
 playwright-report/
 .playwright/
@@ -137,35 +138,43 @@ Desktop.ini
 /Codex-Development-Lab/minimax-probe-results/
 /Codex-Development-Lab/skills_outdated/
 
-# Audit scripts and Markdown documentation remain versioned.
-# Subdirectories hold isolated runs, copied workspaces, screenshots and reports.
-/Codex-Development-Lab/audit/*/
-/Codex-Development-Lab/audit/*.json
-/Codex-Development-Lab/audit/*.jsonl
-/Codex-Development-Lab/audit/*.txt
-/Codex-Development-Lab/audit/*.log
-/Codex-Development-Lab/audit/*.csv
-/Codex-Development-Lab/audit/*.png
-/Codex-Development-Lab/audit/*.jpg
-/Codex-Development-Lab/audit/*.mp4
-/Codex-Development-Lab/audit/*.webm
-/Codex-Development-Lab/audit/*.zip
-/Codex-Development-Lab/audit/*.tar
-/Codex-Development-Lab/audit/*.tar.gz
+# Local audits, with reusable pipeline documentation and its diagram generator
+/Codex-Development-Lab/audit/*
+!/Codex-Development-Lab/audit/SEMANTIC_PIPELINE_V1_RU.md
+!/Codex-Development-Lab/audit/PLANNER_FORMATS_RU.md
+!/Codex-Development-Lab/audit/DURABLE_MEMORY_RU.md
+!/Codex-Development-Lab/audit/build_pipeline_explainer.py
+!/Codex-Development-Lab/audit/pipeline_explainer.template.html
+
+# Local validation notes and standalone diagnostics
+/Codex-Development-Lab/AUDIT_REPORT_RU.md
+/Codex-Development-Lab/AUDIT_TEST_RESULTS.md
+/Codex-Development-Lab/*VALIDATION*.md
+/Codex-Development-Lab/FIXES_RU.md
+/Codex-Development-Lab/RUNTIME_FIXES_RU.md
+/Codex-Development-Lab/PERFORMANCE_SECURITY_RU.md
+/Codex-Development-Lab/VIDEO_FIX_RU.md
+/Codex-Development-Lab/WORKSPACE_RETURN_FIX_RU.md
+/Codex-Development-Lab/test_minimax.py
+/test_litellm.py
+/ai-saruman/integrations/saruman/docs/ai/
+/ai-saruman/integrations/saruman/docker/filter/feature_filter/test_*
+/ai-saruman/integrations/saruman/src/agent/browser/test_agent.py
+/ai-saruman/integrations/telegram-gateway/test_*.py
+/ai-saruman/integrations/telegram-gateway/VALIDATION_RU.md
 
 # Local finalization snapshots and one-off diagnostics
-/Codex-Development-Lab/audit/WorldKeyPathProbe.java
-/Codex-Development-Lab/audit/build_mage_home_path_fix.py
-/Codex-Development-Lab/audit/prepare_mage_home_round10_followup.py
-/Codex-Development-Lab/audit/prepare_sapling_drop_fix.py
-/Codex-Development-Lab/audit/record_mage_home_path_fix.py
-/Codex-Development-Lab/audit/record_mage_home_search_issue.py
 /handoffs/
 /dev_lab_desc.md
 /ai-saruman/integrations/telegram-gateway/scp
 /ai-saruman/integrations/saruman/docs/mod-development/mage-home/QA_*_RU.md
 /ai-saruman/integrations/mage-home/libs/maven-repo/
 /ai-saruman/integrations/mage-home/run/
+/ai-saruman/integrations/mage-home/src/test/
+/ai-saruman/integrations/mage-home/core/src/test/
+/ai-saruman/integrations/mage-home/python/replay/
+/ai-saruman/integrations/mage-home/python/profiles/*.json
+!/ai-saruman/integrations/mage-home/python/profiles/*.example.json
 
 # Local character memory written by Lab
 /ai-saruman/agent-workplace/agent/saruman/memory/MEMORY.md

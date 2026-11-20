@@ -228,8 +228,9 @@ class MageHome:
         if caps.get("engine") != "production-v5" or not caps.get("unionClef", {}).get("taskChain"):
             raise ValueError("Mage Home v5 или UnionClef ещё не готов к строительству.")
 
-        known = description.lower() in {"тестовый дом", "тестовый дом у", "test house"}
-        blueprint = json.loads((self.context.directory / "test-house.json").read_text(encoding="utf-8")) if known else None
+        known = description.lower() in {"типовой дом", "типовой дом у", "starter house",
+                                        "тестовый дом", "тестовый дом у", "test house"}
+        blueprint = json.loads((self.context.directory / "starter-house.json").read_text(encoding="utf-8")) if known else None
         size = FOOTPRINT.search(description)
         width, depth = (blueprint["size"]["x"], blueprint["size"]["z"]) if known else (
             tuple(map(int, size.groups())) if size else (13, 13))

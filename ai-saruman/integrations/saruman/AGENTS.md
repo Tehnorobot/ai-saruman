@@ -51,14 +51,11 @@ source .venv/bin/activate
 ## Введение в проект (план для AI)
 
 1. Прочитать `AGENTS.md` (этот файл)
-2. Прочитать `docs/ai/progress.md` — **обязательно**
+2. Прочитать документацию затронутого компонента в `docs/`
 3. Если нужен контекст — изучить код по задаче
 
 ## Документация сессий
 
-- `docs/ai/progress.md` — детальный прогресс по структуре **IPI** (Investigate → Plan → Implement)
-- `docs/ai/archive/` — архив прогресса (при >500 строк или завершении крупного блока)
-- `docs/ai/readme.md` — формат и правила ведения progress-файлов
 
 Формат архивов: `DD-MM-YYYY-task-name.md`
 
@@ -73,4 +70,3 @@ source .venv/bin/activate
 - `docs/help/0_INSTALLATION.md` — how to build and run from scratch
 - `docs/help/DEVELOP.md` — notes for project developers
 - `AGENTS.md` — this file (AI assistant rules)
-- `docs/ai/progress.md` — прогресс AI по задачам
