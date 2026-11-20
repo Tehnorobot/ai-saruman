@@ -36,8 +36,9 @@ fork или `git submodule update` для него не требуется.
 
 1. Установи uv, Git, FFmpeg и Docker Desktop. Python-приложение запускай нативно,
    из PowerShell, не из WSL. Внутренний Linux/WSL2 backend Docker Desktop — отдельная вещь.
-2. По инструкции курса установи Minecraft **Java 1.21.11 + Fabric**, Java 21,
-   подходящий UnionClef и модпак, включая Simple Voice Chat. `@help` проверяет наличие мода.
+2. Установи Minecraft **Java 1.21.11**, Java **21** и **Fabric Loader 0.19.2**.
+   Готовые моды перечислены в разделе [«Сборки для Minecraft»](#сборки-для-minecraft).
+   Для голосовых функций также установи Simple Voice Chat. Команда `@help` проверяет UnionClef.
 3. В лаунчере выбери ник `saruman_mag`. Если нужен другой свободный ник, поменяй
    `Names.Minecraft` и `Names.Aliases` в `char_config.yml` согласованно.
 4. Установи виртуальный аудиокабель и перезагрузи Windows.
@@ -51,6 +52,24 @@ fork или `git submodule update` для него не требуется.
 https://course.personalabs.ru/instructions/minecraft . Проверяй совместимость
 конкретного JAR: профиль не добавляет игровых заклинаний, маунтов, скин или новый тип NPC.
 Персонаж входит на сервер как отдельный игрок. Первые действия проверяй в своём тестовом мире.
+
+### Сборки для Minecraft
+
+Скачай подходящие JAR из [папки готовых сборок на Google Drive](https://drive.google.com/drive/folders/1f9qnsgq9a7K60Pik4RcNofuciat_58Kh?hl=ru).
+При закрытом Minecraft положи их в `mods` активного клиентского профиля.
+Для стандартного профиля TLauncher это `%APPDATA%\.minecraft\mods`.
+При обновлении оставь в `mods` по одному JAR каждого мода.
+
+| Файл | Для чего нужен |
+| --- | --- |
+| `fabric-api-0.141.3+1.21.11.jar` | Общая зависимость |
+| `unionclef-1.21.11-0.95.61.jar` | Игровое управление и связь с Lab |
+| `treegrow-0.1.0.jar` | Посадка деревьев |
+| `auto-defense-0.1.0.jar` | Автоматическая защита |
+| `mage_home-0.1.10.jar` | Строительство домов |
+
+TreeGrow и Auto Defense уже содержат исправления. Для их установки достаточно
+готовых JAR из папки. Проверить контрольные суммы можно в [документации адаптера](mod-development/native-runtime/IMPLEMENTATION.md#совместимость-установленных-jar).
 
 ## 2. Конфигурация
 
