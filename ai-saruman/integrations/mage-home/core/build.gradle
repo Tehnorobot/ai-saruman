@@ -1,0 +1,81 @@
+plugins {
+    id 'java'
+}
+
+repositories {
+    // The proxy of the environment answers 403 for repo.maven.apache.org ("requests from open
+    // proxy and relay services are blocked on Maven Central"), so the artifacts of Central are
+    // taken from the official Google mirror of Central. The versions stay the same; only the
+    // host differs (ТЗ.md section 1 pins the versions, not the host).
+    maven {
+        name = 'CentralMirror'
+        url = 'https://maven-central.storage-download.googleapis.com/maven2/'
+    }
+    mavenCentral()
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+dependencies {
+    implementation 'com.google.code.gson:gson:2.13.2'
+
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.11.4'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher:1.11.4'
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.release = 21
+    options.encoding = 'UTF-8'
+}
+
+test {
+    useJUnitPlatform()
+    testLogging {
+        events 'passed', 'failed', 'skipped'
+    }
+    reports {
+        junitXml.required = true
+        // The independent runner reads the fresh JUnit reports of the build directory of the
+        // project, so the report of the named checks is written there.
+        junitXml.outputLocation = rootProject.layout.buildDirectory.dir('test-results/coreTest')
+        html.required = true
+    }
+    // The checks of the inventory read the metadata and the sources of the client mod.
+    systemProperty 'lab.project.dir', rootProject.projectDir.absolutePath
+    systemProperty 'lab.core.check.classpath', sourceSets.test.runtimeClasspath.asPath
+    // The check of the distribution of Gradle has a branch for a machine that forbids the
+    // execution of a file; the branch can be forced, so that it runs on every machine.
+    if (System.getProperty('lab.core.check.degraded.gradle') != null) {
+        systemProperty 'lab.core.check.degraded.gradle',
+                System.getProperty('lab.core.check.degraded.gradle')
+    }
+    // The delivery check reads the artifact of the build, therefore the client JAR is built
+    // before the checks run. Without this order the check would either find no artifact or
+    // would block itself. The file of the artifact is an input of the task, so that a changed
+    // artifact is observed by the checks and not only by the task that builds it.
+    dependsOn rootProject.tasks.named('remapJar')
+    inputs.files(rootProject.tasks.named('remapJar').map { it.archiveFile })
+}
+
+// Executable check inventory: one named check per product assertion, executed on the
+// plain-Java classpath (no Minecraft, no UnionClef). The report is written under build/.
+tasks.register('coreCheck', JavaExec) {
+    group = 'verification'
+    description = 'Runs the named domain checks and writes build/reports/mage_home/core-checks.json'
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'dev.magehome.core.checks.CoreCheckHarness'
+    args = ["${layout.buildDirectory.get()}/reports/mage_home"]
+    systemProperty 'lab.core.check.classpath', sourceSets.test.runtimeClasspath.asPath
+    systemProperty 'lab.project.dir', rootProject.projectDir.absolutePath
+    // The branch of the check of the distribution of Gradle can be forced, see the test task.
+    if (System.getProperty('lab.core.check.degraded.gradle') != null) {
+        systemProperty 'lab.core.check.degraded.gradle',
+                System.getProperty('lab.core.check.degraded.gradle')
+    }
+    // The delivery check reads the artifact of the build (see the test task above).
+    dependsOn rootProject.tasks.named('remapJar')
+}

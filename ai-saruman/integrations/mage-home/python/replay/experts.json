@@ -1,0 +1,5 @@
+[
+  {"kind":"world_plan_mismatch", "tactic":"clear_then_restore_goal", "reason":"Remove the observed conflicting block; restore and verify the unchanged blueprint goal."},
+  {"kind":"access_lost", "tactic":"recorded_route_or_reserve", "reason":"Check the relevant alternative approach; use authorized reserve if no physical approach is proven."},
+  {"kind":"support_removed", "response":{"outcome":"blocked","reason":"Observed support loss invalidates the previously traversed route.","blocked":{"reason":"Re-survey an alternative support before proceeding.","safeFallback":"none"}}}
+]

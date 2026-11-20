@@ -180,6 +180,11 @@ class PublicationTests(unittest.TestCase):
         value=self.observer.raw_log(0)
         self.assertNotIn('abcdefgh',value['text']);self.assertTrue(value['text'].endswith('last'))
         self.assertEqual(value['next_offset'],path.stat().st_size)
+        expected = "а" * 500 + "\n" + "Second line\n" + "Third line\n"
+        path.write_bytes(expected.encode("utf-8"))
+        first = self.observer.raw_log(0, size=1024)
+        second = self.observer.raw_log(first["next_offset"], size=1024)
+        self.assertEqual(first["text"] + second["text"], expected)
 
 
 if __name__=='__main__':unittest.main()

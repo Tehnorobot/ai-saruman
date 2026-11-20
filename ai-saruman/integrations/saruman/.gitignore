@@ -188,6 +188,7 @@ HyperAI_DATABASE.db
 /server/storage
 *.json
 !resources/Minecraft/autonomous_activities.json
+!resources/Minecraft/extensions.json
 !resources/Characters/Saruman/action_speech.json
 !migrations/data/action_speech_v1.json
 !migrations/data/action_speech_v2.json

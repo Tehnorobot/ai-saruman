@@ -7,6 +7,7 @@ from agent.tools import tools_config
 from saruman.autonomy_settings import load_weights, save_weights
 from saruman.mod_goals import GoalStore, player_context, public_chat_text, using_mods
 from saruman.activity import current as current_activity
+from saruman.automation_extensions import PRIORITY, enabled_for
 
 
 def get_player_memory(before_event: int = 0) -> dict:
@@ -89,6 +90,8 @@ def grow_trees(count: int = 1) -> dict:
     """
     game = tools_config.ctx_swarm.get("game", {})
     context = player_context(game)
+    if not enabled_for("treegrow") or game.get("mod_runtime", {}).get("extensions", {}).get("treegrow") is False:
+        return {"status": "rejected", "reason": "TreeGrow выключен или недоступен в Lab"}
     if (
         not using_mods(game)
         or context.get("until", 0) < time.time()
@@ -127,10 +130,12 @@ def cancel_mod_goal(goal_id: str = "") -> dict:
     if context.get("until", 0) < time.time():
         return {"status": "rejected", "reason": "No player/operator request"}
     store = GoalStore()
+    source = context.get("source", "player")
     matches = [
         g
         for g in store.list(limit=-1)
         if g["state"] not in {"completed", "failed", "cancelled"}
+        and PRIORITY[g["source"]] <= PRIORITY[source]
         and (not goal_id or goal_id in {g["id"], g.get("run_id")})
     ]
     if not matches:
@@ -139,7 +144,7 @@ def cancel_mod_goal(goal_id: str = "") -> dict:
             "reason": "No active goal matches this goal ID or run ID; nothing cancelled",
         }
     for goal in matches:
-        store.cancel(goal["id"])
+        store.cancel(goal["id"], requested_by=source)
     return {"status": "cancel_requested", "goal_ids": [g["id"] for g in matches]}
 
 
@@ -156,9 +161,11 @@ def stop_tree_growing() -> dict:
     weights = load_weights()
     save_weights({**weights, "trees": 0})
     store = GoalStore()
-    targets = [g for g in store.list(active=True, limit=-1) if g["kind"] == "trees"]
+    source = context.get("source", "player")
+    targets = [g for g in store.list(active=True, limit=-1)
+               if g["kind"] == "trees" and PRIORITY[g["source"]] <= PRIORITY[source]]
     for goal in targets:
-        store.cancel(goal["id"])
+        store.cancel(goal["id"], requested_by=source)
     return {
         "status": "cancel_requested",
         "background_trees_enabled": False,

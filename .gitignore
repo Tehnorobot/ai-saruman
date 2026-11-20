@@ -30,6 +30,8 @@ coverage.xml
 *.egg
 
 # Downloaded dependencies and Java/JavaScript build caches
+*.jar
+*.whl
 node_modules/
 .npm/
 .pnpm-store/
@@ -150,4 +152,25 @@ Desktop.ini
 /Codex-Development-Lab/audit/*.zip
 /Codex-Development-Lab/audit/*.tar
 /Codex-Development-Lab/audit/*.tar.gz
+
+# Local finalization snapshots and one-off diagnostics
+/Codex-Development-Lab/audit/WorldKeyPathProbe.java
+/Codex-Development-Lab/audit/build_mage_home_path_fix.py
+/Codex-Development-Lab/audit/prepare_mage_home_round10_followup.py
+/Codex-Development-Lab/audit/prepare_sapling_drop_fix.py
+/Codex-Development-Lab/audit/record_mage_home_path_fix.py
+/Codex-Development-Lab/audit/record_mage_home_search_issue.py
+/handoffs/
+/dev_lab_desc.md
+/ai-saruman/integrations/telegram-gateway/scp
+/ai-saruman/integrations/saruman/docs/mod-development/mage-home/QA_*_RU.md
+/ai-saruman/integrations/mage-home/libs/maven-repo/
+/ai-saruman/integrations/mage-home/run/
+
+# Local character memory written by Lab
+/ai-saruman/agent-workplace/agent/saruman/memory/MEMORY.md
+/ai-saruman/agent-workplace/agent/saruman/memory/entities/*
+!/ai-saruman/agent-workplace/agent/saruman/memory/entities/.gitkeep
+
 agentic_memory_dev/
+reports/

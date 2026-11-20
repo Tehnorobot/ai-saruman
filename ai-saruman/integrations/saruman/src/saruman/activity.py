@@ -112,6 +112,13 @@ class ActivityStore:
             raise ValueError('Событие не найдено')
         return {**dict(row), 'details': json.loads(row['body']), 'body': None}
 
+    def latest(self, trace, kind, *, skip_status=None):
+        with self.connect() as db:
+            row = db.execute('SELECT status,body FROM events WHERE trace=? AND kind=? '
+                             'AND (? IS NULL OR status<>?) ORDER BY id DESC LIMIT 1',
+                             (trace, kind, skip_status, skip_status)).fetchone()
+        return {'status': row['status'], 'details': json.loads(row['body'])} if row else None
+
     def player_context(self, actor, exclude_trace='', limit=8):
         if not actor:
             return []

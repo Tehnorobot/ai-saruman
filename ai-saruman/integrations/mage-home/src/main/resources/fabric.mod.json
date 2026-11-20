@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "id": "mage_home",
+  "version": "${version}",
+  "name": "Mage Home",
+  "description": "Builds the house of the project automatically with UnionClef on the client.",
+  "authors": [
+    "mage_home"
+  ],
+  "license": "MIT",
+  "environment": "client",
+  "mixins": ["mage_home.mixins.json"],
+  "entrypoints": {
+    "client": [
+      "dev.magehome.client.MageHomeClient"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.19.2",
+    "minecraft": "1.21.11",
+    "java": ">=21",
+    "fabric-api": "*",
+    "altoclef": "1.21.11-0.95.61"
+  }
+}

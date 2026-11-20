@@ -8,6 +8,7 @@ from unittest.mock import Mock, patch
 
 from saruman.mod_goals import GoalStore
 from saruman.mod_runtime import AutomationRuntime
+from saruman.managed import atomic_json
 from tests.test_mod_runtime import FakeMods
 
 
@@ -53,6 +54,62 @@ class NativeIdleTests(unittest.TestCase):
         self.assertEqual((goal["kind"], goal["target"], goal["command"]), ("follow", "Steve", "@follow Steve"))
         self.assertEqual(self.rng.choice.call_args_list[0].args[0], ["trees", "follow"])
         self.assertEqual(self.rng.choice.call_args_list[1].args[0], ["Alex", "Steve"])
+
+    def test_changed_catalog_excludes_disabled_addon_and_replan_skips_idle_wait(self):
+        directory = Path(self.temp.name)
+        self.runtime.extension_directory = directory
+        self.mods.snapshot["players"] = ["Alex"]
+        tasks = self.runtime.default_tasks
+        settings = {"native": {}, "tasks": tasks, "revision": "first", "replan": "first"}
+        atomic_json(directory / "extensions.json", settings)
+        self.tick()
+        self.assertEqual(self.store.list(), [])
+
+        atomic_json(directory / "extensions.json", {**settings, "native": {"treegrow": False},
+                    "revision": "second", "replan": "second"})
+        self.tick()
+        self.assertEqual([g["kind"] for g in self.store.list()], ["follow"])
+        goal = self.store.submit("trees", source="operator")
+        self.tick()
+        self.assertEqual(self.goal(goal["id"])["state"], "cancelled")
+        self.assertFalse(any(op == "tree_start" for op, _ in self.mods.calls))
+
+    def test_hunt_has_weight_and_yields_to_operator_before_planting(self):
+        directory = Path(self.temp.name)
+        self.runtime.extension_directory = directory
+        self.mods.snapshot.update(defense_modes=True, defense_mode="SELF_DEFENSE")
+        actual_call = self.mods.call
+
+        def call(operation, **args):
+            result = actual_call(operation, **args)
+            if operation == "defense":
+                self.mods.snapshot.update(defense_mode=args["mode"], native_suppressed=args["suppress_native"],
+                                          defense_busy=args["mode"] == "SEARCH")
+            return result
+
+        self.mods.call = call
+        atomic_json(directory / "extensions.json", {"revision": "initial", "weights": {"hunt": 0.25, "trees": 0.75}})
+        self.rng.choices.return_value = ["hunt"]
+        self.tick()
+        self.tick(20)
+        self.assertEqual(self.rng.choices.call_args.kwargs["weights"], [0.25, 0.75])
+        self.assertEqual(self.mods.snapshot["defense_mode"], "SEARCH")
+        operator = self.store.submit("trees", source="operator")
+        self.tick()
+        self.assertEqual(self.mods.snapshot["defense_mode"], "SELF_DEFENSE")
+        self.assertTrue(self.mods.snapshot["native_suppressed"])
+        self.assertEqual(self.goal(operator["id"])["state"], "running")
+
+    def test_operator_preempts_running_player_but_other_player_work_waits(self):
+        player = self.store.submit("trees", source="player")
+        self.tick()
+        waiting = self.store.submit("trees", source="player")
+        operator = self.store.submit("trees", source="operator")
+        self.tick()
+        self.assertEqual(self.goal(player["id"])["state"], "cancelled")
+        self.assertEqual(self.goal(waiting["id"])["state"], "queued")
+        self.tick()
+        self.assertEqual(self.goal(operator["id"])["state"], "running")
 
     def test_follow_leaves_on_player_input_and_stops_only_its_run(self):
         self.mods.snapshot["players"] = ["Alex"]

@@ -61,13 +61,13 @@ def close_bridge(gateway, *, native=None, water=None, combat=None, preserve_goal
             logging.exception("Cannot close Minecraft %s; continuing cleanup", name)
 
 
-def native_runtime_status(game, running, clock=time.time):
+def native_runtime_status(game, running, clock=time.time, *, bridge_alive=True):
     native = dict(game.get("mod_runtime", {}).items())
     updated = native.get("updated")
     age = clock()-updated if isinstance(updated, (int, float)) else None
-    fresh = age is not None and 0 <= age <= NATIVE_MAX_AGE and not native.get("stale")
+    fresh = bridge_alive and age is not None and 0 <= age <= NATIVE_MAX_AGE and not native.get("stale")
     available = fresh and native.get("status") != "unavailable"
-    error = native.get("error")
+    error = "Процесс MineBridge завершился" if not bridge_alive else native.get("error")
     if not fresh and not error:
         error = "Игровые данные устарели; ожидание нового состояния Minecraft"
     return {
@@ -79,6 +79,13 @@ def native_runtime_status(game, running, clock=time.time):
         "native_updated": updated,
         "native_fresh": bool(fresh),
         "native_activity": dict(native.get("activity", {}).items()) if available else {},
+        "request_source": native.get("request_source") if available else None,
+        "adapter_grant": native.get("adapter_grant") if available else None,
+        "defense_busy": bool(available and native.get("defense_busy")),
+        "hunt_active": bool(available and native.get("hunt_active")),
+        "scheduler_busy": bool(available and native.get("scheduler_busy")),
+        "scheduler_owner": native.get("scheduler_owner") if available else None,
+        "native_busy": bool(available and native.get("native_busy")),
         "native_stop_kind": native.get("stop_kind") if available else None,
         "player_alive": native.get("player_alive") if available else None,
         "manual_stop_latched": bool(available and native.get("manual_stop_latched")),

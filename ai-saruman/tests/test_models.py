@@ -5,12 +5,12 @@ import os
 from pathlib import Path
 import sqlite3
 from contextlib import closing
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, call, patch
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 from test_lab import Fixture
-from saruman.provider import CodexProvider
+from saruman.provider import CodexProvider, ProviderWorkspaceError
 from saruman.roles import ModelSettings, LabRoleProvider, api_complete, protocol, settings
 from saruman.telegram import POST_SCHEMA
 from saruman.web import Application, make_server
@@ -72,6 +72,35 @@ class ModelTests(Fixture):
         row=self.models.store.history()[0]
         self.assertEqual(row["role"],"telegram")
         self.assertEqual(row["state"],"completed")
+
+    def test_codex_workspace_failure_keeps_budget_for_explicit_retry(self):
+        profile = self.select(model="gpt-6.1-terra", max_output=500000, token_budget=1000000)
+        session = "lab-chat:workspace-retry"
+        issue = "Codex account/read: workspace routing discovery failed"
+        legacy = self.models.store.begin("lab_chat", session, profile, 507756)
+        self.models.store.finish(legacy, reason="RuntimeError: " + issue)
+        provider = LabRoleProvider(self.models, CodexProvider())
+        read = call("account/read", {"refreshToken": False})
+        with patch("saruman.provider.Rpc") as client:
+            rpc = client.return_value.__enter__.return_value
+            rpc.request.side_effect = [RuntimeError(issue), RuntimeError(issue)]
+            with self.assertRaisesRegex(ProviderWorkspaceError, "рабочее пространство ChatGPT"):
+                provider.complete("", "{}", "", {"session_id": session})
+            self.assertEqual(rpc.request.call_args_list, [read, read])
+            row = self.models.store.history()[0]
+            self.assertEqual((row["state"], row["usage"]["total_tokens"]), ("error", 0))
+
+            rpc.request.reset_mock()
+            rpc.request.side_effect = [RuntimeError(issue), {"account": {"type": "chatgpt"}},
+                                       {"thread": {"id": "model-turn"}}, {}]
+            rpc.notification.side_effect = [
+                {"method": "item/completed", "params": {"threadId": "model-turn", "item": {
+                    "id": "reply", "type": "agentMessage", "text": '{"reply":"ok","memories":[]}'}}},
+                {"method": "turn/completed", "params": {"threadId": "model-turn", "turn": {"status": "completed"}}},
+            ]
+            self.assertEqual(provider.complete("", "{}", "", {"session_id": session})["reply"], "ok")
+            self.assertEqual(rpc.request.call_args_list[:2], [read, read])
+            self.assertEqual(rpc.request.call_args_list[-1].args[0], "turn/start")
 
     def test_live_request_and_stale_editor_cannot_replace_profile(self):
         p = self.models.store.profiles()["action"]
@@ -192,5 +221,55 @@ class ModelTests(Fixture):
                     text=response.read().decode()
                 self.assertNotIn("????",text)
             self.assertEqual(app.models.store.history(),[])  # Saving/opening never runs LLM.
+        finally:
+            server.shutdown();server.server_close();thread.join()
+
+    def test_readiness_checks_each_configured_role_only_on_an_authorized_request(self):
+        for role in ("lab_chat", "tool_vision", "persona"):
+            self.minimax(role)
+        app = Application(self.root)
+        server = make_server(app, 0)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        base = f"http://127.0.0.1:{server.server_port}"
+
+        def request(payload=None, authorize=True):
+            headers = {"Content-Type": "application/json"}
+            if authorize:
+                headers["X-Saruman-Token"] = app.token
+            target = Request(base + "/api/readiness",
+                             data=json.dumps(payload).encode() if payload else None, headers=headers)
+            with urlopen(target) as response:
+                return json.load(response)
+
+        def model(snapshot, role):
+            return next(item for item in snapshot["models"] if item["id"] == role)
+
+        try:
+            with patch("saruman.roles.api_complete", side_effect=[
+                    ({"reply": "OK", "memories": []}, {}),
+                    ({"reply": "RED", "memories": []}, {}),
+                    RuntimeError("HTTP 401 secret-token")]) as provider:
+                self.assertEqual(model(request(), "lab_chat")["status"], "unchecked")
+                with self.assertRaises(HTTPError) as denied:
+                    request({"kind": "model", "role": "lab_chat"}, authorize=False)
+                self.assertEqual(denied.exception.code, 403)
+                denied.exception.close()
+                ready = request({"kind": "services", "minecraft": False, "filter_enabled": False})
+                services = {item["id"]: item for item in ready["services"]}
+                self.assertEqual(services["lab"]["status"], "ready")
+                self.assertEqual(services["postgres"]["status"], "disabled")
+                provider.assert_not_called()
+
+                self.assertEqual(model(request({"kind": "model", "role": "lab_chat"}), "lab_chat")["status"], "ready")
+                self.assertEqual(model(request({"kind": "model", "role": "tool_vision"}), "tool_vision")["status"], "ready")
+                self.assertTrue(provider.call_args.kwargs["images"][0]["url"].startswith("data:image/png;base64,"))
+                failure = model(request({"kind": "model", "role": "persona"}), "persona")
+                self.assertEqual(failure["status"], "error")
+                self.assertIn("HTTP 401", failure["detail"])
+                self.assertNotIn("secret-token", json.dumps(failure))
+                self.select(reasoning="medium")
+                self.assertEqual(model(request(), "lab_chat")["status"], "unchecked")
+                self.assertEqual(provider.call_count, 3)
         finally:
             server.shutdown();server.server_close();thread.join()

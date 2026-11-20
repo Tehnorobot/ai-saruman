@@ -8,6 +8,19 @@ import time
 import uuid
 
 
+def matches_target(result, configuration):
+    if result.get('mode') != configuration['mode'] or not isinstance(result.get('target'), str):
+        return False
+    actual, expected = result['target'], configuration['target']
+    if configuration['mode'] == 'world':
+        return actual == expected
+    if ':' not in actual:
+        actual += ':25565'
+    if ':' not in expected:
+        expected += ':25565'
+    return actual.casefold() == expected.casefold()
+
+
 def validate(value):
     if not isinstance(value,dict) or set(value)!={"mode","target","launcher","arguments"}:raise ValueError("Некорректные настройки входа")
     if value["mode"] not in {"server","world"}:raise ValueError("Выберите сервер или существующий мир")
@@ -81,16 +94,17 @@ class GameConnection:
             out,_=self.probe.communicate();self.probe=None
             try:result=json.loads(out)
             except (ValueError,TypeError):result={"status":"unavailable"}
-            if result.get("status")=="in_world":
-                self.value={"status":"running","request_id":self.identifier,"reason":"Minecraft подтвердил открытый мир"};self.identifier=None;return
+            if result.get("status")=="in_world" and matches_target(result,self.selected):
+                self.value={"status":"running","request_id":self.identifier,"mode":result['mode'],"target":result['target'],
+                            "reason":f"Minecraft подтвердил вход в «{result['target']}»"};self.identifier=None;return
             if result.get("status")=="rejected" and result.get("code") in {"world_not_found","invalid_world_name"}:
                 self.value={"status":"needs_world_name","code":result["code"],
                             "reason":result.get("reason","Укажите точное имя папки мира в saves.")}
                 self.identifier=None;return
             if result.get("status") in {"error","rejected","blocked"}:
-                self.value={"status":"error","reason":result.get("reason","Ошибка входа")};self.identifier=None;return
+                self.value={"status":"error","code":result.get('code'),"reason":result.get("reason","Ошибка входа")};self.identifier=None;return
         if self.clock()>self.deadline:
-            self.value={"status":"waiting_world","reason":"Вход не подтверждён. Проверьте окно Minecraft/лаунчер; новый вход — по вашей команде"};self.identifier=None;return
+            self.value={"status":"error","code":"join_timeout","reason":"Minecraft не подтвердил вход в запрошенный мир. Проверьте окно игры и повторите команду."};self.identifier=None;return
         if self.clock()-self.last_probe<2:return
         if not self._port_open():
             self.value={"status":"waiting_world","reason":"Ожидание клиента Minecraft с UnionClef; при необходимости запустите игровой профиль в лаунчере"}

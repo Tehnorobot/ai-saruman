@@ -1,15 +1,17 @@
 import json
 from pathlib import Path
+from queue import Empty, Queue
 import shutil
 import tempfile
 import threading
+import time
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, call, patch
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 from saruman.memory import Workplace
-from saruman.provider import CodexProvider, require_subscription
+from saruman.provider import CodexLogin, CodexProvider, ProviderRequestCancelled, ProviderRequestTimeout, Rpc, require_subscription
 from saruman.storage import Store
 from saruman.web import Application, make_server
 
@@ -200,8 +202,68 @@ class ProviderTests(unittest.TestCase):
                 require_subscription(account)
         require_subscription({"type": "chatgpt"})
 
+    def test_managed_login_waits_for_matching_completion_and_refreshes_account(self):
+        refresh = Mock(return_value={"connected": True, "email": "tester@example.com", "plan": "plus"})
+        login = CodexLogin(refresh)
+        self.addCleanup(login.close)
+        notices = Queue()
+        url = "https://auth.openai.com/oauth/authorize?challenge=test"
+        with patch("saruman.provider.Rpc") as client:
+            rpc = client.return_value.__enter__.return_value
+            rpc.request.return_value = {"type": "chatgpt", "loginId": "local-login", "authUrl": url}
+            rpc.notification.side_effect = lambda timeout: notices.get(timeout=timeout)
+            login.start()
+            deadline = time.monotonic() + 2
+            while login.snapshot()["status"] == "starting" and time.monotonic() < deadline:
+                time.sleep(.01)
+            self.assertEqual(login.start(), {"status": "waiting", "auth_url": url})
+            notices.put({"method": "account/login/completed", "params": {"loginId": "other", "success": False}})
+            notices.put({"method": "account/login/completed", "params": {"loginId": "local-login", "success": True}})
+            login.thread.join(timeout=2)
+            self.assertEqual(login.snapshot()["status"], "completed")
+            self.assertNotIn("auth_url", login.snapshot())
+            self.assertEqual(rpc.request.call_args_list, [call("account/login/start", {"type": "chatgpt"})])
+            refresh.assert_called_once()
+
+    def test_managed_login_cancels_its_rpc_and_rejects_untrusted_links(self):
+        refresh = Mock()
+        login = CodexLogin(refresh)
+        self.addCleanup(login.close)
+        with patch("saruman.provider.Rpc") as client:
+            rpc = client.return_value.__enter__.return_value
+            rpc.request.return_value = {"type": "chatgpt", "loginId": "local-login", "authUrl": "https://auth.openai.com/oauth"}
+            rpc.notification.side_effect = lambda timeout: Queue().get(timeout=timeout)
+            login.start()
+            deadline = time.monotonic() + 2
+            while login.snapshot()["status"] == "starting" and time.monotonic() < deadline:
+                time.sleep(.01)
+            self.assertEqual(login.cancel(), {"status": "cancelling"})
+            login.thread.join(timeout=2)
+            self.assertEqual(login.snapshot()["status"], "cancelled")
+            self.assertEqual(rpc.request.call_args_list[-1], call("account/login/cancel", {"loginId": "local-login"}, timeout=5))
+            rpc.request.return_value["authUrl"] = "https://auth.openai.com.example.net/oauth"
+            login.start()
+            login.thread.join(timeout=2)
+            self.assertEqual(login.snapshot()["status"], "failed")
+            self.assertNotIn("auth_url", login.snapshot())
+            refresh.assert_not_called()
+
+    def test_codex_status_keeps_identity_when_the_catalogue_is_unavailable(self):
+        limits = {"rateLimits": {"primary": {"usedPercent": 45}}}
+        with patch("saruman.provider.Rpc") as client:
+            rpc = client.return_value.__enter__.return_value
+            rpc.request.side_effect = [{"account": {"type": "chatgpt", "email": "tester@example.com", "planType": "pro"}},
+                                       RuntimeError("Temporary catalogue failure"), limits]
+            status = CodexProvider().status()
+        self.assertTrue(status["connected"])
+        self.assertEqual((status["email"], status["plan"], status["limits"]), ("tester@example.com", "pro", limits))
+        self.assertTrue(status["catalog_error"])
+
     def test_usage_notifications_are_not_added_twice(self):
         class FakeRpc:
+            def __init__(self, _):
+                pass
+
             def __enter__(self):
                 self.events = iter([
                     {"method": "thread/tokenUsage/updated", "params": {"threadId": "t",
@@ -234,8 +296,55 @@ class ProviderTests(unittest.TestCase):
         self.assertEqual(trace["usage"]["totalTokens"], 15)
         self.assertEqual(trace["context_window"], 1000)
 
+    def test_codex_waits_without_a_turn_deadline_and_keeps_finite_timeouts(self):
+        with patch("saruman.provider.Rpc") as client:
+            rpc = client.return_value.__enter__.return_value
+            rpc.request.side_effect = [{"account": {"type": "chatgpt"}}, {"thread": {"id": "thread"}}, {}]
+            rpc.notification.side_effect = [
+                {"method": "item/completed", "params": {"threadId": "thread", "item": {
+                    "id": "reply", "type": "agentMessage", "text": '{"json":"{}"}'}}},
+                {"method": "turn/completed", "params": {"threadId": "thread", "turn": {"status": "completed"}}},
+            ]
+            schema = {"type": "object", "properties": {"json": {"type": "string"}}}
+            self.assertEqual(CodexProvider().complete("", "", "test-model", {}, timeout=None,
+                                                     output_schema=schema), {"json": "{}"})
+            self.assertEqual([call.args for call in rpc.notification.call_args_list], [(None,), (None,)])
+
+            rpc.request.side_effect = [{"account": {"type": "chatgpt"}}, {"thread": {"id": "thread"}}, {}]
+            rpc.notification.side_effect = Empty
+            with self.assertRaisesRegex(ProviderRequestTimeout, r"\(5 с\)"):
+                CodexProvider().complete("", "", "test-model", {}, timeout=5)
+
+    def test_codex_cancels_a_wait_when_the_worker_disconnects(self):
+        with patch("saruman.provider.Rpc") as client:
+            rpc = client.return_value.__enter__.return_value
+            rpc.request.side_effect = [{"account": {"type": "chatgpt"}}, {"thread": {"id": "thread"}}, {}]
+            checks = iter((False, True))
+            cancelled = lambda: next(checks)
+            connection = Rpc(cancelled)
+            connection.incoming = Queue()
+            with patch.object(connection.incoming, "get", side_effect=Empty) as wait:
+                rpc.notification.side_effect = connection._next
+                with self.assertRaises(ProviderRequestCancelled):
+                    CodexProvider().complete("", "", "test-model", {}, timeout=None, cancelled=cancelled)
+                client.assert_called_once_with(cancelled)
+                wait.assert_called_once_with(timeout=0.2)
+                client.return_value.__exit__.assert_called_once()
+
 
 class HttpTests(Fixture):
+    def test_codex_login_status_requires_local_session_token(self):
+        url = self.base + "/api/provider/login"
+        data = b'{"action":"status"}'
+        with self.assertRaises(HTTPError) as error:
+            urlopen(Request(url, data=data))
+        self.assertEqual(error.exception.code, 403)
+        error.exception.close()
+        with urlopen(Request(url, data=data, headers={"X-Saruman-Token": self.app.token})) as response:
+            result = json.load(response)
+            self.assertEqual(response.headers["Cache-Control"], "no-store")
+        self.assertEqual(result["login"], {"status": "idle"})
+
     def test_journal_api_full_detail_filters_and_invalid_cursor(self):
         self.app.activity.add('request.received',actor='Alex',trace='req',scope='game_public',details={'text':'message'})
         with urlopen(self.base+'/api/activity?actor=Alex&trace=req') as response:page=json.load(response)

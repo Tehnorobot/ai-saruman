@@ -1,0 +1,22 @@
+pluginManagement {
+    repositories {
+        maven {
+            name = 'Fabric'
+            url = 'https://maven.fabricmc.net/'
+        }
+        // The proxy of the environment answers 403 for repo.maven.apache.org ("requests from
+        // open proxy and relay services are blocked on Maven Central"), so the artifacts of
+        // Central are taken from the official Google mirror of Central. The versions are the
+        // same; only the host differs (ТЗ.md section 1 pins the versions, not the host).
+        maven {
+            name = 'CentralMirror'
+            url = 'https://maven-central.storage-download.googleapis.com/maven2/'
+        }
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+
+rootProject.name = 'mage_home'
+
+include 'core'

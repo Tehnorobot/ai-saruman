@@ -1,0 +1,6 @@
+[
+  {"id":"unionclef","title":"UnionClef","mods":["altoclef"],"required":true},
+  {"id":"auto_defense","title":"Auto Defense","mods":["auto_defense","auto-defense"],"tasks":[{"id":"defense","title":"Самозащита при угрозе","mode":"reactive"},{"id":"hunt","title":"Поиск враждебного моба","mode":"random","default_weight":0}]},
+  {"id":"treegrow","title":"TreeGrow","mods":["treegrow"],"tasks":[{"id":"trees","title":"Выращивание дерева","mode":"random","tool":"grow_trees","weight":"trees"}]},
+  {"id":"follow","title":"Фоновое следование UnionClef","mods":["altoclef"],"tasks":[{"id":"follow","title":"Следование за игроком","mode":"random","tool":"agent_action","target":"player"}]}
+]

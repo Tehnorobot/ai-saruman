@@ -14,14 +14,6 @@ def connect(mode,target,identifier,gateway=None):
     try:
         props=g.jvm.java.lang.System.getProperties()
         request_key="saruman.connect:"+identifier
-        if g.entry_point.inGame():
-            return {"status":"in_world"} if mode=="status" or props.get(request_key) is not None else {
-                "status":"blocked","reason":"Уже открыт мир. Переключение не выполнено; для другого мира сначала выйдите в меню"}
-        if mode=="server":
-            # Verified UnionClef API schedules its operation on the Minecraft executor.
-            if props.putIfAbsent(request_key,"submitted") is None:g.entry_point.ConnectToServer(target)
-            return {"status":"connecting"}
-        if mode=="status":return {"status":"menu"}
         root=Path(__file__).resolve().parents[2]
         source=root/"resources/Minecraft/bridge/WorldConnection.java"
         output=root/"data/world-bridge"/hashlib.sha256(source.read_bytes()).hexdigest()[:16]
@@ -41,13 +33,12 @@ def connect(mode,target,identifier,gateway=None):
         for i in (1,2,3):types[i]=g.jvm.java.lang.Class.forName("java.lang.String")
         values=g.new_array(g.jvm.java.lang.Object,4)
         values[0]=g.jvm.net.minecraft.class_310.method_1551();values[1]=mode;values[2]=target;values[3]=identifier
-        # Persist intent before delivery: loading may outlive the RPC timeout while
-        # the same client operation still completes. A later poll must recognize it.
-        props.putIfAbsent(request_key,"submitted")
         future=g.jvm.java.util.concurrent.CompletableFuture.supplyAsync(cls.getConstructor(types).newInstance(values),values[0])
         result=dict(future.get(5,g.jvm.java.util.concurrent.TimeUnit.SECONDS).items())
-        if result.get("status")=="connecting":props.put(request_key,"submitted")
-        elif result.get("status") in {"error","rejected","blocked"}:props.remove(request_key)
+        if mode=="server" and result.get("status")=="menu":
+            # UnionClef schedules the join on the client executor. Retry the observation, not the join.
+            if props.putIfAbsent(request_key,"submitted") is None:g.entry_point.ConnectToServer(target)
+            return {"status":"connecting"}
         return result
     finally:
         if own:g.close()

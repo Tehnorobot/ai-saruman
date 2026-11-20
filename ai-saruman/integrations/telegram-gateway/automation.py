@@ -433,10 +433,11 @@ class Control:
             raise ValueError("Set GATEWAY_API_KEY in integrations/telegram-gateway/.env.client")
         return env, url, key
 
-    def check(self):
+    def check(self, *, timeout=None):
         try:
             _, url, key = self.config()
-            code, result = self.transport(url, key, "GET", "/v1/check")
+            options = {} if timeout is None else {"timeout": timeout}
+            code, result = self.transport(url, key, "GET", "/v1/check", **options)
             value = {"checked_at": time.time(), "http": code, "connected": code == 200,
                      "can_post": code == 200 and result.get("can_post") is True,
                      "bot_username": result.get("bot_username"), "channel_title": result.get("channel_title"),

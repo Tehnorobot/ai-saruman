@@ -15,6 +15,8 @@ public class AltoClef {
  public static AltoClef getInstance(){return INSTANCE;} public Object getWorld(){return world;}
  public Chain getUserTaskChain(){return chain;} public Runner getTaskRunner(){return runner;} public Executor getCommandExecutor(){return executor;}
  public Chain getMobDefenseChain(){return defense;}
+ public final Settings settings=new Settings(); public Settings getModSettings(){return settings;}
+ public static class Settings {private boolean mobDefense=true;public boolean isMobDefense(){return mobDefense;}}
  public Player getPlayer(){return player;} public boolean isPaused(){return false;}
  public void runUserTask(Object task){chain.setTask(task);} public void cancelUserTask(){runnerEnabled=false;chain.setTask(null);}
  public static class Chain { public Object task; public boolean isActive(){return task!=null;} public Object getCurrentTask(){return task;} public void setTask(Object t){task=t;} public String getName(){return "UserTaskChain";} public float getPriority(){return 50;} }
@@ -22,7 +24,8 @@ public class AltoClef {
  public static class World {public java.util.List<Player> method_18456(){return java.util.List.of(INSTANCE.player,new Player("Alex",true),new Player("Steve",false));}}
  public static class Task {public boolean done,stopped,failStop;public boolean isFinished(){return done;}public boolean stopped(){return stopped;}}
  public static class Executor {public int calls; public void executeWithPrefix(String command){calls++; INSTANCE.chain.setTask(new Task());}}
- public static class Player {public final String name;public final boolean alive;public Player(){this("Saruman",true);}public Player(String n,boolean a){name=n;alive=a;}public boolean method_5805(){return alive;}public Name method_5477(){return new Name(name);}}
+ public static class Player {public final String name;public final boolean alive;public Player(){this("Saruman",true);}public Player(String n,boolean a){name=n;alive=a;}public boolean method_5805(){return alive;}public Name method_5477(){return new Name(name);}
+  public double method_23317(){return 0;}public double method_23318(){return 70;}public double method_23321(){return 0;}}
  public record Name(String value) {public String getString(){return value;}}
 }'''
 TREE = r'''
@@ -49,6 +52,10 @@ public class AutoDefenseClient {
  public static void resetNativeDefense(){nativeResets++;adris.altoclef.AltoClef.INSTANCE.defense.setTask(null);}
  public static Combat combat(){return RUNTIME;}public static void publishSnapshot(Object client){publications++;}
  public static class Combat {
+  public enum Mode {SEARCH, SELF_DEFENSE}
+  private Mode mode=Mode.SEARCH;
+  public Mode mode(){return mode;}
+  public void setMode(Object client,Mode value){mode=value;enabled=false;manual=true;busy=false;}
   public boolean enabled=false,busy=false,manual=false,reset=false;public int changes;
   public boolean isEnabled(){return enabled;}public boolean ownsControls(){return busy;}public String action(){return reset?"RESET":busy?"COMBAT":"IDLE";}
   public boolean manualStop(){return manual;}public void enable(Object client){enabled=true;manual=false;changes++;}
@@ -74,14 +81,51 @@ LEGACY_API = r'''
 package dev.autodefense.api;
 public class AutoDefenseApi {public static String getStatusJson(){return "{\"owner\":\"NONE\",\"missingItems\":[]}";}}
 '''
+VECTOR = '''
+package dev.magehome.core.model;
+public record Vec3i(int x, int y, int z) {}
+'''
+SITE_CLIENT = '''
+package probe;
+public class SiteClient {
+ public String terrain="slope";
+}
+'''
+SITE_VIEW = '''
+package dev.magehome.client;
+import dev.magehome.core.model.Vec3i;
+import probe.SiteClient;
+public final class ClientWorldView {
+ private final SiteClient client;
+ public ClientWorldView(SiteClient client){this.client=client;}
+ public record Block(boolean known,String blockId,boolean solidFull,boolean liquid,boolean removablePlant,boolean container){}
+ public Block read(Vec3i pos){
+  if (client.terrain.equals("unloaded")) return new Block(false,"minecraft:air",false,false,false,false);
+  if (client.terrain.equals("far") && pos.x()<75) return new Block(false,"minecraft:air",false,false,false,false);
+  if (client.terrain.equals("ridge")) {
+   int surface=64+Math.floorMod(pos.x(),11);
+   return pos.y()<=surface ? new Block(true,"minecraft:dirt",true,false,false,false)
+                         : new Block(true,"minecraft:air",false,false,false,false);
+  }
+  if (client.terrain.equals("water")){
+   if (pos.y()<=66) return new Block(true,"minecraft:dirt",true,false,false,false);
+   if (pos.y()<=69) return new Block(true,"minecraft:water",false,true,false,false);
+  } else if (pos.y()<=66+Math.floorMod(pos.x(),4)+Math.floorMod(pos.z(),3)) {
+   return new Block(true,"minecraft:dirt",true,false,false,false);
+  }
+  return new Block(true,"minecraft:air",false,false,false,false);
+ }
+}
+'''
 HARNESS = r'''
 import java.util.*;
 import java.lang.reflect.*;
 import org.saruman.bridge.ModGateway;
 import adris.altoclef.AltoClef;
 import lab.treegrow.TreeGrowClient;
+import probe.SiteClient;
 public class Harness {
- static final Object client=new Harness();static String world;static boolean modern;
+ static final SiteClient client=new SiteClient();static String world;static boolean modern;
  static void check(boolean pass,String message){if(!pass)throw new AssertionError(message);}
  static Map<String,Object> apply(String op,Map<String,Object> args)throws Exception{return new ModGateway(client,op,args).get();}
  static Map<String,Object> snapshot()throws Exception{return apply("snapshot",Map.of());}
@@ -101,6 +145,36 @@ public class Harness {
   check(Boolean.TRUE.equals(first.get("player_alive")),"alive state missing");
   check(List.of("Alex").equals(first.get("players")),"follow candidates include self or dead players");
   world=(String)first.get("world");
+  if(modern){
+   var slope=apply("find_site",Map.of("width",13,"depth",13));
+   check("found".equals(slope.get("status")), "uneven terrain rejected: "+slope);
+   Map<?,?> slopeWork=(Map<?,?>)slope.get("survey");
+   check((int)slopeWork.get("cut")+(int)slopeWork.get("fill")>0, "slope was treated as ready");
+   client.terrain="ridge";
+   var ridge=apply("find_site",Map.of("width",13,"depth",13,"height",13));
+   check("found".equals(ridge.get("status")),"ridge could not be leveled: "+ridge);
+   Map<?,?> ridgeWork=(Map<?,?>)ridge.get("survey");
+   check((int)ridgeWork.get("cut")>0 && (int)ridgeWork.get("fill")>0,"ridge should be cut and filled: "+ridge);
+   Map<?,?> firstPlot=(Map<?,?>)ridge.get("anchor");
+   int firstX=(int)firstPlot.get("x"), firstZ=(int)firstPlot.get("z");
+   String occupied=firstX+","+firstZ+","+(firstX+12)+","+(firstZ+12);
+   var next=apply("find_site",Map.of("width",13,"depth",13,"height",13,"occupied",occupied));
+   check("found".equals(next.get("status")),"second plot not found: "+next);
+   Map<?,?> nextPlot=(Map<?,?>)next.get("anchor");
+   int nextX=(int)nextPlot.get("x"), nextZ=(int)nextPlot.get("z");
+   check(Math.abs(nextX-firstX)>13 || Math.abs(nextZ-firstZ)>13,"occupied plot reused: "+next);
+   client.terrain="far";
+   var far=apply("find_site",Map.of("width",9,"depth",9));
+   check("found".equals(far.get("status")) && (int)((Map<?,?>)far.get("survey")).get("distance")>72,
+         "search stopped before the only known terrain: "+far);
+   client.terrain="water";
+   var shallow=apply("find_site",Map.of("width",7,"depth",7));
+   check("found".equals(shallow.get("status")), "shallow water with support rejected: "+shallow);
+   check((int)((Map<?,?>)shallow.get("anchor")).get("y")>=70, "floor would be underwater");
+   check((int)((Map<?,?>)shallow.get("survey")).get("water")>0, "wet foundation was not counted");
+   client.terrain="unloaded";
+   check("no_suitable_site".equals(apply("find_site",Map.of("width",7,"depth",7)).get("reason")),"unknown chunks treated as free");
+  }
   apply("defense",Map.of("enabled",true));apply("defense",Map.of("enabled",true));apply("defense",Map.of("enabled",false));
   check(runtime.getClass().getField("changes").getInt(runtime)==2,"non-idempotent enable/disable");
   Object handover=null,bridge=null;
@@ -167,6 +241,17 @@ public class Harness {
   check(!AltoClef.INSTANCE.runnerEnabled && AltoClef.INSTANCE.defense.task==null,"native task survived Stop");
   if(modern)check(dc.getField("nativeResets").getInt(null)==1,"native lifecycle reset omitted");
   check("halted".equals(apply("halt",Map.of("world",world)).get("status")),"Stop is not idempotent");
+  if(modern){
+   check("applied".equals(apply("defense",Map.of("world",world,"enabled",false,"mode","SELF_DEFENSE","suppress_native",true)).get("status")),"operator takeover failed");
+   Map<String,Object> during=snapshot();
+   check("SELF_DEFENSE".equals(during.get("defense_mode")) && Boolean.FALSE.equals(during.get("manual_stop_latched")),"scheduler mode latched a manual stop");
+   check(!AltoClef.INSTANCE.settings.isMobDefense() && Boolean.FALSE.equals(during.get("defense_enabled")),"operator did not get exclusive controls");
+   runtime.getClass().getField("manual").setBoolean(runtime,true);
+   check("applied".equals(apply("defense",Map.of("world",world,"enabled",false,"mode","SELF_DEFENSE","resume",true)).get("status")),"explicit Start failed with defense disabled");
+   check(Boolean.FALSE.equals(snapshot().get("manual_stop_latched")) && Boolean.FALSE.equals(snapshot().get("defense_enabled")),"explicit Start kept the latch or re-enabled defense");
+   check("applied".equals(apply("defense",Map.of("world",world,"enabled",true,"mode","SELF_DEFENSE","suppress_native",false)).get("status")),"defense restore failed");
+   check(AltoClef.INSTANCE.settings.isMobDefense() && Boolean.TRUE.equals(snapshot().get("defense_enabled")),"defense did not return after operator");
+  }
   System.out.println(modern?"MODERN PASS":"LEGACY PASS");
  }
 }'''
@@ -195,6 +280,8 @@ class JavaContractTests(unittest.TestCase):
                 files={"adris/altoclef/AltoClef.java":ALTO,"lab/treegrow/TreeGrowClient.java":TREE,
                        "dev/autodefense/api/AutoDefenseApi.java":MODERN_API if modern else LEGACY_API,
                        ("dev/autodefense/AutoDefenseClient.java" if modern else "dev/autodefense/client/AutoDefenseClient.java"):MODERN if modern else LEGACY,
+                       "dev/magehome/core/model/Vec3i.java":VECTOR, "dev/magehome/client/ClientWorldView.java":SITE_VIEW,
+                       "probe/SiteClient.java":SITE_CLIENT,
                        "Harness.java":HARNESS}
                 sources=[str(ROOT/"resources/Minecraft/bridge/ModGateway.java")]
                 for name,body in files.items():

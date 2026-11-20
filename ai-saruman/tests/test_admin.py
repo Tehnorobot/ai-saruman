@@ -16,7 +16,7 @@ class AdminTests(unittest.TestCase):
         future = 4_000_000_000
         with self.store.db() as db:
             for number in range(55):
-                db.execute("INSERT INTO admin_messages VALUES (?,?,?,'accepted',?)",
+                db.execute("INSERT INTO admin_messages (id,input,result,status,created) VALUES (?,?,?,'accepted',?)",
                            (f"maintenance-{number}", "Earlier maintenance", json.dumps({'detail': 'Paused'}), future))
         self.command('Новое поручение', 'new-command', operation='status')
         history = self.admin.history()
@@ -112,7 +112,7 @@ class AdminTests(unittest.TestCase):
         result=self.command('Что нужно уточнить?')
         self.assertEqual(result['status'],'answered')
         with self.store.db() as db:
-            db.execute("INSERT INTO admin_messages VALUES ('old','old command',?,'accepted',0)",
+            db.execute("INSERT INTO admin_messages (id,input,result,status,created) VALUES ('old','old command',?,'accepted',0)",
                        (json.dumps({'detail':'Old clarification'}),))
         self.assertEqual([r for r in self.admin.history() if r['id']=='old'][0]['status'],'answered')
         with self.store.db() as db:self.assertEqual(db.execute("SELECT status FROM admin_messages WHERE id='old'").fetchone()[0],'accepted')
@@ -225,7 +225,7 @@ class ConnectionTests(unittest.TestCase):
                 game.step()
                 self.assertIn('saruman.connection',run.call_args.args[0])
                 self.assertEqual(game.value['status'],'starting')
-                probe.poll.return_value=0;probe.communicate.return_value=(b'{"status":"in_world"}',None)
+                probe.poll.return_value=0;probe.communicate.return_value=(b'{"status":"in_world","mode":"server","target":"localhost"}',None)
                 game.step();self.assertEqual(game.value['status'],'running')
                 self.assertEqual(run.call_count,1)
 
@@ -273,7 +273,7 @@ class ConnectionTests(unittest.TestCase):
             self.assertEqual(game.selected['target'],'Display name')
             spawn.assert_not_called()
 
-    def test_world_join_keeps_request_marker_separate_from_cached_classloader(self):
+    def test_server_join_submits_once_and_confirms_only_with_fresh_world_observation(self):
         from saruman.roles import load
         import sys
         from types import SimpleNamespace
@@ -296,17 +296,20 @@ class ConnectionTests(unittest.TestCase):
             gateway.new_array.side_effect=lambda _,length:[None]*length
             gateway.jvm.java.lang.System.getProperties.return_value=properties
             gateway.jvm.java.net.URLClassLoader.newInstance.return_value=loader
-            gateway.jvm.java.util.concurrent.CompletableFuture.supplyAsync.return_value.get.return_value={
-                'status':status,'code':'world_not_found'}
-            gateway.entry_point.inGame.side_effect=[False,True]
+            observer = gateway.jvm.java.util.concurrent.CompletableFuture.supplyAsync.return_value.get
+            observer.return_value={'status':'menu'} if status=='connecting' else {'status':status,'code':'world_not_found'}
             with patch('pathlib.Path.exists',return_value=True):
-                result=module.connect('world','Existing','request',gateway=gateway)
+                result=module.connect('server','example.com','request',gateway=gateway)
             cached=[value for key,value in properties.items() if key.startswith('saruman.world.adapter:')]
             self.assertEqual(cached,[loader])
             self.assertEqual(result['status'],status)
             if status=='connecting':
                 self.assertEqual(properties.get('saruman.connect:request'),'submitted')
-                self.assertEqual(module.connect('world','Existing','request',gateway=gateway)['status'],'in_world')
+                with patch('pathlib.Path.exists',return_value=True):
+                    self.assertEqual(module.connect('server','example.com','request',gateway=gateway)['status'],'connecting')
+                    observer.return_value={'status':'in_world','mode':'server','target':'example.com:25565'}
+                    self.assertEqual(module.connect('server','example.com','request',gateway=gateway)['target'],'example.com:25565')
+                gateway.entry_point.ConnectToServer.assert_called_once_with('example.com')
             else:
                 self.assertNotIn('saruman.connect:request',properties)
 
@@ -320,11 +323,16 @@ class ConnectionTests(unittest.TestCase):
             (root/'saves/Мир Сарумана').mkdir();(root/'saves/Мир Сарумана/level.dat').touch()
             (root/'saves/Incomplete').mkdir()
             harness=root/'Probe.java'
-            harness.write_text('''import java.io.File; import org.saruman.bridge.WorldConnection;
+            mappings=root/'class_5218.java'
+            mappings.write_text('package net.minecraft; public class class_5218 { public static final class_5218 field_24188=new class_5218(); }',encoding='utf-8')
+            harness.write_text('''import java.io.File; import java.nio.file.Path; import net.minecraft.class_5218; import org.saruman.bridge.WorldConnection;
 public class Probe {
  public static class Loader {public String opened="";public void method_57784(String n,Runnable r){opened=n;}}
- public static class Client {public Object field_1687;public File field_1697;public Loader loader=new Loader();
-  public Object method_41735(){return loader;}}
+ public static class Integrated {public Path save;public Path method_27050(class_5218 key){return save;}}
+ public static class Client {public Object field_1687,field_1724;public File field_1697;public Loader loader=new Loader();
+  public Integrated server;
+  public Object method_41735(){return loader;}
+  public Integrated method_1576(){return server;}}
  static void check(boolean x){if(!x)throw new AssertionError();}
  public static void main(String[] args){Client c=new Client();c.field_1697=new File(args[0]);
   check(new WorldConnection(c,"status","","s").get().get("status").equals("menu"));
@@ -345,10 +353,16 @@ public class Probe {
   Client empty=new Client();empty.field_1697=new File(args[0],"another-profile");
   check(new WorldConnection(empty,"world","Existing","missing-saves").get().get("code").equals("world_not_found"));
   check(empty.loader.opened.equals(""));
-  c.field_1687=new Object();check(new WorldConnection(c,"world","Existing","two").get().get("status").equals("in_world"));
+  c.field_1687=new Object();check(new WorldConnection(c,"world","Existing","two").get().get("status").equals("connecting"));
+  c.field_1724=new Object();c.server=new Integrated();c.server.save=Path.of(args[0],"saves","Мир Сарумана");
+  var other=new WorldConnection(c,"world","Existing","one").get();
+  check(other.get("code").equals("other_world_open"));check(other.get("target").equals("Мир Сарумана"));
+  c.server.save=Path.of(args[0],"saves","Existing");
+  var confirmed=new WorldConnection(c,"world","Existing","two").get();
+  check(confirmed.get("status").equals("in_world") && confirmed.get("target").equals("Existing"));
   check(c.loader.opened.equals(""));System.out.println("OK");
  }}''',encoding='utf-8')
-            compiled=subprocess.run(['javac','--release','21','-encoding','UTF-8','-d',str(root),str(source),str(harness)],capture_output=True)
+            compiled=subprocess.run(['javac','--release','21','-encoding','UTF-8','-d',str(root),str(source),str(harness),str(mappings)],capture_output=True)
             self.assertEqual(compiled.returncode,0,compiled.stderr.decode('utf-8',errors='replace'))
             run=subprocess.run(['java','-cp',str(root),'Probe',str(root)],capture_output=True,text=True,encoding='utf-8')
             self.assertEqual(run.returncode,0,run.stderr)

@@ -9,20 +9,26 @@ from importlib.resources import files
 from pathlib import Path
 import secrets
 import socket
+import sqlite3
 import threading
+import time
 import traceback
 import uuid
 from urllib.parse import parse_qs, urlparse
 
 from .memory import Workplace, estimate_tokens
-from .provider import CodexProvider
-from .roles import ModelSettings, LabRoleProvider
+from .provider import CodexLogin, CodexProvider
+from .roles import (ModelSettings, LabRoleProvider, ProviderOutputLimit, ProviderRateLimit,
+                    ProviderRequestCancelled, ProviderRequestTimeout, settings)
+from .adapters import Adapters, MODEL_BODY_LIMIT
 from .storage import Store
 from .telegram import Director, Store as TelegramStore, POST_PROMPT, POST_SCHEMA, Conversations, REPLY_PROMPT, REPLY_SCHEMA
 from .runtime import CharacterRuntime
 from .admin import Admin, SCHEMA as ADMIN_SCHEMA, PROMPT as ADMIN_PROMPT
 from .workflows import Workflows
 from .game_activity import GameActivity, ActivityStore
+from .extensions import Extensions
+from .readiness import Readiness
 
 MAX_BODY = 64 * 1024
 
@@ -31,14 +37,18 @@ class Application:
     def __init__(self, project, data_dir=None, provider=None):
         self.workplace = Workplace(project)
         self.store = Store((data_dir or project / ".saruman") / "lab.sqlite3")
-        self.models = ModelSettings(project, data_dir)
+        self.adapters = Adapters(project, self.store, data_dir)
+        self.models = ModelSettings(project, data_dir, self.adapters.roles())
         self.codex = provider or CodexProvider()
         self.provider = provider or LabRoleProvider(self.models, self.codex)
         self.custom_provider = provider is not None
         self.activity = ActivityStore(project)
         self.models.activity = self.activity
+        self.adapters.bind(self.models, self.codex, self.activity)
         self.provider_status = {"connected": False, "models": [], "limits": None,
-                                "note": "Нажми «Подключить Codex», чтобы проверить аккаунт и лимиты."}
+                                "note": "Обновите данные аккаунта Codex, чтобы проверить подключение и лимиты."}
+        self.provider_lock = threading.Lock()
+        self.codex_login = CodexLogin(self.refresh_provider)
         self.token = secrets.token_urlsafe(32)
         self.turn_lock = threading.Lock()
         telegram_store = TelegramStore((data_dir or project / ".saruman") / "telegram.sqlite3")
@@ -50,6 +60,10 @@ class Application:
         self.director = Director(draft, telegram_store, managed=True)
         self.telegram = self.director.control
         self.runtime = CharacterRuntime(project, telegram_store, self.director)
+        self.runtime.adapters = self.adapters
+        self.extensions = Extensions(project, self.runtime, self.adapters)
+        self.runtime.extensions = self.extensions
+        self.readiness = Readiness(project, self.models, self.codex, self.runtime, self.extensions, self.telegram)
         caption_provider=LabRoleProvider(self.models,self.codex,role='telegram',schema={
             'type':'object','additionalProperties':False,'required':['text'],'properties':{'text':{'type':'string'}}})
         def caption(payload):
@@ -62,6 +76,7 @@ class Application:
             return caption_provider.complete(prompt,json.dumps(payload,ensure_ascii=False),'',
                 {'session_id':'telegram:workflow:'+role_session,'parent_id':parent_id})
         self.runtime.workflows=Workflows(project,telegram_store,self.runtime,caption)
+        self.adapters.object_capture = self.runtime.workflows.capture_game
         reply_provider=LabRoleProvider(self.models,self.codex,role="telegram_reply",schema=REPLY_SCHEMA)
         self.replies=Conversations(telegram_store,lambda payload:reply_provider.complete(
             self.workplace.read("PERSONA.md")+REPLY_PROMPT,json.dumps(payload,ensure_ascii=False),"",{"session_id":"telegram:reply:"+role_session}),self.telegram)
@@ -71,7 +86,8 @@ class Application:
             payload=dict(payload);parent_id=payload.pop('_lab_trace',None)
             return admin_provider.complete(ADMIN_PROMPT,json.dumps(payload,ensure_ascii=False),'',
                 {'session_id':'admin:private:'+role_session,'parent_id':parent_id})
-        self.admin=Admin(telegram_store,self.runtime,interpret)
+        self.admin=Admin(telegram_store,self.runtime,interpret,self.adapters)
+        self.runtime.workflows.admin=self.admin
         self.game_activity = GameActivity(project, self.runtime, telegram_store, self.models.store.path, self.activity,
                                           memory_lock=self.workplace.lock)
         self.runtime.observer = self.game_activity
@@ -81,16 +97,34 @@ class Application:
         return {"csrf_token": self.token, "memory": self.workplace.snapshot(),
                 "sessions": self.store.sessions(), "analytics": self.store.analytics(),
                 "provider": self.provider_status, "models": self.models.snapshot(),
+                "adapters": self.adapters.snapshot(), "adapter_journal": True,
+                "extensions": self.extensions.snapshot(),
                 "persona": self.workplace.read("PERSONA.md"), "runtime": self.runtime.snapshot()}
 
     def refresh_provider(self):
-        try:
-            self.provider_status = self.codex.status()
-            if not self.custom_provider:
-                self.models.store.update_catalogue(self.provider_status.get("models", []))
-        except (RuntimeError, OSError) as error:
-            self.provider_status = {"connected": False, "models": [], "limits": None, "error": str(error)}
-        return self.provider_status
+        with self.provider_lock:
+            try:
+                value = self.codex.status()
+            except (RuntimeError, OSError) as error:
+                value = {"connected": False, "models": [], "limits": None, "error": str(error)}
+            if not self.custom_provider and value.get("models"):
+                try:
+                    self.models.store.update_catalogue(value["models"])
+                except sqlite3.Error:
+                    value = {**value, "catalog_error": "Локальный каталог моделей не обновился."}
+            self.provider_status = {**value, "checked_at": time.time()}
+            return self.provider_status
+
+    def provider_login(self, action):
+        if action == "start":
+            login = self.codex_login.start()
+        elif action == "cancel":
+            login = self.codex_login.cancel()
+        elif action == "status":
+            login = self.codex_login.snapshot()
+        else:
+            raise ValueError("Неизвестное действие входа в Codex.")
+        return {"login": login, "provider": self.provider_status}
 
     def chat(self, payload):
         text = payload.get("text")
@@ -175,7 +209,8 @@ class Handler(BaseHTTPRequestHandler):
             if parsed.path == '/api/activity/event':
                 return self.respond(self.app.activity.event(params.get('id',['0'])[0]))
             if parsed.path == '/api/activity/log':
-                return self.respond(self.app.game_activity.raw_log(params.get('offset',[None])[0]))
+                return self.respond(self.app.game_activity.raw_log(params.get('offset',[None])[0],
+                                                                   source=params.get('source',['runtime'])[0]))
             if parsed.path.startswith('/api/media/'):
                 digest=parsed.path.removeprefix('/api/media/')
                 try:
@@ -188,6 +223,17 @@ class Handler(BaseHTTPRequestHandler):
                 return self.respond(self.app.telegram.store.snapshot(int(params.get("page", ["0"])[0])))
             if parsed.path == "/api/runtime":
                 return self.respond(self.app.runtime.snapshot())
+            if parsed.path == "/api/readiness":
+                return self.respond(self.app.readiness.snapshot())
+            if parsed.path == "/api/extensions":
+                return self.respond(self.app.extensions.snapshot())
+            if parsed.path == "/api/adapters/objects":
+                identifier = params.get("id", [""])[0]
+                objects = self.app.adapters.objects(identifier)
+                metadata = self.app.runtime.workflows.object_metadata(identifier)
+                items = [{**metadata.get(item["run_id"], {}), **{key: val for key, val in item.items() if val is not None}}
+                         for item in objects]
+                return self.respond({"items": items})
             if parsed.path == "/api/admin":
                 return self.respond({"messages":self.app.admin.history(),"game_result":self.app.runtime.game.read("admin-result.json")})
             if parsed.path == "/api/telegram/dialogues":
@@ -217,6 +263,8 @@ class Handler(BaseHTTPRequestHandler):
             return
 
     def do_POST(self):
+        if self.path.startswith("/adapter-model/"):
+            return self.adapter_model()
         if not self.allowed_origin() or not secrets.compare_digest(
                 self.headers.get("X-Saruman-Token", ""), self.app.token):
             return self.respond({"error": "Обнови страницу: локальная сессия не подтверждена."}, 403)
@@ -231,8 +279,16 @@ class Handler(BaseHTTPRequestHandler):
                 return self.respond(self.app.store.create_session(), 201)
             if self.path == "/api/provider":
                 return self.respond(self.app.refresh_provider())
+            if self.path == "/api/provider/login":
+                return self.respond(self.app.provider_login(payload.get("action")))
             if self.path == "/api/models":
                 return self.respond(self.app.models.save(payload))
+            if self.path == "/api/adapters":
+                self.app.adapters.entry(payload.get("id"))
+                value = self.app.extensions.configure({**payload, "action": "toggle"})
+                return self.respond({**self.app.adapters.snapshot(), "warning": value["warning"]})
+            if self.path == "/api/extensions":
+                return self.respond(self.app.extensions.configure(payload))
             if self.path == "/api/chat":
                 return self.respond(self.app.chat(payload))
             if self.path == "/api/runtime/start":
@@ -241,6 +297,17 @@ class Handler(BaseHTTPRequestHandler):
                 return self.respond(self.app.runtime.stop())
             if self.path == "/api/runtime/connection":
                 return self.respond(self.app.runtime.connection.configure(payload))
+            if self.path == "/api/readiness":
+                if payload.get("kind") == "services":
+                    minecraft, filter_enabled = payload.get("minecraft"), payload.get("filter_enabled")
+                    if type(minecraft) is not bool or type(filter_enabled) is not bool:
+                        raise ValueError("Укажите состояние переключателей Minecraft и фильтра.")
+                    self.app.readiness.check_services(minecraft, filter_enabled)
+                elif payload.get("kind") == "model":
+                    self.app.readiness.check_model(payload.get("role"))
+                else:
+                    raise ValueError("Неизвестный вид проверки.")
+                return self.respond(self.app.readiness.snapshot())
             if self.path == "/api/admin":
                 return self.respond(self.app.admin.execute(payload))
             if self.path == "/api/telegram/settings":
@@ -265,6 +332,34 @@ class Handler(BaseHTTPRequestHandler):
             traceback.print_exc()
             self.respond({"error": "Внутренняя ошибка. Подробности в терминале сервера."}, 500)
 
+    def adapter_model(self):
+        if not self.allowed_origin() or self.headers.get("Origin"):
+            return self.respond({"error": "Недопустимый источник запроса."}, 403)
+        try:
+            token, identifier, agent, request_id = self.path.removeprefix("/adapter-model/").split("/")
+            self.app.adapters.authenticate(token, identifier, agent)
+            length = int(self.headers.get("Content-Length", "0"))
+            if not 0 < length <= MODEL_BODY_LIMIT:
+                return self.respond({"error": "Некорректный размер запроса."}, 413)
+            payload = json.loads(self.rfile.read(length))
+            if not isinstance(payload, dict):
+                raise ValueError("Ожидается JSON-объект.")
+            self.respond(self.app.adapters.model(identifier, agent, request_id, payload, client_socket=self.connection))
+        except PermissionError as error:
+            self.respond({"error": str(error)}, 403)
+        except (BrokenPipeError, ConnectionResetError, ProviderRequestCancelled):
+            pass  # The game may have cancelled its subprocess while a model was running.
+        except (ValueError, TypeError) as error:
+            self.respond({"error": str(error)}, 400)
+        except ProviderRequestTimeout as error:
+            self.respond({"error": str(error)}, 504)
+        except ProviderOutputLimit as error:
+            self.respond({"error": str(error), "code": "provider_output_limit"}, 422)
+        except (ProviderRateLimit, settings.RoleBudgetExceeded) as error:
+            self.respond({"error": str(error), "code": "provider_waiting"}, 429)
+        except (OSError, RuntimeError) as error:
+            self.respond({"error": str(error)}, 502)
+
 
 class LabHTTPServer(ThreadingHTTPServer):
     # Windows SO_REUSEADDR can let two HTTP servers serve the same loopback port.
@@ -280,6 +375,7 @@ class LabHTTPServer(ThreadingHTTPServer):
 def make_server(app, port=8765):
     server = LabHTTPServer(("127.0.0.1", port), Handler)
     server.app = app
+    app.adapters.port = server.server_port
     return server
 
 
@@ -296,10 +392,15 @@ def main():
         parser.exit(1, str(error) + "\n")
     print(f"Saruman Lab → http://127.0.0.1:{server.server_port}", flush=True)
     print("Локальная БД: " + str(app.store.path), flush=True)
+    app.adapters.start_observer()
+    app.extensions.start()
     try:
         server.serve_forever()
     except KeyboardInterrupt:
         pass
     finally:
+        app.codex_login.close()
+        app.extensions.closed.set()
+        app.adapters.close_observer()
         app.runtime.close()
         server.server_close()

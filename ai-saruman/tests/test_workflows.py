@@ -41,10 +41,10 @@ class WorkflowTests(unittest.TestCase):
     def setUp(self):
         self.temp=tempfile.TemporaryDirectory();self.addCleanup(self.temp.cleanup)
         self.root=Path(self.temp.name);self.store=Store(self.root/'telegram.sqlite')
-        self.results={};self.game=Mock();self.game.read.side_effect=lambda name:self.results.get(name,{})
+        self.results={};self.game=Mock();self.game.value={};self.game.read.side_effect=lambda name:self.results.get(name,{})
         self.runtime=SimpleNamespace(active=True,lock=threading.RLock(),game=self.game,connection=Mock())
         self.writer=Mock(return_value={'text':'Дерево выросло.'})
-        self.capture=Mock(side_effect=lambda identifier:self.store.save_photo(png()))
+        self.capture=Mock(side_effect=lambda identifier, **kwargs:self.store.save_photo(png()))
         self.flow=self.new_flow()
 
     def new_flow(self):
@@ -60,6 +60,246 @@ class WorkflowTests(unittest.TestCase):
         identifier=self.flow.get('command')['steps'][0]['id']
         self.results['results/'+identifier+'.json']={'command_id':identifier,'status':'completed',
             'facts':{'goals':[{'kind':'trees','completed':1,'state':'completed','world':'secret','context_id':'private','coordinates':[1,2,3]}]}}
+
+    def admit_build_chain(self, *, world_name='New World'):
+        adapter = Mock()
+        adapter.chat_target.side_effect = lambda text: 'mage_home' if text.startswith('построй') else ''
+        adapter.state.return_value = (True,{})
+        adapter.journal = load('activity').ActivityStore(self.root/'activity.sqlite')
+        adapter.instance.return_value.call.return_value = {'world':{'connected':True,'name':world_name}}
+        adapter.entry.return_value.lock = threading.RLock()
+        adapter.instance.return_value.photo_subject.return_value = {
+            'run_id':'house-run', 'project_id':'house', 'world_uid':'save-id',
+            'min':[10, 64, 20], 'max':[20, 75, 30], 'facing':'north',
+        }
+        self.runtime.workflows = self.flow
+        self.runtime.start = Mock()
+        self.runtime.snapshot = Mock(return_value={'options':{'minecraft':True}})
+        self.runtime.extensions = Mock()
+        self.runtime.extensions.operator_handle.return_value = {
+            'status':'running','run_id':'house-run','world_uid':'save-id','detail':'Идёт стройка',
+        }
+        connection = self.runtime.connection
+        connection.identifier = None
+        connection.configuration.side_effect = lambda *, world=None: {'mode':'world','target':world or 'New World'}
+        def request(*, identifier, configuration):
+            connection.last_request_id = identifier
+            connection.value = {'status':'running','request_id':identifier, **configuration}
+        connection.request.side_effect = request
+        text = 'зайди в мир New World, построй дом с печью и опубликуй отчёт со скриншотом'
+        steps = [{'operation':op,'text':value} for op,value in [
+            ('connect','New World'),('adapter_task','построй дом с печью'),
+            ('screenshot',''),('draft',''),('publish',''),
+        ]]
+        intent = Mock(return_value={'operation':'workflow','text':'','steps':steps})
+        admin = Admin(self.store,self.runtime,intent,adapter)
+        self.flow.admin = admin
+        row = admin.execute({'text':text,'request_id':'compound'})
+        self.assertEqual(json.loads(row['result'])['workflow_id'],'compound')
+        self.results['status.json'] = {'world_ready':True,'world_session':'world-new'}
+        return adapter, self.flow.get('compound')['steps'][1]['id']
+
+    def test_repeat_build_text_creates_fresh_join_build_and_publication_ids(self):
+        self.admit_build_chain()
+        first = self.flow.get('compound')
+        text = self.flow.admin.history()[0]['input']
+        self.flow.admin.interpret.side_effect = AssertionError('Repeated command must not depend on model history')
+        new = self.flow.admin.execute({'text':text,'request_id':'compound-again'})
+        retransmit = self.flow.admin.execute({'text':text,'request_id':'compound-again'})
+        self.assertEqual(json.loads(new['result'])['workflow_id'], 'compound-again')
+        self.assertEqual(json.loads(retransmit['result'])['workflow_id'], 'compound-again')
+        second = self.flow.get('compound-again')
+        self.assertEqual([step['operation'] for step in first['steps']], [step['operation'] for step in second['steps']])
+        self.assertFalse({step['id'] for step in first['steps']} & {step['id'] for step in second['steps']})
+
+    def test_cancelled_build_finishes_old_chain_at_menu(self):
+        _, build_id = self.admit_build_chain()
+        self.flow.step()
+        with self.store.db() as db:
+            db.execute("INSERT INTO admin_messages VALUES (?,?,?,'cancelled',0,'mage_home')",
+                       (build_id, 'построй дом с печью', json.dumps({'detail':'Отменено'})))
+        self.results['status.json'] = {'world_ready':False}
+        self.flow.step()
+        self.assertEqual(self.flow.get('compound')['status'], 'cancelled')
+        self.capture.assert_not_called()
+
+    def test_returning_to_menu_requires_explicit_resume_before_entering_again(self):
+        adapter, build_id = self.admit_build_chain()
+        self.flow.step()
+        first_join = self.runtime.connection.last_request_id
+        self.results['status.json'] = {'world_ready':False}
+        adapter.instance.return_value.call.return_value = {'world':{'connected':False}, 'ui':{'screen':'class_442'}}
+        self.flow.step()
+        self.assertEqual(self.flow.get('compound')['status'], 'paused')
+        self.assertEqual(self.flow.get('compound')['steps'][0]['status'], 'completed')
+        self.flow.step()
+        self.runtime.connection.request.assert_called_once()
+        self.flow.resume('compound')
+        self.flow.step()
+        self.assertNotEqual(self.runtime.connection.last_request_id, first_join)
+        self.assertEqual(self.runtime.connection.request.call_args.kwargs['configuration']['target'], 'New World')
+        self.assertEqual(self.flow.get('compound')['steps'][1]['id'], build_id)
+        self.runtime.extensions.operator_handle.assert_not_called()
+
+    def test_new_demo_join_is_not_preempted_by_build_workflow_after_leaving_its_world(self):
+        adapter, _ = self.admit_build_chain(world_name='build')
+        first = self.flow.get('compound')
+        first['steps'][0]['configuration']['target'] = 'build'
+        self.flow.save(first)
+        self.flow.step()
+        self.results['status.json'] = {'world_ready':False}
+        adapter.instance.return_value.call.return_value = {'world':{'connected':False}, 'ui':{'screen':'class_442'}}
+        self.flow.step()
+        self.flow.create('demo-request', [{'operation':'connect', 'text':'demo'}], 'Зайди в мир demo')
+        for _ in range(3):
+            self.flow.step()
+
+        targets = [call.kwargs['configuration']['target'] for call in self.runtime.connection.request.call_args_list]
+        self.assertEqual(targets, ['build','demo'])
+        self.assertEqual(self.flow.get('demo-request')['status'], 'completed')
+        self.assertEqual(self.flow.get('compound')['status'], 'paused')
+        self.runtime.extensions.operator_handle.assert_not_called()
+
+    def test_inflight_result_cannot_revive_durably_cancelled_workflow(self):
+        self.chain()
+
+        def finish_during_cancellation(*_):
+            self.flow.cancel_pending()
+            return True, {'facts':{'state':'completed'}}
+
+        with patch.object(self.flow, 'run', side_effect=finish_during_cancellation):
+            self.flow.step()
+        self.flow = self.new_flow()
+        self.flow.step()
+        self.assertEqual(self.flow.get('command')['status'], 'cancelled')
+        with self.assertRaises(ValueError):
+            self.flow.resume('command')
+        self.capture.assert_not_called()
+        self.writer.assert_not_called()
+
+    def test_cancelled_join_cannot_dispatch_with_a_stale_snapshot_after_start(self):
+        self.admit_build_chain(world_name='build')
+        stale = self.flow.get('compound')
+        self.flow.cancel_pending()
+        complete, result = self.flow.run(stale, 0)
+        self.assertFalse(complete)
+        self.assertEqual(result['status'], 'cancelled')
+        self.runtime.connection.request.assert_not_called()
+
+    def test_open_world_and_stale_dispatcher_are_reported_separately(self):
+        self.admit_build_chain()
+        self.flow.step()
+        self.results['status.json'] = {'world_ready':False,'native_fresh':False,'native_error':'Данные устарели'}
+        self.flow.step()
+        workflow = self.flow.get('compound')
+        self.assertIn('Мир «New World» открыт', workflow['detail'])
+        self.assertEqual(workflow['steps'][1]['result']['status'], 'waiting_adapter')
+        self.runtime.extensions.operator_handle.assert_not_called()
+
+    def test_open_world_keeps_build_pending_and_shows_service_failure(self):
+        self.admit_build_chain()
+        self.flow.step()
+        self.results['status.json'] = {'phase':'waiting_services','reason':'Игровая проверка не пройдена (Redis TCP)'}
+        self.game.value = {'status':'retrying','reason':self.results['status.json']['reason']}
+        self.flow.step()
+        workflow = self.flow.get('compound')
+        self.assertEqual(workflow['status'], 'waiting')
+        self.assertEqual(workflow['steps'][0]['status'], 'completed')
+        self.assertEqual(workflow['steps'][1]['result']['status'], 'waiting_services')
+        self.assertIn('Redis TCP', workflow['detail'])
+        self.runtime.extensions.operator_handle.assert_not_called()
+
+    def test_build_dispatch_waits_for_the_new_worker_even_if_old_status_was_ready(self):
+        _, build_id = self.admit_build_chain()
+        self.flow.step()
+        self.game.value = {'status':'restarting','reason':'Восстанавливаем игровой обработчик'}
+        self.flow.step()
+        workflow = self.flow.get('compound')
+        self.assertEqual(workflow['steps'][1]['status'], 'waiting')
+        self.assertEqual(workflow['detail'], self.game.value['reason'])
+        self.runtime.extensions.operator_handle.assert_not_called()
+        self.game.value = {'status':'running'}
+        self.results['status.json']['world_session'] = 'worker-reconnected'
+        self.flow.step()
+        self.runtime.extensions.operator_handle.assert_called_once_with(
+            'mage_home', 'построй дом с печью', build_id, None, world_session='worker-reconnected')
+
+    def test_world_build_and_report_wait_for_same_build_and_photo(self):
+        adapter, build_id = self.admit_build_chain()
+        self.flow.step()
+        self.runtime.extensions.operator_handle.assert_not_called()
+        self.flow.step()
+        self.flow.step()
+        self.runtime.extensions.operator_handle.assert_called_once_with(
+            'mage_home','построй дом с печью',build_id,None,world_session='world-new',
+        )
+        self.capture.assert_not_called()
+        adapter.journal.record('adapter.minecraft.state',trace='admin-'+build_id,status='completed',
+                               details={'state':{'runId':'another-house'},'text':'Other house'})
+        self.flow.step()
+        self.capture.assert_not_called()
+        adapter.journal.record('adapter.minecraft.state',trace='admin-'+build_id,status='completed',
+                               details={'state':{'runId':'house-run'},'text':'Постройка подтверждена'})
+        for _ in range(4):
+            self.flow.step()
+        self.capture.assert_called_once_with(self.flow.get('compound')['steps'][2]['id'],
+                                            focus=adapter.instance.return_value.photo_subject.return_value)
+        self.assertEqual(self.writer.call_args.args[0]['confirmed_game_results'],
+                         [{'kind':'mage_home','state':'completed','completed':1}])
+        post = self.store.snapshot()['posts'][0]
+        self.assertEqual(post['status'],'queued')
+        with self.store.db() as db:
+            db.execute("UPDATE posts SET status='sent',message_id=42 WHERE id=?",(post['id'],))
+        self.flow.step()
+        self.flow.step()
+        self.assertEqual(self.flow.get('compound')['status'],'completed')
+
+    def test_unframed_house_photo_does_not_generate_report(self):
+        adapter, build_id = self.admit_build_chain()
+        self.flow.step()
+        self.flow.step()
+        adapter.journal.record('adapter.minecraft.state', trace='admin-'+build_id, status='completed',
+                               details={'state':{'runId':'house-run'}, 'text':'Готово'})
+        self.capture.side_effect = RuntimeError('Дом закрыт рельефом.')
+        for _ in range(4):
+            self.flow.step()
+        self.assertEqual(self.flow.get('compound')['status'], 'failed')
+        self.writer.assert_not_called()
+        self.assertEqual(self.store.snapshot()['posts'], [])
+
+    def test_compound_build_refuses_other_save_before_start(self):
+        self.admit_build_chain(world_name='New World (1)')
+        self.flow.step()
+        self.flow.step()
+        self.assertEqual(self.flow.get('compound')['status'],'failed')
+        self.runtime.extensions.operator_handle.assert_not_called()
+        self.capture.assert_not_called()
+        self.writer.assert_not_called()
+
+    def test_paused_build_keeps_the_same_run_across_a_reconnect(self):
+        adapter, build_id = self.admit_build_chain()
+        self.runtime.extensions.operator_handle.return_value['world_uid'] = 'save-id'
+        self.flow.step()
+        self.flow.step()
+        adapter.journal.record('adapter.minecraft.state', trace='admin-'+build_id, status='paused',
+                               details={'state':{'runId':'house-run'}, 'text':'Ждёт восстановления модели'})
+        self.flow.step()
+        self.assertEqual(self.flow.get('compound')['status'], 'waiting')
+        self.results['status.json'] = {'world_ready':True, 'world_session':'rejoined'}
+        world = adapter.instance.return_value.call.return_value['world']
+        world['worldUid'] = 'different-save'
+        self.flow.step()
+        self.assertEqual(self.flow.get('compound')['world_session'], 'world-new')
+        world['worldUid'] = 'save-id'
+        self.flow.step()
+        self.assertEqual(self.flow.get('compound')['world_session'], 'rejoined')
+        self.runtime.extensions.operator_handle.assert_called_once()
+        self.capture.assert_not_called()
+        adapter.journal.record('adapter.minecraft.state', trace='admin-'+build_id, status='completed',
+                               details={'state':{'runId':'house-run'}, 'text':'Готово'})
+        self.flow.step()
+        self.flow.step()
+        self.capture.assert_called_once()
 
     def test_chain_waits_for_exact_observed_completion_and_delivery(self):
         value=self.chain();identifier=value['steps'][0]['id'];self.flow.step()
@@ -97,7 +337,7 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(self.flow.get('command')['detail'],'native acquisition timed out')
         self.capture.assert_not_called();self.writer.assert_not_called()
 
-    def test_stop_and_reconstruction_keep_checkpoints_without_repeating_completed_actions(self):
+    def test_temporary_suspension_keeps_checkpoints_after_reconstruction(self):
         self.chain();self.complete_game();self.flow.step();self.flow.step()
         self.runtime.active=False
         self.flow.step();self.assertEqual(self.flow.get('command')['status'],'waiting_start')
@@ -190,13 +430,18 @@ class WorkflowTests(unittest.TestCase):
     def test_connect_step_polls_same_request_and_preserves_config_across_restart(self):
         connection=self.runtime.connection
         config={'mode':'world','target':'test_3','launcher':'','arguments':[]}
-        connection.configuration.return_value=config;connection.last_request_id=None
+        connection.configuration.return_value=config;connection.last_request_id=None;connection.identifier=None
         def request(**kw):
             connection.last_request_id=kw['identifier'];connection.value={'status':'starting'}
         connection.request.side_effect=request
         self.flow.create('join',[{'operation':'connect','text':'test_3'}],'Войди в мир test_3')
         self.flow.step();self.flow.step();self.assertEqual(connection.request.call_count,1)
-        connection.value={'status':'running'}
+        identifier = self.flow.get('join')['steps'][0]['id']
+        connection.value={'status':'running','request_id':identifier,'mode':'world','target':'another'}
+        self.flow.step();self.assertEqual(self.flow.get('join')['steps'][0]['status'],'waiting')
+        connection.value={'status':'running','request_id':'another-request','mode':'world','target':'test_3'}
+        self.flow.step();self.assertEqual(self.flow.get('join')['steps'][0]['status'],'waiting')
+        connection.value={'status':'running','request_id':identifier,'mode':'world','target':'test_3'}
         self.flow.step();self.assertEqual(self.flow.get('join')['steps'][0]['status'],'completed')
         self.assertEqual(connection.request.call_args.kwargs['configuration'],config)
 

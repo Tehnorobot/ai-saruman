@@ -1,0 +1,9 @@
+{
+  "schema": "mage_home.profile/1",
+  "provider": "openai_compatible",
+  "endpoint": "https://provider.example.invalid/v1/chat/completions",
+  "model": "provider-model-id",
+  "apiKeyEnv": "MAGE_HOME_MODEL_API_KEY",
+  "deadlineMillis": 30000,
+  "jsonResponseFormat": true
+}

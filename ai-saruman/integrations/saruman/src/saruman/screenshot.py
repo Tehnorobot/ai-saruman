@@ -2,14 +2,16 @@
 import argparse
 import hashlib
 import json
+import os
 from pathlib import Path
 import re
 import shutil
 import subprocess
+from tempfile import TemporaryDirectory
 from py4j.java_gateway import JavaGateway,GatewayParameters
 
 
-def capture(identifier,gateway=None):
+def capture(identifier,gateway=None,*,focus=None):
     if not re.fullmatch('[a-f0-9]{64}',identifier):raise ValueError('Invalid capture ID')
     root=Path(__file__).resolve().parents[2]
     target=root.parents[1]/'.saruman/runtime/captures'/(identifier+'.png')
@@ -18,12 +20,17 @@ def capture(identifier,gateway=None):
     if target.is_file():return {'status':'completed'}
     source=root/'resources/Minecraft/bridge/GameScreenshot.java'
     output=root/'data/screenshot-bridge'/hashlib.sha256(source.read_bytes()).hexdigest()[:16]
-    if not (output/'org/saruman/bridge/GameScreenshot.class').is_file():
-        output.mkdir(parents=True,exist_ok=True)
-        subprocess.run([shutil.which('javac') or 'javac','--release','21','-encoding','UTF-8','-d',str(output),str(source)],
-                       check=True,capture_output=True,timeout=45)
+    relative_class=Path('org/saruman/bridge/GameScreenshot.class')
+    compiled=output/relative_class
+    if not compiled.is_file():
+        compiled.parent.mkdir(parents=True,exist_ok=True)
+        with TemporaryDirectory(dir=output.parent) as staging:
+            subprocess.run([shutil.which('javac') or 'javac','--release','21','-encoding','UTF-8','-d',staging,str(source)],
+                           check=True,capture_output=True,timeout=45)
+            (Path(staging)/relative_class).replace(compiled)
     own=gateway is None
-    g=gateway or JavaGateway(gateway_parameters=GatewayParameters(port=25333,read_timeout=35,auto_convert=True))
+    g=gateway or JavaGateway(gateway_parameters=GatewayParameters(
+        port=int(os.environ.get('MINECRAFT_GATEWAY_PORT', '25333')),read_timeout=35,auto_convert=True))
     try:
         props=g.jvm.java.lang.System.getProperties()
         loader_key='saruman.screenshot.adapter:'+output.name
@@ -36,22 +43,29 @@ def capture(identifier,gateway=None):
         job=props.get(key)
         if job is None:
             cls=loader.loadClass('org.saruman.bridge.GameScreenshot')
-            types=g.new_array(g.jvm.java.lang.Class,2)
+            types=g.new_array(g.jvm.java.lang.Class,3)
             types[0]=g.jvm.java.lang.Class.forName('java.lang.Object');types[1]=g.jvm.java.lang.Class.forName('java.lang.String')
-            args=g.new_array(g.jvm.java.lang.Object,2)
+            types[2]=types[1]
+            args=g.new_array(g.jvm.java.lang.Object,3)
             args[0]=g.jvm.net.minecraft.class_310.method_1551();args[1]=str(target)
+            args[2]=json.dumps(focus) if focus is not None else ''
             job=cls.getConstructor(types).newInstance(args)
             previous=props.putIfAbsent(key,job)
             if previous is not None:job=previous
             else:args[0].execute(job)
-        return dict(job.getResult().get(30,g.jvm.java.util.concurrent.TimeUnit.SECONDS).items())
+        pending=job.getResult()
+        try:
+            return dict(pending.get(30,g.jvm.java.util.concurrent.TimeUnit.SECONDS).items())
+        finally:
+            if pending.isCompletedExceptionally() or pending.isDone() and not target.is_file():
+                props.remove(key,job)
     finally:
         if own:g.close()
 
 
 def main():
-    parser=argparse.ArgumentParser();parser.add_argument('identifier');args=parser.parse_args()
-    try:result=capture(args.identifier)
+    parser=argparse.ArgumentParser();parser.add_argument('identifier');parser.add_argument('--focus',type=json.loads);args=parser.parse_args()
+    try:result=capture(args.identifier,focus=args.focus)
     except Exception as error:result={'status':'error','reason':type(error).__name__}
     print(json.dumps(result))
 

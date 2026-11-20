@@ -1,0 +1,3012 @@
+{
+    "schema":  "mage_home.blueprint/1",
+    "projectId":  "compact_flat_v1_palette0",
+    "revision":  1,
+    "templateId":  "mage_home:compact_flat_v1",
+    "description":  "Frozen compact house regression",
+    "requirements":  {
+                         "mandatory":  [
+                                           "Unchanged compact_flat_v1.palette0 geometry and furniture"
+                                       ],
+                         "assumptions":  [
+
+                                         ],
+                         "conflicts":  [
+
+                                       ]
+                     },
+    "size":  {
+                 "x":  7,
+                 "y":  5,
+                 "z":  7
+             },
+    "origin":  {
+                   "x":  0,
+                   "y":  0,
+                   "z":  0
+               },
+    "cells":  [
+                  {
+                      "x":  0,
+                      "y":  0,
+                      "z":  0,
+                      "block":  "minecraft:stone_bricks",
+                      "kind":  "structure",
+                      "id":  "cell_0_0_0",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  1,
+                      "y":  0,
+                      "z":  0,
+                      "block":  "minecraft:stone_bricks",
+                      "kind":  "structure",
+                      "id":  "cell_1_0_0",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  2,
+                      "y":  0,
+                      "z":  0,
+                      "block":  "minecraft:stone_bricks",
+                      "kind":  "structure",
+                      "id":  "cell_2_0_0",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  3,
+                      "y":  0,
+                      "z":  0,
+                      "block":  "minecraft:stone_bricks",
+                      "kind":  "structure",
+                      "id":  "cell_3_0_0",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  4,
+                      "y":  0,
+                      "z":  0,
+                      "block":  "minecraft:stone_bricks",
+                      "kind":  "structure",
+                      "id":  "cell_4_0_0",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  5,
+                      "y":  0,
+                      "z":  0,
+                      "block":  "minecraft:stone_bricks",
+                      "kind":  "structure",
+                      "id":  "cell_5_0_0",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  6,
+                      "y":  0,
+                      "z":  0,
+                      "block":  "minecraft:stone_bricks",
+                      "kind":  "structure",
+                      "id":  "cell_6_0_0",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  0,
+                      "y":  0,
+                      "z":  1,
+                      "block":  "minecraft:stone_bricks",
+                      "kind":  "structure",
+                      "id":  "cell_0_0_1",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  1,
+                      "y":  0,
+                      "z":  1,
+                      "block":  "minecraft:stone_bricks",
+                      "kind":  "structure",
+                      "id":  "cell_1_0_1",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  2,
+                      "y":  0,
+                      "z":  1,
+                      "block":  "minecraft:stone_bricks",
+                      "kind":  "structure",
+                      "id":  "cell_2_0_1",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  3,
+                      "y":  0,
+                      "z":  1,
+                      "block":  "minecraft:stone_bricks",
+                      "kind":  "structure",
+                      "id":  "cell_3_0_1",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  4,
+                      "y":  0,
+                      "z":  1,
+                      "block":  "minecraft:stone_bricks",
+                      "kind":  "structure",
+                      "id":  "cell_4_0_1",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  5,
+                      "y":  0,
+                      "z":  1,
+                      "block":  "minecraft:stone_bricks",
+                      "kind":  "structure",
+                      "id":  "cell_5_0_1",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  6,
+                      "y":  0,
+                      "z":  1,
+                      "block":  "minecraft:stone_bricks",
+                      "kind":  "structure",
+                      "id":  "cell_6_0_1",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  0,
+                      "y":  0,
+                      "z":  2,
+                      "block":  "minecraft:stone_bricks",
+                      "kind":  "structure",
+                      "id":  "cell_0_0_2",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  1,
+                      "y":  0,
+                      "z":  2,
+                      "block":  "minecraft:stone_bricks",
+                      "kind":  "structure",
+                      "id":  "cell_1_0_2",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  2,
+                      "y":  0,
+                      "z":  2,
+                      "block":  "minecraft:stone_bricks",
+                      "kind":  "structure",
+                      "id":  "cell_2_0_2",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  3,
+                      "y":  0,
+                      "z":  2,
+                      "block":  "minecraft:stone_bricks",
+                      "kind":  "structure",
+                      "id":  "cell_3_0_2",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  4,
+                      "y":  0,
+                      "z":  2,
+                      "block":  "minecraft:stone_bricks",
+                      "kind":  "structure",
+                      "id":  "cell_4_0_2",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  5,
+                      "y":  0,
+                      "z":  2,
+                      "block":  "minecraft:stone_bricks",
+                      "kind":  "structure",
+                      "id":  "cell_5_0_2",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  6,
+                      "y":  0,
+                      "z":  2,
+                      "block":  "minecraft:stone_bricks",
+                      "kind":  "structure",
+                      "id":  "cell_6_0_2",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  0,
+                      "y":  0,
+                      "z":  3,
+                      "block":  "minecraft:stone_bricks",
+                      "kind":  "structure",
+                      "id":  "cell_0_0_3",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  1,
+                      "y":  0,
+                      "z":  3,
+                      "block":  "minecraft:stone_bricks",
+                      "kind":  "structure",
+                      "id":  "cell_1_0_3",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  2,
+                      "y":  0,
+                      "z":  3,
+                      "block":  "minecraft:stone_bricks",
+                      "kind":  "structure",
+                      "id":  "cell_2_0_3",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  3,
+                      "y":  0,
+                      "z":  3,
+                      "block":  "minecraft:stone_bricks",
+                      "kind":  "structure",
+                      "id":  "cell_3_0_3",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  4,
+                      "y":  0,
+                      "z":  3,
+                      "block":  "minecraft:stone_bricks",
+                      "kind":  "structure",
+                      "id":  "cell_4_0_3",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  5,
+                      "y":  0,
+                      "z":  3,
+                      "block":  "minecraft:stone_bricks",
+                      "kind":  "structure",
+                      "id":  "cell_5_0_3",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  6,
+                      "y":  0,
+                      "z":  3,
+                      "block":  "minecraft:stone_bricks",
+                      "kind":  "structure",
+                      "id":  "cell_6_0_3",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  0,
+                      "y":  0,
+                      "z":  4,
+                      "block":  "minecraft:stone_bricks",
+                      "kind":  "structure",
+                      "id":  "cell_0_0_4",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  1,
+                      "y":  0,
+                      "z":  4,
+                      "block":  "minecraft:stone_bricks",
+                      "kind":  "structure",
+                      "id":  "cell_1_0_4",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  2,
+                      "y":  0,
+                      "z":  4,
+                      "block":  "minecraft:stone_bricks",
+                      "kind":  "structure",
+                      "id":  "cell_2_0_4",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  3,
+                      "y":  0,
+                      "z":  4,
+                      "block":  "minecraft:stone_bricks",
+                      "kind":  "structure",
+                      "id":  "cell_3_0_4",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  4,
+                      "y":  0,
+                      "z":  4,
+                      "block":  "minecraft:stone_bricks",
+                      "kind":  "structure",
+                      "id":  "cell_4_0_4",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  5,
+                      "y":  0,
+                      "z":  4,
+                      "block":  "minecraft:stone_bricks",
+                      "kind":  "structure",
+                      "id":  "cell_5_0_4",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  6,
+                      "y":  0,
+                      "z":  4,
+                      "block":  "minecraft:stone_bricks",
+                      "kind":  "structure",
+                      "id":  "cell_6_0_4",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  0,
+                      "y":  0,
+                      "z":  5,
+                      "block":  "minecraft:stone_bricks",
+                      "kind":  "structure",
+                      "id":  "cell_0_0_5",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  1,
+                      "y":  0,
+                      "z":  5,
+                      "block":  "minecraft:stone_bricks",
+                      "kind":  "structure",
+                      "id":  "cell_1_0_5",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  2,
+                      "y":  0,
+                      "z":  5,
+                      "block":  "minecraft:stone_bricks",
+                      "kind":  "structure",
+                      "id":  "cell_2_0_5",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  3,
+                      "y":  0,
+                      "z":  5,
+                      "block":  "minecraft:stone_bricks",
+                      "kind":  "structure",
+                      "id":  "cell_3_0_5",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  4,
+                      "y":  0,
+                      "z":  5,
+                      "block":  "minecraft:stone_bricks",
+                      "kind":  "structure",
+                      "id":  "cell_4_0_5",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  5,
+                      "y":  0,
+                      "z":  5,
+                      "block":  "minecraft:stone_bricks",
+                      "kind":  "structure",
+                      "id":  "cell_5_0_5",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  6,
+                      "y":  0,
+                      "z":  5,
+                      "block":  "minecraft:stone_bricks",
+                      "kind":  "structure",
+                      "id":  "cell_6_0_5",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  0,
+                      "y":  0,
+                      "z":  6,
+                      "block":  "minecraft:stone_bricks",
+                      "kind":  "structure",
+                      "id":  "cell_0_0_6",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  1,
+                      "y":  0,
+                      "z":  6,
+                      "block":  "minecraft:stone_bricks",
+                      "kind":  "structure",
+                      "id":  "cell_1_0_6",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  2,
+                      "y":  0,
+                      "z":  6,
+                      "block":  "minecraft:stone_bricks",
+                      "kind":  "structure",
+                      "id":  "cell_2_0_6",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  3,
+                      "y":  0,
+                      "z":  6,
+                      "block":  "minecraft:stone_bricks",
+                      "kind":  "structure",
+                      "id":  "cell_3_0_6",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  4,
+                      "y":  0,
+                      "z":  6,
+                      "block":  "minecraft:stone_bricks",
+                      "kind":  "structure",
+                      "id":  "cell_4_0_6",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  5,
+                      "y":  0,
+                      "z":  6,
+                      "block":  "minecraft:stone_bricks",
+                      "kind":  "structure",
+                      "id":  "cell_5_0_6",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  6,
+                      "y":  0,
+                      "z":  6,
+                      "block":  "minecraft:stone_bricks",
+                      "kind":  "structure",
+                      "id":  "cell_6_0_6",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  0,
+                      "y":  1,
+                      "z":  0,
+                      "block":  "minecraft:stripped_dark_oak_log",
+                      "kind":  "structure",
+                      "id":  "cell_0_1_0",
+                      "state":  {
+                                    "axis":  "y"
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  1,
+                      "y":  1,
+                      "z":  0,
+                      "block":  "minecraft:purple_terracotta",
+                      "kind":  "structure",
+                      "id":  "cell_1_1_0",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  2,
+                      "y":  1,
+                      "z":  0,
+                      "block":  "minecraft:purple_terracotta",
+                      "kind":  "structure",
+                      "id":  "cell_2_1_0",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  3,
+                      "y":  1,
+                      "z":  0,
+                      "block":  "minecraft:spruce_door",
+                      "kind":  "structure",
+                      "id":  "cell_3_1_0",
+                      "state":  {
+                                    "facing":  "south",
+                                    "hinge":  "left",
+                                    "half":  "lower"
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  4,
+                      "y":  1,
+                      "z":  0,
+                      "block":  "minecraft:purple_terracotta",
+                      "kind":  "structure",
+                      "id":  "cell_4_1_0",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  5,
+                      "y":  1,
+                      "z":  0,
+                      "block":  "minecraft:purple_terracotta",
+                      "kind":  "structure",
+                      "id":  "cell_5_1_0",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  6,
+                      "y":  1,
+                      "z":  0,
+                      "block":  "minecraft:stripped_dark_oak_log",
+                      "kind":  "structure",
+                      "id":  "cell_6_1_0",
+                      "state":  {
+                                    "axis":  "y"
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  0,
+                      "y":  1,
+                      "z":  1,
+                      "block":  "minecraft:purple_terracotta",
+                      "kind":  "structure",
+                      "id":  "cell_0_1_1",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  1,
+                      "y":  1,
+                      "z":  1,
+                      "block":  "minecraft:crafting_table",
+                      "kind":  "furniture",
+                      "id":  "cell_1_1_1",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  2,
+                      "y":  1,
+                      "z":  1,
+                      "block":  "minecraft:furnace",
+                      "kind":  "furniture",
+                      "id":  "cell_2_1_1",
+                      "state":  {
+                                    "facing":  "south"
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  5,
+                      "y":  1,
+                      "z":  1,
+                      "block":  "minecraft:bookshelf",
+                      "kind":  "furniture",
+                      "id":  "cell_5_1_1",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  6,
+                      "y":  1,
+                      "z":  1,
+                      "block":  "minecraft:purple_terracotta",
+                      "kind":  "structure",
+                      "id":  "cell_6_1_1",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  0,
+                      "y":  1,
+                      "z":  2,
+                      "block":  "minecraft:purple_terracotta",
+                      "kind":  "structure",
+                      "id":  "cell_0_1_2",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  6,
+                      "y":  1,
+                      "z":  2,
+                      "block":  "minecraft:purple_terracotta",
+                      "kind":  "structure",
+                      "id":  "cell_6_1_2",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  0,
+                      "y":  1,
+                      "z":  3,
+                      "block":  "minecraft:purple_terracotta",
+                      "kind":  "structure",
+                      "id":  "cell_0_1_3",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  1,
+                      "y":  1,
+                      "z":  3,
+                      "block":  "minecraft:purple_bed",
+                      "kind":  "furniture",
+                      "id":  "cell_1_1_3",
+                      "state":  {
+                                    "part":  "head",
+                                    "facing":  "north"
+                                },
+                      "dependsOn":  [
+                                        "cell_1_1_4"
+                                    ]
+                  },
+                  {
+                      "x":  6,
+                      "y":  1,
+                      "z":  3,
+                      "block":  "minecraft:purple_terracotta",
+                      "kind":  "structure",
+                      "id":  "cell_6_1_3",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  0,
+                      "y":  1,
+                      "z":  4,
+                      "block":  "minecraft:purple_terracotta",
+                      "kind":  "structure",
+                      "id":  "cell_0_1_4",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  1,
+                      "y":  1,
+                      "z":  4,
+                      "block":  "minecraft:purple_bed",
+                      "kind":  "furniture",
+                      "id":  "cell_1_1_4",
+                      "state":  {
+                                    "part":  "foot",
+                                    "facing":  "north"
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  5,
+                      "y":  1,
+                      "z":  4,
+                      "block":  "minecraft:barrel",
+                      "kind":  "furniture",
+                      "id":  "cell_5_1_4",
+                      "state":  {
+                                    "facing":  "up"
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  6,
+                      "y":  1,
+                      "z":  4,
+                      "block":  "minecraft:purple_terracotta",
+                      "kind":  "structure",
+                      "id":  "cell_6_1_4",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  0,
+                      "y":  1,
+                      "z":  5,
+                      "block":  "minecraft:purple_terracotta",
+                      "kind":  "structure",
+                      "id":  "cell_0_1_5",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  2,
+                      "y":  1,
+                      "z":  5,
+                      "block":  "minecraft:lantern",
+                      "kind":  "furniture",
+                      "id":  "cell_2_1_5",
+                      "state":  {
+                                    "hanging":  "false",
+                                    "waterlogged":  "false"
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  4,
+                      "y":  1,
+                      "z":  5,
+                      "block":  "minecraft:lantern",
+                      "kind":  "furniture",
+                      "id":  "cell_4_1_5",
+                      "state":  {
+                                    "hanging":  "false",
+                                    "waterlogged":  "false"
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  5,
+                      "y":  1,
+                      "z":  5,
+                      "block":  "minecraft:barrel",
+                      "kind":  "furniture",
+                      "id":  "cell_5_1_5",
+                      "state":  {
+                                    "facing":  "up"
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  6,
+                      "y":  1,
+                      "z":  5,
+                      "block":  "minecraft:purple_terracotta",
+                      "kind":  "structure",
+                      "id":  "cell_6_1_5",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  0,
+                      "y":  1,
+                      "z":  6,
+                      "block":  "minecraft:stripped_dark_oak_log",
+                      "kind":  "structure",
+                      "id":  "cell_0_1_6",
+                      "state":  {
+                                    "axis":  "y"
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  1,
+                      "y":  1,
+                      "z":  6,
+                      "block":  "minecraft:purple_terracotta",
+                      "kind":  "structure",
+                      "id":  "cell_1_1_6",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  2,
+                      "y":  1,
+                      "z":  6,
+                      "block":  "minecraft:purple_terracotta",
+                      "kind":  "structure",
+                      "id":  "cell_2_1_6",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  3,
+                      "y":  1,
+                      "z":  6,
+                      "block":  "minecraft:purple_terracotta",
+                      "kind":  "structure",
+                      "id":  "cell_3_1_6",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  4,
+                      "y":  1,
+                      "z":  6,
+                      "block":  "minecraft:purple_terracotta",
+                      "kind":  "structure",
+                      "id":  "cell_4_1_6",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  5,
+                      "y":  1,
+                      "z":  6,
+                      "block":  "minecraft:purple_terracotta",
+                      "kind":  "structure",
+                      "id":  "cell_5_1_6",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  6,
+                      "y":  1,
+                      "z":  6,
+                      "block":  "minecraft:stripped_dark_oak_log",
+                      "kind":  "structure",
+                      "id":  "cell_6_1_6",
+                      "state":  {
+                                    "axis":  "y"
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  0,
+                      "y":  2,
+                      "z":  0,
+                      "block":  "minecraft:stripped_dark_oak_log",
+                      "kind":  "structure",
+                      "id":  "cell_0_2_0",
+                      "state":  {
+                                    "axis":  "y"
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  1,
+                      "y":  2,
+                      "z":  0,
+                      "block":  "minecraft:glass",
+                      "kind":  "structure",
+                      "id":  "cell_1_2_0",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  2,
+                      "y":  2,
+                      "z":  0,
+                      "block":  "minecraft:purple_terracotta",
+                      "kind":  "structure",
+                      "id":  "cell_2_2_0",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  3,
+                      "y":  2,
+                      "z":  0,
+                      "block":  "minecraft:spruce_door",
+                      "kind":  "structure",
+                      "id":  "cell_3_2_0",
+                      "state":  {
+                                    "facing":  "south",
+                                    "hinge":  "left",
+                                    "half":  "upper"
+                                },
+                      "dependsOn":  [
+                                        "cell_3_1_0"
+                                    ]
+                  },
+                  {
+                      "x":  4,
+                      "y":  2,
+                      "z":  0,
+                      "block":  "minecraft:purple_terracotta",
+                      "kind":  "structure",
+                      "id":  "cell_4_2_0",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  5,
+                      "y":  2,
+                      "z":  0,
+                      "block":  "minecraft:glass",
+                      "kind":  "structure",
+                      "id":  "cell_5_2_0",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  6,
+                      "y":  2,
+                      "z":  0,
+                      "block":  "minecraft:stripped_dark_oak_log",
+                      "kind":  "structure",
+                      "id":  "cell_6_2_0",
+                      "state":  {
+                                    "axis":  "y"
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  0,
+                      "y":  2,
+                      "z":  1,
+                      "block":  "minecraft:purple_terracotta",
+                      "kind":  "structure",
+                      "id":  "cell_0_2_1",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  5,
+                      "y":  2,
+                      "z":  1,
+                      "block":  "minecraft:bookshelf",
+                      "kind":  "furniture",
+                      "id":  "cell_5_2_1",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  6,
+                      "y":  2,
+                      "z":  1,
+                      "block":  "minecraft:purple_terracotta",
+                      "kind":  "structure",
+                      "id":  "cell_6_2_1",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  0,
+                      "y":  2,
+                      "z":  2,
+                      "block":  "minecraft:purple_terracotta",
+                      "kind":  "structure",
+                      "id":  "cell_0_2_2",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  6,
+                      "y":  2,
+                      "z":  2,
+                      "block":  "minecraft:purple_terracotta",
+                      "kind":  "structure",
+                      "id":  "cell_6_2_2",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  0,
+                      "y":  2,
+                      "z":  3,
+                      "block":  "minecraft:glass",
+                      "kind":  "structure",
+                      "id":  "cell_0_2_3",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  6,
+                      "y":  2,
+                      "z":  3,
+                      "block":  "minecraft:glass",
+                      "kind":  "structure",
+                      "id":  "cell_6_2_3",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  0,
+                      "y":  2,
+                      "z":  4,
+                      "block":  "minecraft:purple_terracotta",
+                      "kind":  "structure",
+                      "id":  "cell_0_2_4",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  6,
+                      "y":  2,
+                      "z":  4,
+                      "block":  "minecraft:purple_terracotta",
+                      "kind":  "structure",
+                      "id":  "cell_6_2_4",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  0,
+                      "y":  2,
+                      "z":  5,
+                      "block":  "minecraft:purple_terracotta",
+                      "kind":  "structure",
+                      "id":  "cell_0_2_5",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  6,
+                      "y":  2,
+                      "z":  5,
+                      "block":  "minecraft:purple_terracotta",
+                      "kind":  "structure",
+                      "id":  "cell_6_2_5",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  0,
+                      "y":  2,
+                      "z":  6,
+                      "block":  "minecraft:stripped_dark_oak_log",
+                      "kind":  "structure",
+                      "id":  "cell_0_2_6",
+                      "state":  {
+                                    "axis":  "y"
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  1,
+                      "y":  2,
+                      "z":  6,
+                      "block":  "minecraft:purple_terracotta",
+                      "kind":  "structure",
+                      "id":  "cell_1_2_6",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  2,
+                      "y":  2,
+                      "z":  6,
+                      "block":  "minecraft:purple_terracotta",
+                      "kind":  "structure",
+                      "id":  "cell_2_2_6",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  3,
+                      "y":  2,
+                      "z":  6,
+                      "block":  "minecraft:glass",
+                      "kind":  "structure",
+                      "id":  "cell_3_2_6",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  4,
+                      "y":  2,
+                      "z":  6,
+                      "block":  "minecraft:purple_terracotta",
+                      "kind":  "structure",
+                      "id":  "cell_4_2_6",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  5,
+                      "y":  2,
+                      "z":  6,
+                      "block":  "minecraft:purple_terracotta",
+                      "kind":  "structure",
+                      "id":  "cell_5_2_6",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  6,
+                      "y":  2,
+                      "z":  6,
+                      "block":  "minecraft:stripped_dark_oak_log",
+                      "kind":  "structure",
+                      "id":  "cell_6_2_6",
+                      "state":  {
+                                    "axis":  "y"
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  0,
+                      "y":  3,
+                      "z":  0,
+                      "block":  "minecraft:stripped_dark_oak_log",
+                      "kind":  "structure",
+                      "id":  "cell_0_3_0",
+                      "state":  {
+                                    "axis":  "y"
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  1,
+                      "y":  3,
+                      "z":  0,
+                      "block":  "minecraft:purple_terracotta",
+                      "kind":  "structure",
+                      "id":  "cell_1_3_0",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  2,
+                      "y":  3,
+                      "z":  0,
+                      "block":  "minecraft:purple_terracotta",
+                      "kind":  "structure",
+                      "id":  "cell_2_3_0",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  3,
+                      "y":  3,
+                      "z":  0,
+                      "block":  "minecraft:purple_terracotta",
+                      "kind":  "structure",
+                      "id":  "cell_3_3_0",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  4,
+                      "y":  3,
+                      "z":  0,
+                      "block":  "minecraft:purple_terracotta",
+                      "kind":  "structure",
+                      "id":  "cell_4_3_0",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  5,
+                      "y":  3,
+                      "z":  0,
+                      "block":  "minecraft:purple_terracotta",
+                      "kind":  "structure",
+                      "id":  "cell_5_3_0",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  6,
+                      "y":  3,
+                      "z":  0,
+                      "block":  "minecraft:stripped_dark_oak_log",
+                      "kind":  "structure",
+                      "id":  "cell_6_3_0",
+                      "state":  {
+                                    "axis":  "y"
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  0,
+                      "y":  3,
+                      "z":  1,
+                      "block":  "minecraft:purple_terracotta",
+                      "kind":  "structure",
+                      "id":  "cell_0_3_1",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  6,
+                      "y":  3,
+                      "z":  1,
+                      "block":  "minecraft:purple_terracotta",
+                      "kind":  "structure",
+                      "id":  "cell_6_3_1",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  0,
+                      "y":  3,
+                      "z":  2,
+                      "block":  "minecraft:purple_terracotta",
+                      "kind":  "structure",
+                      "id":  "cell_0_3_2",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  6,
+                      "y":  3,
+                      "z":  2,
+                      "block":  "minecraft:purple_terracotta",
+                      "kind":  "structure",
+                      "id":  "cell_6_3_2",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  0,
+                      "y":  3,
+                      "z":  3,
+                      "block":  "minecraft:purple_terracotta",
+                      "kind":  "structure",
+                      "id":  "cell_0_3_3",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  6,
+                      "y":  3,
+                      "z":  3,
+                      "block":  "minecraft:purple_terracotta",
+                      "kind":  "structure",
+                      "id":  "cell_6_3_3",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  0,
+                      "y":  3,
+                      "z":  4,
+                      "block":  "minecraft:purple_terracotta",
+                      "kind":  "structure",
+                      "id":  "cell_0_3_4",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  6,
+                      "y":  3,
+                      "z":  4,
+                      "block":  "minecraft:purple_terracotta",
+                      "kind":  "structure",
+                      "id":  "cell_6_3_4",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  0,
+                      "y":  3,
+                      "z":  5,
+                      "block":  "minecraft:purple_terracotta",
+                      "kind":  "structure",
+                      "id":  "cell_0_3_5",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  6,
+                      "y":  3,
+                      "z":  5,
+                      "block":  "minecraft:purple_terracotta",
+                      "kind":  "structure",
+                      "id":  "cell_6_3_5",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  0,
+                      "y":  3,
+                      "z":  6,
+                      "block":  "minecraft:stripped_dark_oak_log",
+                      "kind":  "structure",
+                      "id":  "cell_0_3_6",
+                      "state":  {
+                                    "axis":  "y"
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  1,
+                      "y":  3,
+                      "z":  6,
+                      "block":  "minecraft:purple_terracotta",
+                      "kind":  "structure",
+                      "id":  "cell_1_3_6",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  2,
+                      "y":  3,
+                      "z":  6,
+                      "block":  "minecraft:purple_terracotta",
+                      "kind":  "structure",
+                      "id":  "cell_2_3_6",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  3,
+                      "y":  3,
+                      "z":  6,
+                      "block":  "minecraft:purple_terracotta",
+                      "kind":  "structure",
+                      "id":  "cell_3_3_6",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  4,
+                      "y":  3,
+                      "z":  6,
+                      "block":  "minecraft:purple_terracotta",
+                      "kind":  "structure",
+                      "id":  "cell_4_3_6",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  5,
+                      "y":  3,
+                      "z":  6,
+                      "block":  "minecraft:purple_terracotta",
+                      "kind":  "structure",
+                      "id":  "cell_5_3_6",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  6,
+                      "y":  3,
+                      "z":  6,
+                      "block":  "minecraft:stripped_dark_oak_log",
+                      "kind":  "structure",
+                      "id":  "cell_6_3_6",
+                      "state":  {
+                                    "axis":  "y"
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  0,
+                      "y":  4,
+                      "z":  0,
+                      "block":  "minecraft:dark_oak_planks",
+                      "kind":  "structure",
+                      "id":  "cell_0_4_0",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  1,
+                      "y":  4,
+                      "z":  0,
+                      "block":  "minecraft:dark_oak_planks",
+                      "kind":  "structure",
+                      "id":  "cell_1_4_0",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  2,
+                      "y":  4,
+                      "z":  0,
+                      "block":  "minecraft:dark_oak_planks",
+                      "kind":  "structure",
+                      "id":  "cell_2_4_0",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  3,
+                      "y":  4,
+                      "z":  0,
+                      "block":  "minecraft:dark_oak_planks",
+                      "kind":  "structure",
+                      "id":  "cell_3_4_0",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  4,
+                      "y":  4,
+                      "z":  0,
+                      "block":  "minecraft:dark_oak_planks",
+                      "kind":  "structure",
+                      "id":  "cell_4_4_0",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  5,
+                      "y":  4,
+                      "z":  0,
+                      "block":  "minecraft:dark_oak_planks",
+                      "kind":  "structure",
+                      "id":  "cell_5_4_0",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  6,
+                      "y":  4,
+                      "z":  0,
+                      "block":  "minecraft:dark_oak_planks",
+                      "kind":  "structure",
+                      "id":  "cell_6_4_0",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  0,
+                      "y":  4,
+                      "z":  1,
+                      "block":  "minecraft:dark_oak_planks",
+                      "kind":  "structure",
+                      "id":  "cell_0_4_1",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  1,
+                      "y":  4,
+                      "z":  1,
+                      "block":  "minecraft:dark_oak_planks",
+                      "kind":  "structure",
+                      "id":  "cell_1_4_1",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  2,
+                      "y":  4,
+                      "z":  1,
+                      "block":  "minecraft:dark_oak_planks",
+                      "kind":  "structure",
+                      "id":  "cell_2_4_1",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  3,
+                      "y":  4,
+                      "z":  1,
+                      "block":  "minecraft:dark_oak_planks",
+                      "kind":  "structure",
+                      "id":  "cell_3_4_1",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  4,
+                      "y":  4,
+                      "z":  1,
+                      "block":  "minecraft:dark_oak_planks",
+                      "kind":  "structure",
+                      "id":  "cell_4_4_1",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  5,
+                      "y":  4,
+                      "z":  1,
+                      "block":  "minecraft:dark_oak_planks",
+                      "kind":  "structure",
+                      "id":  "cell_5_4_1",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  6,
+                      "y":  4,
+                      "z":  1,
+                      "block":  "minecraft:dark_oak_planks",
+                      "kind":  "structure",
+                      "id":  "cell_6_4_1",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  0,
+                      "y":  4,
+                      "z":  2,
+                      "block":  "minecraft:dark_oak_planks",
+                      "kind":  "structure",
+                      "id":  "cell_0_4_2",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  1,
+                      "y":  4,
+                      "z":  2,
+                      "block":  "minecraft:dark_oak_planks",
+                      "kind":  "structure",
+                      "id":  "cell_1_4_2",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  2,
+                      "y":  4,
+                      "z":  2,
+                      "block":  "minecraft:dark_oak_planks",
+                      "kind":  "structure",
+                      "id":  "cell_2_4_2",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  3,
+                      "y":  4,
+                      "z":  2,
+                      "block":  "minecraft:dark_oak_planks",
+                      "kind":  "structure",
+                      "id":  "cell_3_4_2",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  4,
+                      "y":  4,
+                      "z":  2,
+                      "block":  "minecraft:dark_oak_planks",
+                      "kind":  "structure",
+                      "id":  "cell_4_4_2",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  5,
+                      "y":  4,
+                      "z":  2,
+                      "block":  "minecraft:dark_oak_planks",
+                      "kind":  "structure",
+                      "id":  "cell_5_4_2",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  6,
+                      "y":  4,
+                      "z":  2,
+                      "block":  "minecraft:dark_oak_planks",
+                      "kind":  "structure",
+                      "id":  "cell_6_4_2",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  0,
+                      "y":  4,
+                      "z":  3,
+                      "block":  "minecraft:dark_oak_planks",
+                      "kind":  "structure",
+                      "id":  "cell_0_4_3",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  1,
+                      "y":  4,
+                      "z":  3,
+                      "block":  "minecraft:dark_oak_planks",
+                      "kind":  "structure",
+                      "id":  "cell_1_4_3",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  2,
+                      "y":  4,
+                      "z":  3,
+                      "block":  "minecraft:dark_oak_planks",
+                      "kind":  "structure",
+                      "id":  "cell_2_4_3",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  3,
+                      "y":  4,
+                      "z":  3,
+                      "block":  "minecraft:dark_oak_planks",
+                      "kind":  "structure",
+                      "id":  "cell_3_4_3",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  4,
+                      "y":  4,
+                      "z":  3,
+                      "block":  "minecraft:dark_oak_planks",
+                      "kind":  "structure",
+                      "id":  "cell_4_4_3",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  5,
+                      "y":  4,
+                      "z":  3,
+                      "block":  "minecraft:dark_oak_planks",
+                      "kind":  "structure",
+                      "id":  "cell_5_4_3",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  6,
+                      "y":  4,
+                      "z":  3,
+                      "block":  "minecraft:dark_oak_planks",
+                      "kind":  "structure",
+                      "id":  "cell_6_4_3",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  0,
+                      "y":  4,
+                      "z":  4,
+                      "block":  "minecraft:dark_oak_planks",
+                      "kind":  "structure",
+                      "id":  "cell_0_4_4",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  1,
+                      "y":  4,
+                      "z":  4,
+                      "block":  "minecraft:dark_oak_planks",
+                      "kind":  "structure",
+                      "id":  "cell_1_4_4",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  2,
+                      "y":  4,
+                      "z":  4,
+                      "block":  "minecraft:dark_oak_planks",
+                      "kind":  "structure",
+                      "id":  "cell_2_4_4",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  3,
+                      "y":  4,
+                      "z":  4,
+                      "block":  "minecraft:dark_oak_planks",
+                      "kind":  "structure",
+                      "id":  "cell_3_4_4",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  4,
+                      "y":  4,
+                      "z":  4,
+                      "block":  "minecraft:dark_oak_planks",
+                      "kind":  "structure",
+                      "id":  "cell_4_4_4",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  5,
+                      "y":  4,
+                      "z":  4,
+                      "block":  "minecraft:dark_oak_planks",
+                      "kind":  "structure",
+                      "id":  "cell_5_4_4",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  6,
+                      "y":  4,
+                      "z":  4,
+                      "block":  "minecraft:dark_oak_planks",
+                      "kind":  "structure",
+                      "id":  "cell_6_4_4",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  0,
+                      "y":  4,
+                      "z":  5,
+                      "block":  "minecraft:dark_oak_planks",
+                      "kind":  "structure",
+                      "id":  "cell_0_4_5",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  1,
+                      "y":  4,
+                      "z":  5,
+                      "block":  "minecraft:dark_oak_planks",
+                      "kind":  "structure",
+                      "id":  "cell_1_4_5",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  2,
+                      "y":  4,
+                      "z":  5,
+                      "block":  "minecraft:dark_oak_planks",
+                      "kind":  "structure",
+                      "id":  "cell_2_4_5",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  3,
+                      "y":  4,
+                      "z":  5,
+                      "block":  "minecraft:dark_oak_planks",
+                      "kind":  "structure",
+                      "id":  "cell_3_4_5",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  4,
+                      "y":  4,
+                      "z":  5,
+                      "block":  "minecraft:dark_oak_planks",
+                      "kind":  "structure",
+                      "id":  "cell_4_4_5",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  5,
+                      "y":  4,
+                      "z":  5,
+                      "block":  "minecraft:dark_oak_planks",
+                      "kind":  "structure",
+                      "id":  "cell_5_4_5",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  6,
+                      "y":  4,
+                      "z":  5,
+                      "block":  "minecraft:dark_oak_planks",
+                      "kind":  "structure",
+                      "id":  "cell_6_4_5",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  0,
+                      "y":  4,
+                      "z":  6,
+                      "block":  "minecraft:dark_oak_planks",
+                      "kind":  "structure",
+                      "id":  "cell_0_4_6",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  1,
+                      "y":  4,
+                      "z":  6,
+                      "block":  "minecraft:dark_oak_planks",
+                      "kind":  "structure",
+                      "id":  "cell_1_4_6",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  2,
+                      "y":  4,
+                      "z":  6,
+                      "block":  "minecraft:dark_oak_planks",
+                      "kind":  "structure",
+                      "id":  "cell_2_4_6",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  3,
+                      "y":  4,
+                      "z":  6,
+                      "block":  "minecraft:dark_oak_planks",
+                      "kind":  "structure",
+                      "id":  "cell_3_4_6",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  4,
+                      "y":  4,
+                      "z":  6,
+                      "block":  "minecraft:dark_oak_planks",
+                      "kind":  "structure",
+                      "id":  "cell_4_4_6",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  5,
+                      "y":  4,
+                      "z":  6,
+                      "block":  "minecraft:dark_oak_planks",
+                      "kind":  "structure",
+                      "id":  "cell_5_4_6",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  },
+                  {
+                      "x":  6,
+                      "y":  4,
+                      "z":  6,
+                      "block":  "minecraft:dark_oak_planks",
+                      "kind":  "structure",
+                      "id":  "cell_6_4_6",
+                      "state":  {
+
+                                },
+                      "dependsOn":  [
+
+                                    ]
+                  }
+              ],
+    "requiredAir":  [
+                        {
+                            "x":  3,
+                            "y":  1,
+                            "z":  1
+                        },
+                        {
+                            "x":  4,
+                            "y":  1,
+                            "z":  1
+                        },
+                        {
+                            "x":  1,
+                            "y":  1,
+                            "z":  2
+                        },
+                        {
+                            "x":  2,
+                            "y":  1,
+                            "z":  2
+                        },
+                        {
+                            "x":  3,
+                            "y":  1,
+                            "z":  2
+                        },
+                        {
+                            "x":  4,
+                            "y":  1,
+                            "z":  2
+                        },
+                        {
+                            "x":  5,
+                            "y":  1,
+                            "z":  2
+                        },
+                        {
+                            "x":  2,
+                            "y":  1,
+                            "z":  3
+                        },
+                        {
+                            "x":  3,
+                            "y":  1,
+                            "z":  3
+                        },
+                        {
+                            "x":  4,
+                            "y":  1,
+                            "z":  3
+                        },
+                        {
+                            "x":  5,
+                            "y":  1,
+                            "z":  3
+                        },
+                        {
+                            "x":  2,
+                            "y":  1,
+                            "z":  4
+                        },
+                        {
+                            "x":  3,
+                            "y":  1,
+                            "z":  4
+                        },
+                        {
+                            "x":  4,
+                            "y":  1,
+                            "z":  4
+                        },
+                        {
+                            "x":  1,
+                            "y":  1,
+                            "z":  5
+                        },
+                        {
+                            "x":  3,
+                            "y":  1,
+                            "z":  5
+                        },
+                        {
+                            "x":  1,
+                            "y":  2,
+                            "z":  1
+                        },
+                        {
+                            "x":  2,
+                            "y":  2,
+                            "z":  1
+                        },
+                        {
+                            "x":  3,
+                            "y":  2,
+                            "z":  1
+                        },
+                        {
+                            "x":  4,
+                            "y":  2,
+                            "z":  1
+                        },
+                        {
+                            "x":  1,
+                            "y":  2,
+                            "z":  2
+                        },
+                        {
+                            "x":  2,
+                            "y":  2,
+                            "z":  2
+                        },
+                        {
+                            "x":  3,
+                            "y":  2,
+                            "z":  2
+                        },
+                        {
+                            "x":  4,
+                            "y":  2,
+                            "z":  2
+                        },
+                        {
+                            "x":  5,
+                            "y":  2,
+                            "z":  2
+                        },
+                        {
+                            "x":  1,
+                            "y":  2,
+                            "z":  3
+                        },
+                        {
+                            "x":  2,
+                            "y":  2,
+                            "z":  3
+                        },
+                        {
+                            "x":  3,
+                            "y":  2,
+                            "z":  3
+                        },
+                        {
+                            "x":  4,
+                            "y":  2,
+                            "z":  3
+                        },
+                        {
+                            "x":  5,
+                            "y":  2,
+                            "z":  3
+                        },
+                        {
+                            "x":  1,
+                            "y":  2,
+                            "z":  4
+                        },
+                        {
+                            "x":  2,
+                            "y":  2,
+                            "z":  4
+                        },
+                        {
+                            "x":  3,
+                            "y":  2,
+                            "z":  4
+                        },
+                        {
+                            "x":  4,
+                            "y":  2,
+                            "z":  4
+                        },
+                        {
+                            "x":  5,
+                            "y":  2,
+                            "z":  4
+                        },
+                        {
+                            "x":  1,
+                            "y":  2,
+                            "z":  5
+                        },
+                        {
+                            "x":  2,
+                            "y":  2,
+                            "z":  5
+                        },
+                        {
+                            "x":  3,
+                            "y":  2,
+                            "z":  5
+                        },
+                        {
+                            "x":  4,
+                            "y":  2,
+                            "z":  5
+                        },
+                        {
+                            "x":  5,
+                            "y":  2,
+                            "z":  5
+                        },
+                        {
+                            "x":  1,
+                            "y":  3,
+                            "z":  1
+                        },
+                        {
+                            "x":  2,
+                            "y":  3,
+                            "z":  1
+                        },
+                        {
+                            "x":  3,
+                            "y":  3,
+                            "z":  1
+                        },
+                        {
+                            "x":  4,
+                            "y":  3,
+                            "z":  1
+                        },
+                        {
+                            "x":  5,
+                            "y":  3,
+                            "z":  1
+                        },
+                        {
+                            "x":  1,
+                            "y":  3,
+                            "z":  2
+                        },
+                        {
+                            "x":  2,
+                            "y":  3,
+                            "z":  2
+                        },
+                        {
+                            "x":  3,
+                            "y":  3,
+                            "z":  2
+                        },
+                        {
+                            "x":  4,
+                            "y":  3,
+                            "z":  2
+                        },
+                        {
+                            "x":  5,
+                            "y":  3,
+                            "z":  2
+                        },
+                        {
+                            "x":  1,
+                            "y":  3,
+                            "z":  3
+                        },
+                        {
+                            "x":  2,
+                            "y":  3,
+                            "z":  3
+                        },
+                        {
+                            "x":  3,
+                            "y":  3,
+                            "z":  3
+                        },
+                        {
+                            "x":  4,
+                            "y":  3,
+                            "z":  3
+                        },
+                        {
+                            "x":  5,
+                            "y":  3,
+                            "z":  3
+                        },
+                        {
+                            "x":  1,
+                            "y":  3,
+                            "z":  4
+                        },
+                        {
+                            "x":  2,
+                            "y":  3,
+                            "z":  4
+                        },
+                        {
+                            "x":  3,
+                            "y":  3,
+                            "z":  4
+                        },
+                        {
+                            "x":  4,
+                            "y":  3,
+                            "z":  4
+                        },
+                        {
+                            "x":  5,
+                            "y":  3,
+                            "z":  4
+                        },
+                        {
+                            "x":  1,
+                            "y":  3,
+                            "z":  5
+                        },
+                        {
+                            "x":  2,
+                            "y":  3,
+                            "z":  5
+                        },
+                        {
+                            "x":  3,
+                            "y":  3,
+                            "z":  5
+                        },
+                        {
+                            "x":  4,
+                            "y":  3,
+                            "z":  5
+                        },
+                        {
+                            "x":  5,
+                            "y":  3,
+                            "z":  5
+                        }
+                    ],
+    "multiBlockPairs":  [
+                            {
+                                "id":  "door",
+                                "kind":  "door",
+                                "cells":  [
+                                              {
+                                                  "x":  3,
+                                                  "y":  1,
+                                                  "z":  0
+                                              },
+                                              {
+                                                  "x":  3,
+                                                  "y":  2,
+                                                  "z":  0
+                                              }
+                                          ]
+                            },
+                            {
+                                "id":  "bed",
+                                "kind":  "bed",
+                                "cells":  [
+                                              {
+                                                  "x":  1,
+                                                  "y":  1,
+                                                  "z":  4
+                                              },
+                                              {
+                                                  "x":  1,
+                                                  "y":  1,
+                                                  "z":  3
+                                              }
+                                          ]
+                            }
+                        ],
+    "materials":  [
+                      {
+                          "item":  "minecraft:barrel",
+                          "count":  2,
+                          "purpose":  "house"
+                      },
+                      {
+                          "item":  "minecraft:bookshelf",
+                          "count":  2,
+                          "purpose":  "house"
+                      },
+                      {
+                          "item":  "minecraft:crafting_table",
+                          "count":  1,
+                          "purpose":  "house"
+                      },
+                      {
+                          "item":  "minecraft:dark_oak_planks",
+                          "count":  49,
+                          "purpose":  "house"
+                      },
+                      {
+                          "item":  "minecraft:furnace",
+                          "count":  1,
+                          "purpose":  "house"
+                      },
+                      {
+                          "item":  "minecraft:glass",
+                          "count":  5,
+                          "purpose":  "house"
+                      },
+                      {
+                          "item":  "minecraft:lantern",
+                          "count":  2,
+                          "purpose":  "house"
+                      },
+                      {
+                          "item":  "minecraft:purple_bed",
+                          "count":  1,
+                          "purpose":  "house"
+                      },
+                      {
+                          "item":  "minecraft:purple_terracotta",
+                          "count":  53,
+                          "purpose":  "house"
+                      },
+                      {
+                          "item":  "minecraft:spruce_door",
+                          "count":  1,
+                          "purpose":  "house"
+                      },
+                      {
+                          "item":  "minecraft:stone_bricks",
+                          "count":  49,
+                          "purpose":  "house"
+                      },
+                      {
+                          "item":  "minecraft:stripped_dark_oak_log",
+                          "count":  12,
+                          "purpose":  "house"
+                      }
+                  ],
+    "entrance":  {
+                     "x":  3,
+                     "y":  1,
+                     "z":  0,
+                     "facing":  "north",
+                     "outsidePoint":  {
+                                          "x":  3,
+                                          "y":  0,
+                                          "z":  -1
+                                      },
+                     "approachCells":  [
+
+                                       ]
+                 },
+    "exitPoint":  {
+                      "x":  3,
+                      "y":  0,
+                      "z":  -1
+                  },
+    "cleanup":  [
+                    {
+                        "x":  -2,
+                        "y":  1,
+                        "z":  0,
+                        "block":  "minecraft:cobblestone",
+                        "purpose":  "platform"
+                    }
+                ],
+    "restoration":  [
+
+                    ]
+}

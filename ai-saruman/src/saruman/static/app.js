@@ -27,26 +27,36 @@ const scenarios = [
   {name:"Проверка памяти", icon:"memory", text:"Что ты помнишь обо мне из нашего диалога? Отдели известные тебе факты от предположений."},
   {name:"Неизвестные сведения", icon:"chat", text:"Сколько у меня сейчас алмазов в инвентаре? Если не знаешь, не выдумывай."}
 ];
-const views = {control:"Управление",activity:"Журнал",chat:"Тестирование", memory:"Память", history:"Диалоги", analytics:"Аналитика", telegram:"Telegram", settings:"Настройки"};
+const views = {control:"Управление",extensions:"Моды и адаптеры",activity:"Журнал",chat:"Тестирование", memory:"Память", history:"Диалоги", analytics:"Аналитика", telegram:"Telegram", settings:"Настройки"};
 const state = {data:null, view:location.hash.slice(1) || "chat", session:null, messages:[], draft:"",
   remember:false, busy:false, connecting:false, memoryView:"graph", entity:null, file:null,
   database:"sessions", databaseData:null, model:"", error:null};
 state.roleDrafts = {};
 state.showOptional = false;
+state.codexLogin = {status:'idle'};
+state.codexLoginBusy = false;
 let toastTimer;
 state.telegram = null;
 state.telegramPage = 0;
 state.telegramDraft = "";
 state.runtimeBusy = false;
+const readiness = {data:null, checkingServices:false, checkingModel:null, checkingModels:false, error:''};
 state.minecraftChoice = null;
 state.filterChoice = null;
 state.admin = null;state.adminDraft='';state.adminBusy=false;state.dialogues=null;state.gameForm=null;
+state.extensionBusy=false;
+state.extensionDrafts={};
 state.activity=null;state.activityActor='';state.activityTrace='';state.activityStatus='';state.activityFollow=true;
-state.activityDetails={};state.activityOpen=new Set();state.rawLog=null;paths.activity=paths.history;
+state.activityDetails={};state.activityOpen=new Set();state.rawLog=null;state.rawLogSource='runtime';paths.activity=paths.history;
 const eventNames={'request.received':'Получена команда','request.checkpoint':'Решение и состояние','llm.request':'Запрос к модели','llm.result':'Ответ модели',
   'tool.request':'Вызов инструмента','tool.result':'Результат инструмента','goal.queued':'Действие принято','goal.result':'Результат действия',
   'response.queued':'Ответ в очереди','chat.sent':'Сообщение передано в игру','voice.synthesis':'Синтез речи','voice.playback':'Воспроизведение',
-  'minecraft.control':'Управление персонажем','minecraft.respawn':'Возрождение','telegram.request':'Публикация принята','workflow.checkpoint':'Этапы публикации','admin.result':'Результат управления'};
+  'minecraft.control':'Управление персонажем','minecraft.respawn':'Возрождение','telegram.request':'Публикация принята','workflow.checkpoint':'Этапы публикации','admin.result':'Результат управления',
+  'adapter.configuration':'Настройки адаптера','adapter.route':'Выбор адаптера','adapter.result':'Ответ адаптера','adapter.observer':'Сбой наблюдения',
+  'adapter.minecraft.state':'Состояние стройки','adapter.minecraft.attempt':'Игровая попытка','adapter.minecraft.route':'Маршрут',
+  'adapter.minecraft.site':'Выбор участка','extension.check':'Проверка расширений',
+  'adapter.control':'Передача управления адаптером',
+  'adapter.minecraft.expert':'Решение эксперта','adapter.minecraft.cleanup':'Уборка и восстановление','adapter.minecraft.record':'Запись Minecraft'};
 let renderedView=null;
 function toast(text) {
   $("#toast").textContent = text;
@@ -244,18 +254,77 @@ function usageChart() {
 }
 function limitsHTML() {
   const provider=state.data.provider, limits=provider.limits;
-  if (!limits) return '<div class="tiny">' + e(provider.limit_error || 'Нажмите «Подключить Codex», чтобы запросить лимиты аккаунта. Недоступные показатели не заменяются нулём.') + '</div>';
-  const buckets=limits.rateLimitsByLimitId || (limits.rateLimits ? {codex:limits.rateLimits} : {});
-  return Object.entries(buckets).map(([id,bucket]) => '<div class="tiny mono">' + e(bucket.limitName || id) + '</div>' +
+  if (!limits) return '<div class="tiny">' + e(provider.limit_error || 'Обновите данные аккаунта Codex, чтобы запросить лимиты.') + '</div>';
+  const buckets=limits.rateLimitsByLimitId && Object.keys(limits.rateLimitsByLimitId).length ?
+    limits.rateLimitsByLimitId : (limits.rateLimits ? {codex:limits.rateLimits} : {});
+  return Object.entries(buckets).filter(([,bucket])=>bucket?.primary||bucket?.secondary).map(([id,bucket]) => '<div class="tiny mono">' + e(bucket.limitName || id) + '</div>' +
     ["primary","secondary"].map((key) => {
       const window=bucket[key];
       if (!window) return '';
-      const used=Math.max(0,Math.min(100,Number(window.usedPercent)));
+      const known=typeof window.usedPercent==='number'&&Number.isFinite(window.usedPercent);
+      const used=known?Math.max(0,Math.min(100,window.usedPercent)):null;
       const hours=window.windowDurationMins ? window.windowDurationMins/60 : null;
       const label=hours == null ? key : hours < 24 ? hours+' ч' : (hours/24).toFixed(0)+' дн';
-      return '<div class="mini-stat"><span>Окно ' + e(label) + '</span><strong>' + e(window.usedPercent) + '% использовано</strong></div><div class="meter"><span style="width:' +
-        used + '%"></span></div><div class="tiny">Сброс: ' + e(window.resetsAt ? date(window.resetsAt*1000) : 'неизвестно') + '</div>';
+      const reset=window.resetsAt?window.resetsAt*1000:null;
+      const resetText=reset?(reset>Date.now()?'Сброс '+date(reset):'Показатели этого окна требуют обновления.'):'Время сброса недоступно.';
+      return '<div class="mini-stat"><span>Окно ' + e(label) + '</span><strong>' +
+        (known?e(window.usedPercent)+'% использовано':'Расход недоступен')+'</strong></div>'+
+        (known?'<div class="meter"><span style="width:'+used+'%"></span></div>':'')+
+        '<div class="tiny">'+e(resetText)+'</div>';
     }).join("")).join("") || '<div class="tiny">Провайдер не вернул окна лимитов.</div>';
+}
+function codexLoginPending(){
+  return ['starting','waiting','checking','cancelling'].includes(state.codexLogin.status);
+}
+function renderCodexAccount(){
+  const node=$('#codex-account');
+  if(node)node.outerHTML=codexAccountPanel();
+}
+async function syncCodexLogin(action){
+  if(state.codexLoginBusy)return;
+  const previous=state.codexLogin;
+  const providerCheckedAt=state.data.provider.checked_at;
+  let changed=false;
+  state.codexLoginBusy=true;
+  try{
+    const value=await api('/api/provider/login',{action});
+    state.data.provider=value.provider;
+    state.codexLogin=value.login;
+    changed=previous.status!==value.login.status||previous.auth_url!==value.login.auth_url||
+      previous.detail!==value.login.detail||providerCheckedAt!==value.provider.checked_at;
+    if(value.login.status==='completed'&&previous.status!=='completed'){
+      await refresh();
+      if(state.view==='settings'&&!document.activeElement.closest('.role-form'))render();
+    }
+  }finally{
+    state.codexLoginBusy=false;
+    if(changed)renderCodexAccount();
+  }
+}
+async function copyCodexLogin(){
+  const url=state.codexLogin.auth_url;
+  if(!url)return;
+  try{
+    await navigator.clipboard.writeText(url);
+    toast('Ссылка для входа скопирована.');
+  }catch(error){
+    if(state.codexLogin.auth_url!==url)return;
+    const field=$('#codex-login-url');
+    if(!field)return;
+    field.hidden=false;
+    field.focus();
+    field.select();
+    toast('Ссылка выделена. Нажмите Ctrl+C, чтобы скопировать её.');
+  }
+}
+async function openCodexAccount(){
+  try{
+    await syncCodexLogin('status');
+    if(state.data.provider.checked_at||state.connecting||codexLoginPending())return;
+    state.connecting=true;renderCodexAccount();
+    try{state.data.provider=await api('/api/provider',{});}
+    finally{state.connecting=false;renderCodexAccount();}
+  }catch(error){toast(error.message);}
 }
 function analyticsView() {
   const analytics=state.data.analytics, totals=analytics.totals;
@@ -287,6 +356,122 @@ function analyticsView() {
     panel('Запросы и вклад памяти',rows?'<div class="table-scroll"><table><thead><tr><th>Время</th><th>Модель</th><th>Статус</th><th>Вход</th><th>Кэш</th><th>Выход</th><th>Память, оценка</th><th>Фактов</th><th>Задержка</th><th>Ошибка / примечание</th></tr></thead><tbody>'+
       rows+'</tbody></table></div>':'<div class="empty">Запросов ещё нет.</div>');
 }
+const objectStatuses={PLANNING:'Проектируется',PREPARING:'Подготовка участка',BUILDING:'Строится',
+  VERIFYING:'Проверка',CLEANUP:'Уборка',EXITING:'Выход',READY:'Готов',PAUSED:'На паузе',
+  STOPPED:'Остановлен',BLOCKED:'Ждёт решения',FAILED:'Ошибка'};
+const modelWaitReasons=new Set(['design_timeout','design_provider_timeout','design_provider_waiting',
+  'design_provider_error','design_provider_output_limit']);
+let openObjects=null;
+let objectRows=[];
+let objectBusy=false;
+const openExtensionSections=new Set();
+
+function extensionObjects(item){
+  if(!item.has_objects||openObjects!==item.id)return '';
+  const cards=objectRows.map(row=>{
+    const phase=row.status==='PAUSED'&&modelWaitReasons.has(row.reason)?'Ждёт модель':objectStatuses[row.status]||'Сохранён';
+    const when=row.created_at?'Создан '+date(row.created_at*1000):row.updated_at?'Обновлён '+date(row.updated_at*1000):'';
+    const coords=row.anchor?'X '+row.anchor.x+', Y '+row.anchor.y+', Z '+row.anchor.z:'';
+    const location=[row.world_name||row.world_uid,coords].filter(Boolean).join(' · ');
+    const media=/^[a-f0-9]{64}$/.test(row.photo||'')?'/api/media/'+row.photo:null;
+    const resume=row.can_resume&&item.enabled?'<button type="button" class="button small" data-action="extension-object-resume"'+
+      ' data-extension="'+e(item.id)+'" data-project="'+e(row.id)+'"'+(objectBusy?' disabled':'')+'>Продолжить</button>':'';
+    const reason=row.reason&&row.reason!=='pause_requested'&&!modelWaitReasons.has(row.reason)?
+      '<p class="tiny">'+e(row.reason)+'</p>':'';
+    return '<article class="extension-object"><div class="row"><span class="tag">'+e(phase)+'</span>'+
+      (when?'<time class="tiny">'+e(when)+'</time>':'')+'</div><p>'+e(row.prompt||'Описание недоступно')+'</p>'+
+      (location?'<p class="tiny">'+e(location)+'</p>':'')+'<p class="tiny"><code>'+e(row.id)+'</code></p>'+
+      (media?'<a href="'+media+'" target="_blank" rel="noreferrer"><img class="workflow-photo" loading="lazy" src="'+media+
+        '" alt="Снимок объекта Minecraft"></a>':'')+reason+resume+'</article>';
+  }).join('');
+  return '<div class="extension-objects" id="extension-objects-'+e(item.id)+'"><button type="button" class="button small"'+
+    ' data-action="extension-object-refresh" data-extension="'+e(item.id)+'"'+(objectBusy?' disabled':'')+'>Обновить список</button>'+
+    '<div class="extension-object-list">'+(cards||(objectBusy?'<p>Загрузка…</p>':'<p>Сохранённых объектов пока нет.</p>'))+'</div></div>';
+}
+
+async function loadExtensionObjects(id){
+  const data=await api('/api/adapters/objects?'+new URLSearchParams({id}));
+  if(openObjects===id)objectRows=data.items;
+}
+
+const extensionAvailabilityLabels={
+  ready:'Доступен', disabled:'Выключен', checking:'Проверка', waiting_world:'Ожидает входа в мир',
+  client_disconnected:'Minecraft не подключён', mod_missing:'Мод не загружен', api_missing:'Несовместимая версия мода',
+  unionclef_unavailable:'UnionClef недоступен', incompatible:'Мод несовместим', adapter_missing:'Адаптер требует настройки'
+};
+
+function extensionSection(key,title,body){
+  return '<details class="extension-section" data-extension-section="'+e(key)+'"'+(openExtensionSections.has(key)?' open':'')+'>'+
+    '<summary>'+e(title)+'</summary>'+body+'</details>';
+}
+
+function extensionCard(item,data,disabled){
+  const id=e(item.id);
+  const status=item.availability||(!item.enabled?'disabled':item.available?'ready':!data.connected&&item.mods.length?'client_disconnected':
+    !item.installed?'mod_missing':!data.world&&item.mods.length?'waiting_world':'unavailable');
+  const reason=item.reason&&!['waiting_world','client_disconnected'].includes(status)?'<p class="extension-note">'+e(item.reason)+'</p>':'';
+  const chatTasks=item.tasks?.filter(task=>task.mode==='chat')||[];
+  const nativeTasks=item.tasks?.filter(task=>task.mode!=='chat')||[];
+  const modes={random:'Фоновое занятие',reactive:'По угрозе'};
+  const native=nativeTasks.length?'<ul class="extension-native-tasks">'+nativeTasks.map(task=>
+    '<li>'+e(task.title)+'<span>'+e(modes[task.mode]||'')+'</span></li>').join('')+'</ul>':'';
+  const commands=chatTasks.length?extensionSection(item.id+'-commands','Команды управления',
+    '<ul class="extension-command-list">'+chatTasks.map(task=>'<li>'+e(task.title)+'</li>').join('')+'</ul>'):'';
+  const toggle=item.required?'':'<button type="button" class="button small extension-toggle" data-action="extension-toggle"'+
+    ' data-extension="'+id+'"'+disabled+'>'+(item.enabled?'Выключить':'Включить')+'</button>';
+  const objectsOpen=openObjects===item.id;
+  const objectsButton=item.has_objects?'<button type="button" class="button small" data-action="extension-objects" data-extension="'+id+
+    '" aria-expanded="'+objectsOpen+'">'+(item.id==='mage_home'?'Постройки':'Объекты')+'</button>':'';
+  const control=item.enabled&&chatTasks.length?'<a class="button small" href="#control">Открыть управление</a>':'';
+  let queue='';
+  if(item.enabled&&item.background_action){
+    const body=item.queued?'<p class="extension-queued-text">'+e(item.queued.text)+'</p><button type="button" class="button small"'+
+      ' data-action="extension-dequeue" data-extension="'+id+'"'+disabled+'>Снять с очереди</button>':
+      '<form class="extension-job" data-extension-job="'+id+'"><label for="extension-job-'+id+'">Поручение</label>'+
+      '<textarea id="extension-job-'+id+'" name="text" rows="3" maxlength="12000" required>'+e(state.extensionDrafts[item.id]||'')+'</textarea>'+
+      '<button class="button small" type="submit"'+disabled+'>Добавить в очередь</button></form>';
+    queue=extensionSection(item.id+'-queue',item.queued?'Поручение в очереди':'Фоновое поручение',body);
+  }
+  const tools=control||objectsButton||toggle?'<div class="extension-actions">'+control+objectsButton+toggle+'</div>':'';
+  const badge='<span class="extension-status" data-status="'+e(status)+'">'+e(extensionAvailabilityLabels[status]||'Недоступен')+'</span>';
+  return panel(e(item.title),'<div class="extension-card-body">'+reason+native+tools+extensionObjects(item)+commands+queue+'</div>',badge,'extension-card');
+}
+
+function extensionsView(){
+  const data=state.data.extensions;
+  const disabled=state.extensionBusy?' disabled':'';
+  const cards=data.items.map(item=>extensionCard(item,data,disabled)).join('');
+  const errors=data.errors.map(row=>'<p class="alert">'+e(row.id)+' · '+e(row.detail)+'</p>').join('');
+  const weights=(data.background_tasks||[]).map(task=>'<tr><td><label for="weight-'+e(task.id)+'">'+e(task.title)+'</label></td>'+
+    '<td>'+e(!task.enabled?'Выключен компонент':task.available?'Доступно':'Ожидает условий')+'</td>'+
+    '<td><input id="weight-'+e(task.id)+'" name="'+e(task.id)+'" type="number" min="0" max="1" step="any" value="'+e(task.selection_weight)+'" required></td></tr>').join('');
+  const planner=extensionSection('background-weights','Фоновые занятия','<form id="extension-weights">'+
+    '<p class="extension-note">Вес 0 исключает занятие из фонового выбора.</p>'+
+    '<div class="table-scroll"><table><thead><tr><th>Занятие</th><th>Доступность</th><th>Вес 0–1</th></tr></thead><tbody>'+
+    weights+'</tbody></table></div><button class="button small" type="submit"'+disabled+'>Сохранить веса</button></form>');
+  const headline=data.world?'Мир открыт':data.connected?'Ожидается вход в мир':data.checked?'Minecraft не подключён':'Проверка подключения';
+  const hint=data.world?'':data.connected?'Войдите в одиночный мир или на сервер.':data.checked?'Запустите Minecraft с UnionClef.':'';
+  const interval=extensionSection('detection-interval','Параметры проверки',
+    '<form id="extension-interval" class="extension-interval"><label>Интервал, с <input name="seconds" type="number" min="2" max="120" value="'+
+    e(data.interval)+'" required></label><button class="button small" type="submit"'+disabled+'>Сохранить</button></form>');
+  return panel('Подключение к Minecraft','<div class="panel-body extension-connection"><div class="extension-connection-row"><div><strong>'+e(headline)+'</strong>'+
+    (hint?'<p>'+e(hint)+'</p>':'')+'</div><button type="button" class="button small" data-action="extension-replan"'+disabled+'>Обновить и перепланировать</button></div>'+
+    interval+'</div>','', 'extension-overview')+errors+'<div class="role-grid extension-grid">'+cards+'</div><div class="panel extension-planner">'+planner+'</div>';
+}
+
+async function configureExtension(payload){
+  if(state.extensionBusy)return;
+  state.extensionBusy=true;
+  try{
+    state.data.extensions=await api('/api/extensions',payload);
+    if(payload.action==='queue')delete state.extensionDrafts[payload.id];
+    for(const item of state.data.extensions.items.filter(item=>item.kind==='adapter')){
+      const adapter=state.data.adapters.items.find(adapter=>adapter.id===item.id);
+      if(adapter)adapter.enabled=item.enabled;
+    }
+    toast(state.data.extensions.warning||(payload.action==='replan'?'Доступность проверена, фоновый план пересчитывается.':'Настройка сохранена.'));
+  }finally{state.extensionBusy=false;render();}
+}
 function settingsView(){
   const g=state.gameForm||state.data.runtime.game_settings;
   return modelSettingsView()+panel('Подключение к Minecraft','<form id="game-settings" class="panel-body role-selectors">'+
@@ -309,25 +494,27 @@ function controlResultDetail(result){
 }
 function controlView(){
   const d=state.admin||{messages:[],game_result:{}};
+  const example=(state.data.adapters?.items||[]).find(adapter=>adapter.enabled&&adapter.example)?.example;
   const labels={accepted:'Принято',answered:'Ответ',interpreting:'Разбирает команду',needs_input:'Нужно уточнение',
     no_draft:'Нет готового поста',draft:'Готов к публикации',waiting_start:'Ожидает Start',queued:'В очереди',preparing:'Готовится',sending:'Отправляется',
     sent:'Опубликовано',already_sent:'Уже опубликовано',failed:'Ошибка',error:'Ошибка',unknown:'Проверьте доставку',cancelled:'Отменено',
-    running:'Выполняется',completed:'Завершено',pending:'Ожидает',requested:'Передано игре',unresolved:'Выполнение не подтверждено',refused:'Отклонено',clarify:'Нужно уточнение',uncertain:'Результат неизвестен'};
-  const steps={connect:'Вход в мир',game_task:'Игровое действие',screenshot:'Скриншот Minecraft',draft:'Подготовка поста',publish:'Публикация в канале'};
+    running:'Выполняется',waiting:'Ожидает продолжения',paused:'Пауза',saved:'Сохранённый статус',completed:'Завершено',pending:'Ожидает',requested:'Передано игре',unresolved:'Выполнение не подтверждено',refused:'Отклонено',clarify:'Нужно уточнение',uncertain:'Результат неизвестен'};
+  const steps={connect:'Вход в мир',game_task:'Игровое действие',adapter_task:'Задача игрового адаптера',screenshot:'Скриншот Minecraft',draft:'Подготовка поста',publish:'Публикация в канале'};
   const messages=d.messages.slice().reverse().map(m=>{
     let result={};try{const parsed=JSON.parse(m.result);if(parsed&&typeof parsed==='object'&&!Array.isArray(parsed))result=parsed;}catch(error){}
-    return '<article class="panel-body"><strong>Вы</strong><p class="bubble">'+e(m.input)+'</p><strong>Управление · '+e(labels[m.status]||m.status)+
+    return '<article class="panel-body"><strong>Вы</strong><p class="bubble">'+e(m.input)+'</p><strong>'+e(result.adapter_title||m.adapter||'Управление')+' · '+e(labels[m.status]||m.status)+
       '</strong><pre class="note-preview" data-control-scroll="result-'+e(m.id)+'">'+e(controlResultDetail(result)||m.result)+'</pre>'+
       (result.steps?'<ol class="workflow-steps">'+result.steps.map(s=>'<li><strong>'+e(steps[s.operation]||s.operation)+'</strong> · '+e(labels[s.status]||s.status)+
         (s.text?'<p class="tiny">'+e(s.text)+'</p>':'')+
         (controlResultDetail(s.result)?'<p class="tiny">'+e(controlResultDetail(s.result))+'</p>':'')+
         (s.operation==='screenshot'&&s.result?.sha256?'<a href="/api/media/'+e(s.result.sha256)+'" target="_blank" rel="noreferrer"><img class="workflow-photo" width="'+e(s.result.width)+'" height="'+e(s.result.height)+'" src="/api/media/'+e(s.result.sha256)+'" alt="Снимок Minecraft"></a>':'')+
         (s.result?.message_id?'<p class="tiny">Telegram: сообщение '+e(s.result.message_id)+'</p>':'')+'</li>').join('')+'</ol>':'')+
-      (result.operation==='publish'&&m.status==='needs_input'?'<a href="#telegram">Выбрать пост в Telegram</a>':'')+'</article>';
+      (result.operation==='publish'&&m.status==='needs_input'?'<a href="#telegram">Выбрать пост в Telegram</a>':'')+
+      (m.adapter&&state.data.adapter_journal?'<button class="button small" data-activity-trace="admin-'+e(m.id)+'">Журнал команды</button>':'')+'</article>';
   }).join('');
   return panel('Приватный административный чат','<div class="panel-body tiny">Этот чат управляет доступными операциями. Он отделён от публичных диалогов и памяти персонажа. Принятие поручения ещё не означает его выполнение.</div>'+
     '<div class="admin-messages" data-control-scroll="messages">'+(messages||'<div class="empty">Попросите проверить состояние, подготовить пост или выполнить игровое поручение.</div>')+'</div>'+
-    '<form id="admin-form" class="composer"><textarea id="admin-text" placeholder="Например: посади дерево, затем опубликуй пост со скриншотом" maxlength="12000">'+e(state.adminDraft)+'</textarea><button class="button primary" '+(state.adminBusy?'disabled':'')+'>'+(state.adminBusy?'Обрабатываем…':'Отправить')+'</button></form>',
+    '<form id="admin-form" class="composer"><textarea id="admin-text" placeholder="'+e('Например: '+(example||'посади дерево, затем опубликуй пост со скриншотом'))+'" maxlength="12000">'+e(state.adminDraft)+'</textarea><button class="button primary" '+(state.adminBusy?'disabled':'')+'>'+(state.adminBusy?'Обрабатываем…':'Отправить')+'</button></form>',
     button('Войти в настроенный мир','game-connect'))+
     panel('Состояние подключения','<div class="panel-body">'+e(state.data.runtime.connection.reason)+'</div>')+
     (d.game_result.command_id?panel('Результат игрового поручения','<pre class="note-preview" data-control-scroll="game-'+e(d.game_result.command_id)+'">'+e(JSON.stringify(d.game_result,null,2))+'</pre>'):'');
@@ -346,9 +533,91 @@ function runtimeControls() {
     '<label class="check-label"><input id="runtime-filter" type="checkbox" '+(filter?'checked':'')+' '+(runtime.active?'disabled':'')+'> Фильтр речи и игрового чата</label>'+
     '<button class="button primary" data-action="runtime-start" '+(state.runtimeBusy?'disabled':'')+'>Start</button>'+
     '<button class="button" data-action="runtime-stop" '+(state.runtimeBusy?'disabled':'')+'>Stop</button>'+
+    '<button class="button" data-action="readiness-open" type="button">Готовность</button>'+
     '<small>'+e(runtime.active?(runtime.health?.healthy===false?'Требуется восстановление':'Запущен из Lab'):'Остановлен')+'</small></div><div class="runtime-components">'+cards+'</div>'+
     '<small>Фильтр применяется при Start. Для изменения нажмите Stop. При выключении речь и игровой чат проходят без модерации.</small>'+
     (runtime.error?'<div class="alert error">'+e(runtime.error)+'</div>':'')+'</section>';
+}
+
+function renderReadiness() {
+  const data = readiness.data;
+  const statusNames = {ready:'Отвечает', error:'Ошибка', disabled:'Выключено',
+    waiting:'Ожидает', unchecked:'Не проверено', checking:'Проверяется'};
+  const items = (rows, models = false) => rows.map(item => {
+    const checking = models && readiness.checkingModel === item.id;
+    const status = checking ? 'checking' : item.status;
+    const configuration = models ? '<span class="readiness-meta">'+e([
+      providerNames[item.provider] || item.provider, item.model, item.reasoning
+    ].join(' · '))+'</span>' : '';
+    const meta = [item.responding_model ? 'Ответила '+item.responding_model : '',
+      item.latency_ms != null ? item.latency_ms+' мс' : '',
+      item.checked_at ? date(item.checked_at*1000) : ''].filter(Boolean).join(' · ');
+    const check = models && item.can_check ? '<button class="button small" type="button" data-action="readiness-model" data-role-id="'+e(item.id)+'"'+
+      (readiness.checkingModels||readiness.checkingServices||data.model_busy?' disabled':'')+' aria-label="Проверить '+e(item.label)+'">Проверить</button>' : '';
+    return '<li class="readiness-row"><div><strong>'+e(item.label)+'</strong>'+configuration+
+      '<span class="readiness-meta">'+e(checking?'Отправлен тестовый запрос.':item.detail)+'</span>'+
+      (meta&&!checking?'<span class="readiness-meta">'+e(meta)+'</span>':'')+'</div><span class="readiness-status" data-status="'+e(status)+'">'+
+      e(statusNames[status]||status)+'</span>'+check+'</li>';
+  }).join('');
+  const canCheck = data?.models.some(item=>item.can_check);
+  const summary = (rows,noun) => rows.filter(item=>item.status==='ready').length+' / '+
+    rows.filter(item=>item.status!=='disabled').length+' '+noun+' отвечают';
+  $('#readiness-content').innerHTML =
+    (readiness.error?'<p class="alert error" role="alert">'+e(readiness.error)+'</p>':'')+
+    (data?'<p class="tiny" role="status">'+e(summary(data.services,'служб')+' · '+summary(data.models,'моделей'))+'</p>':'')+
+    '<section><div class="readiness-heading"><h3>Службы</h3>'+button(readiness.checkingServices?'Проверяем…':'Обновить службы','readiness-services')+'</div>'+
+    (data?'<ul class="readiness-list">'+items(data.services)+'</ul>':'<p role="status">Загружаем состояние…</p>')+'</section>'+
+    '<section><div class="readiness-heading"><h3>Модели по ролям</h3><button class="button primary" type="button" data-action="readiness-models"'+
+    (!canCheck||readiness.checkingModels||readiness.checkingServices||data?.model_busy?' disabled':'')+'>'+
+    (readiness.checkingModels?'Проверяем модели…':'Проверить все LLM')+'</button></div>'+
+    '<p class="tiny">Проверка отправляет короткий запрос выбранной модели и расходует её лимит.</p>'+
+    (data?'<ul class="readiness-list">'+items(data.models.filter(item=>!item.optional),true)+'</ul>'+
+      (data.models.some(item=>item.optional)?'<details id="readiness-optional"'+($('#readiness-optional')?.open?' open':'')+
+        '><summary>Дополнительные роли и старый режим</summary><ul class="readiness-list">'+
+        items(data.models.filter(item=>item.optional),true)+'</ul></details>':''):'')+'</section>';
+  const refresh = $('[data-action="readiness-services"]');
+  if(refresh) refresh.disabled = readiness.checkingServices || readiness.checkingModels;
+}
+
+async function checkReadinessServices() {
+  if(readiness.checkingServices || readiness.checkingModels)return;
+  readiness.checkingServices = true;
+  readiness.error = '';
+  renderReadiness();
+  try {
+    readiness.data = await api('/api/readiness',{kind:'services',
+      minecraft:state.minecraftChoice??state.data.runtime.options.minecraft,
+      filter_enabled:state.filterChoice??(state.data.runtime.options.filter_enabled!==false)});
+  } catch(error) {
+    readiness.error = error.message;
+  } finally {
+    readiness.checkingServices = false;
+    renderReadiness();
+  }
+}
+
+async function checkReadinessModels(role) {
+  if(readiness.checkingModels || readiness.checkingServices || readiness.data?.model_busy)return;
+  readiness.checkingModels = true;
+  readiness.error = '';
+  renderReadiness();
+  try {
+    const data = await api('/api/readiness');
+    readiness.data = data;
+    const queue = data.models.filter(item=>item.can_check&&(!role||item.id===role));
+    for(const item of queue){
+      if(!$('#readiness-dialog').open)break;
+      readiness.checkingModel = item.id;
+      renderReadiness();
+      readiness.data = await api('/api/readiness',{kind:'model',role:item.id});
+    }
+  } catch(error) {
+    readiness.error = error.message;
+  } finally {
+    readiness.checkingModel = null;
+    readiness.checkingModels = false;
+    renderReadiness();
+  }
 }
 function telegramView() {
   const d=state.telegram;
@@ -405,24 +674,31 @@ async function refreshActivity(older=false) {
 }
 function activityView() {
   const data=state.activity;
-  const filters='<form id="activity-filter" class="activity-tools panel-body"><label>Игрок <select id="activity-actor"><option value="">Все</option>'+
+  const filters='<form id="activity-filter" class="activity-tools panel-body"><label>Источник <select id="activity-actor"><option value="">Все</option>'+
     (data?.actors||[]).map(actor=>'<option '+(actor===state.activityActor?'selected':'')+' value="'+e(actor)+'">'+e(actor)+'</option>').join('')+
     '</select></label><label>Поток <input id="activity-trace" value="'+e(state.activityTrace)+'" placeholder="ID запроса"></label><label>Статус <input id="activity-status" value="'+e(state.activityStatus)+'" placeholder="Все"></label><button class="button">Применить</button><label><input id="activity-follow" type="checkbox" '+(state.activityFollow?'checked':'')+'> Автообновление</label></form>';
   const rows=(data?.events||[]).map(item=>'<details class="activity-entry" data-activity-event="'+item.id+'" '+(state.activityOpen.has(String(item.id))?'open':'')+'><summary><span class="tiny">#'+item.id+' · '+e(date(item.created_at))+'</span><strong>'+e(eventNames[item.kind]||item.kind)+'</strong><span class="pill">'+e(item.status)+'</span><span>'+e(item.actor||'Система')+'</span><span class="activity-summary">'+e(item.summary)+'</span></summary>'+
     '<div class="panel-body"><p class="tiny">'+e(item.scope)+' · поток '+e(item.trace||'—')+'</p>'+(item.trace?'<button class="button" data-activity-trace="'+e(item.trace)+'">Весь поток этой команды</button>':'')+'<pre class="note-preview" data-control-scroll="event-'+item.id+'">'+e(state.activityDetails[item.id]?JSON.stringify(state.activityDetails[item.id].details,null,2):'Загружаем полные данные…')+'</pre></div></details>').join('');
   const raw=state.rawLog?'<p class="tiny">Байты '+number(state.rawLog.offset)+'–'+number(state.rawLog.next_offset)+' из '+number(state.rawLog.size)+'</p><pre class="note-preview" data-control-scroll="raw-game-log">'+e(state.rawLog.text)+'</pre>'+button('Ранее','activity-log-before')+' '+button('Далее','activity-log-after'):'';
+  const sources=state.data.adapter_journal?'<label class="adapter-target">Источник <select id="activity-log-source">'+
+    '<option value="runtime" '+(state.rawLogSource==='runtime'?'selected':'')+'>Игровой процесс Сарумана</option>'+
+    '<option value="client" '+(state.rawLogSource==='client'?'selected':'')+'>Клиент Minecraft</option></select></label>':'';
   return panel('Поток событий',filters+'<div class="activity-stream" data-control-scroll="activity-stream">'+(rows||'<div class="empty">Событий пока нет или фильтр не дал результатов.</div>')+'</div><div class="panel-body tiny">Всего сохранено: '+number(data?.total||0)+' · история хранится полностью. '+(data?.next_before?button('Более ранние события','activity-older'):'')+'</div>')+
-    panel('Журнал Minecraft', '<div class="panel-body">'+button('Последний фрагмент','activity-log')+raw+'</div>');
+    panel('Журнал Minecraft', '<div class="panel-body">'+sources+button('Последний фрагмент','activity-log')+raw+'</div>');
 }
 function render() {
   if (!state.data) return;
   if (!views[state.view]) state.view="chat";
-  const preserve=['control','activity','memory'].includes(state.view)&&renderedView===state.view;
+  for(const section of document.querySelectorAll('[data-extension-section]')){
+    if(section.open)openExtensionSections.add(section.dataset.extensionSection);
+    else openExtensionSections.delete(section.dataset.extensionSection);
+  }
+  const preserve=['control','extensions','activity','memory'].includes(state.view)&&renderedView===state.view;
   const pagePosition=preserve?{x:window.scrollX,y:window.scrollY}:null;
   const scrollPositions=new Map(preserve?Array.from(document.querySelectorAll('[data-control-scroll]'),node=>[
     node.dataset.controlScroll,{top:node.scrollTop,left:node.scrollLeft}]):[]);
   const provider=state.data.provider;
-  const bodies={control:controlView,activity:activityView,chat:chatView,memory:memoryView,history:historyView,analytics:analyticsView,telegram:telegramView,settings:settingsView};
+  const bodies={control:controlView,extensions:extensionsView,activity:activityView,chat:chatView,memory:memoryView,history:historyView,analytics:analyticsView,telegram:telegramView,settings:settingsView};
   $("#app").innerHTML='<div class="shell">'+sidebar()+'<main class="main"><header class="topbar"><div class="breadcrumb"><span>Рабочее пространство</span><span>/</span><strong>Саруман</strong></div><div class="top-actions"><span class="pill"><span class="dot '+
     (chatReady()?'online':'')+'"></span>'+e(providerNames[chatProfile().provider])+' / '+e(chatProfile().model)+
     '</span>'+(state.view==='settings'?'':button(views.settings,'models-settings'))+
@@ -495,6 +771,11 @@ document.addEventListener("input",(event)=>{
 });
 document.addEventListener("change",async(event)=>{
   try {
+    if(event.target.id==='activity-log-source'){
+      state.rawLogSource=event.target.value;
+      state.rawLog=await api('/api/activity/log?source='+encodeURIComponent(state.rawLogSource));
+      render();return;
+    }
     if(event.target.dataset.role && event.target.tagName==='SELECT') {
       const role=event.target.dataset.role, field=event.target.dataset.field;
       const p=state.roleDrafts[role] ||= {...state.data.models.profiles[role]};
@@ -521,6 +802,24 @@ document.addEventListener("submit",(event)=>{
     event.preventDefault();state.activityActor=$('#activity-actor').value;
     state.activityTrace=$('#activity-trace').value.trim();state.activityStatus=$('#activity-status').value.trim();
     refreshActivity().then(render).catch(error=>toast(error.message));return;
+  }
+  if(event.target.id==='extension-weights'){
+    event.preventDefault();
+    const weights=Object.fromEntries(Array.from(new FormData(event.target),([key,value])=>[key,Number(value)]));
+    configureExtension({action:'weights',weights}).catch(error=>toast(error.message));
+    return;
+  }
+  if(event.target.id==='extension-interval'){
+    event.preventDefault();
+    configureExtension({action:'interval',seconds:Number(new FormData(event.target).get('seconds'))})
+      .catch(error=>toast(error.message));
+    return;
+  }
+  if(event.target.dataset.extensionJob){
+    event.preventDefault();
+    configureExtension({action:'queue',id:event.target.dataset.extensionJob,text:new FormData(event.target).get('text')})
+      .catch(error=>toast(error.message));
+    return;
   }
   if(event.target.id==='game-settings'){
     event.preventDefault();
@@ -570,7 +869,11 @@ document.addEventListener("click",async(event)=>{
   const target=event.target.closest("button,[data-node]");
   if(!target)return;
   try {
-    if(target.dataset.activityTrace){state.activityTrace=target.dataset.activityTrace;await refreshActivity();render();return;}
+    if(target.dataset.activityTrace){
+      state.activityTrace=target.dataset.activityTrace;state.activityActor='';state.activityStatus='';state.activityFollow=true;
+      if(state.view!=='activity')location.hash='activity';else {await refreshActivity();render();}
+      return;
+    }
     if(target.dataset.tgAction){await api('/api/telegram/action',{id:target.dataset.tgId,action:target.dataset.tgAction});await refreshTelegram();render();return;}
     if(target.dataset.view){location.hash=target.dataset.view;return;}
     if(target.dataset.memoryView){state.memoryView=target.dataset.memoryView;render();if(state.memoryView==="database")await database();return;}
@@ -584,10 +887,52 @@ document.addEventListener("click",async(event)=>{
       $("#message-input").focus();return;
     }
     const action=target.dataset.action;
+    if(action==='readiness-open'){
+      $('#readiness-dialog').showModal();
+      renderReadiness();
+      try { readiness.data = await api('/api/readiness'); }
+      catch(error) { readiness.error = error.message; renderReadiness(); return; }
+      await checkReadinessServices();
+      return;
+    }
+    if(action==='readiness-services'){await checkReadinessServices();return;}
+    if(action==='readiness-models'||action==='readiness-model'){
+      await checkReadinessModels(target.dataset.roleId);
+      return;
+    }
+    if(action==='codex-login-start'||action==='codex-login-cancel'){
+      await syncCodexLogin(action==='codex-login-start'?'start':'cancel');
+      return;
+    }
+    if(action==='codex-login-copy'){await copyCodexLogin();return;}
+    if(action==='extension-objects'||action==='extension-object-refresh'||action==='extension-object-resume'){
+      if(objectBusy)return;
+      const id=target.dataset.extension;
+      if(action==='extension-objects'&&openObjects===id){openObjects=null;objectRows=[];render();return;}
+      if(openObjects!==id)objectRows=[];
+      openObjects=id;objectBusy=true;render();
+      try{
+        if(action==='extension-object-resume'){
+          const message=await api('/api/admin',{text:'Дострой дом '+target.dataset.project,adapter:id,request_id:crypto.randomUUID()});
+          toast(JSON.parse(message.result).detail);
+        }
+        await loadExtensionObjects(id);
+      }finally{objectBusy=false;render();}
+      return;
+    }
+    if(action==='extension-toggle'){
+      const item=state.data.extensions.items.find(item=>item.id===target.dataset.extension);
+      if(item)await configureExtension({action:'toggle',id:item.id,enabled:!item.enabled});
+      return;
+    }
+    if(action==='extension-dequeue'){await configureExtension({action:'dequeue',id:target.dataset.extension});return;}
+    if(action==='extension-replan'){await configureExtension({action:'replan'});return;}
     if(action==='activity-older'){await refreshActivity(true);render();return;}
     if(action?.startsWith('activity-log')){
       const offset=action==='activity-log-before'?Math.max(0,(state.rawLog?.offset||0)-49152):action==='activity-log-after'?state.rawLog?.next_offset:null;
-      state.rawLog=await api('/api/activity/log'+(offset==null?'':'?offset='+offset));render();return;
+      const params=new URLSearchParams({source:state.rawLogSource});
+      if(offset!=null)params.set('offset',offset);
+      state.rawLog=await api('/api/activity/log?'+params);render();return;
     }
     if(action==='game-connect'){
       await api('/api/admin',{text:'Войти в настроенный мир',operation:'connect',request_id:crypto.randomUUID()});
@@ -604,7 +949,7 @@ document.addEventListener("click",async(event)=>{
         state.data.runtime=await api('/api/runtime/'+(action==='runtime-start'?'start':'stop'),action==='runtime-start'?{minecraft:choice,filter_enabled:filter}:{});
         state.minecraftChoice=null;
         state.filterChoice=null;
-        toast(action==='runtime-start'?'Запуск персонажа запрошен. Состояния компонентов показаны сверху.':'Остановка запрошена. Очередь Telegram сохранена.');
+        toast(state.data.runtime.adapter_warnings?.join('\n')||(action==='runtime-start'?'Запуск персонажа запрошен. Состояния компонентов показаны сверху.':'Остановка запрошена. Очередь Telegram сохранена.'));
       }finally{state.runtimeBusy=false;render();}
       return;
     }
@@ -631,11 +976,15 @@ document.addEventListener("click",async(event)=>{
     }
   } catch(error){toast(error.message);}
 });
-window.addEventListener("hashchange",async()=>{state.view=location.hash.slice(1);render();try{if(state.view==='activity')await refreshActivity();if(state.view==='memory')await refresh();if(state.view==='telegram')await refreshTelegram();if(state.view==='control')state.admin=await api('/api/admin');render();}catch(error){toast(error.message);}});
+window.addEventListener("hashchange",async()=>{state.view=location.hash.slice(1);render();try{if(state.view==='activity')await refreshActivity();if(state.view==='memory')await refresh();if(state.view==='telegram')await refreshTelegram();if(state.view==='control')state.admin=await api('/api/admin');render();if(state.view==='settings')openCodexAccount();}catch(error){toast(error.message);}});
 (async()=>{
-  try{await refresh();if(state.data.sessions.length)await loadSession(state.data.sessions[0].id);if(state.view==='activity')await refreshActivity();if(state.view==='telegram')await refreshTelegram();if(state.view==='control')state.admin=await api('/api/admin');render();}
+  try{await refresh();if(state.data.sessions.length)await loadSession(state.data.sessions[0].id);if(state.view==='activity')await refreshActivity();if(state.view==='telegram')await refreshTelegram();if(state.view==='control')state.admin=await api('/api/admin');render();if(state.view==='settings')openCodexAccount();}
   catch(error){$("#app").innerHTML='<div class="boot"><strong>Лаборатория недоступна</strong><p>'+e(error.message)+'</p><p>Запустите сервер и обновите страницу.</p></div>';}
 })();
+setInterval(async()=>{
+  if(state.view!=='settings'||!state.data||!codexLoginPending())return;
+  try{await syncCodexLogin('status');}catch(error){/* Keep the last login state after a temporary disconnect. */}
+},1200);
 setInterval(async()=>{
   if(state.view!=='telegram'||!state.data)return;
   try{await refreshTelegram();if(!document.activeElement.closest('form')&&!document.querySelector('details[open]')&&!String(window.getSelection()).trim())render();}
@@ -653,7 +1002,18 @@ document.addEventListener('change',event=>{
 });
 document.addEventListener('input',event=>{
   if(event.target.id==='admin-text')state.adminDraft=event.target.value;
+  const job=event.target.closest('[data-extension-job]');
+  if(job)state.extensionDrafts[job.dataset.extensionJob]=event.target.value;
 });
+setInterval(async()=>{
+  if(state.view!=='extensions'||!state.data||state.extensionBusy||document.activeElement.closest('form'))return;
+  try{
+    const data=await api('/api/extensions');
+    if(state.view==='extensions'&&!state.extensionBusy&&!document.activeElement.closest('form')){
+      if(JSON.stringify(data)!==JSON.stringify(state.data.extensions)){state.data.extensions=data;render();}
+    }
+  }catch(error){/* Retain the last confirmed availability. */}
+},3000);
 setInterval(async()=>{
   if(!state.data||state.runtimeBusy)return;
   try{

@@ -33,7 +33,7 @@ class FakeMods:
             return copy.deepcopy(self.snapshot)
         if operation == "defense":
             self.snapshot["defense_enabled"] = args["enabled"]
-            if args["enabled"]:
+            if args["enabled"] or args.get("resume"):
                 self.snapshot.update(manual_stop=False, manual_stop_latched=False, stop_kind="none")
         if operation == "halt":
             self.snapshot.update(defense_enabled=False, defense_busy=False, native_busy=False,
@@ -708,6 +708,25 @@ class NativeRuntimeTests(unittest.TestCase):
             self.tick()
         self.assertFalse(any(op == "tree_start" for op, _ in self.adapter.calls))
         self.assertEqual(self.store.list(active=True), [])
+
+    def test_explicit_lab_start_clears_manual_stop_with_auto_defense_disabled(self):
+        from saruman.managed import atomic_json
+
+        directory = Path(self.temp.name)
+        self.runtime.extension_directory = directory
+        atomic_json(directory / "extensions.json", {"native": {"auto_defense": False}})
+        self.tick()
+        self.adapter.snapshot.update(defense_enabled=False, manual_stop=True, manual_stop_latched=True)
+        self.tick()
+        self.assertEqual(self.game["mod_runtime"]["status"], "paused")
+        self.game["native_start_token"] = "explicit-start"
+        self.tick()
+        self.tick()
+        self.assertEqual(self.game["mod_runtime"]["status"], "running")
+        self.assertFalse(self.adapter.snapshot["manual_stop_latched"])
+        self.assertFalse(self.adapter.snapshot["defense_enabled"])
+        self.assertEqual([args["enabled"] for op, args in self.adapter.calls
+                          if op == "defense" and args.get("resume")], [False])
 
 
 class NativeRoutingTests(unittest.TestCase):

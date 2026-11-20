@@ -1,0 +1,7 @@
+{
+  "schema": "mage_home.profile/1",
+  "provider": "replay",
+  "deadlineMillis": 30000,
+  "designReplay": "../replay/designs.json",
+  "expertReplay": "../replay/experts.json"
+}

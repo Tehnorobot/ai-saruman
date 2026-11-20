@@ -22,30 +22,39 @@ ARTIFACTS = {
 }
 
 
-def probe_native_mods(gateway):
+def probe_native_mods(gateway, *, partial=False):
     """Read actual API/contracts and origin JARs. No compilation or game commands."""
     from pathlib import Path
 
     loader = gateway.jvm.net.fabricmc.loader.api.FabricLoader.getInstance()
-    names = {}
+    names, failures = {}, {}
     defense_id = "auto_defense" if loader.getModContainer("auto_defense").isPresent() else "auto-defense"
     for mod_id in ("altoclef", defense_id, "treegrow"):
-        optional = loader.getModContainer(mod_id)
-        if not optional.isPresent():
-            raise RuntimeError(f"Не загружен мод {mod_id}")
-        paths = optional.get().getOrigin().getPaths()
-        if paths.size() != 1:
-            raise RuntimeError(f"Не удалось определить JAR {mod_id}")
-        path = Path(str(paths.iterator().next().toString()))
-        digest = hashlib.sha256(path.read_bytes()).hexdigest()
-        if digest not in ARTIFACTS[mod_id]:
-            raise RuntimeError(f"Непроверенная сборка {mod_id}: {path.name}, SHA-256 {digest[:16]}; требуется проверка совместимости адаптера")
-        names[mod_id] = path.name
-    api = gateway.jvm.dev.autodefense.api.AutoDefenseApi
-    state = json.loads(api.get().state() if defense_id == "auto_defense" else api.getStatusJson())
-    if not isinstance(state, dict) or (defense_id == "auto_defense" and state.get("ok") is not True):
-        raise RuntimeError("Auto Defense API не подтвердил чтение состояния")
-    gateway.jvm.lab.treegrow.TreeGrowClient.current()  # None means idle, not missing.
+        try:
+            optional = loader.getModContainer(mod_id)
+            if not optional.isPresent():
+                raise RuntimeError(f"Не загружен мод {mod_id}")
+            paths = optional.get().getOrigin().getPaths()
+            if paths.size() != 1:
+                raise RuntimeError(f"Не удалось определить JAR {mod_id}")
+            path = Path(str(paths.iterator().next().toString()))
+            digest = hashlib.sha256(path.read_bytes()).hexdigest()
+            if digest not in ARTIFACTS[mod_id]:
+                raise RuntimeError(f"Непроверенная сборка {mod_id}: {path.name}, SHA-256 {digest[:16]}; требуется проверка совместимости адаптера")
+            if mod_id == defense_id:
+                api = gateway.jvm.dev.autodefense.api.AutoDefenseApi
+                state = json.loads(api.get().state() if defense_id == "auto_defense" else api.getStatusJson())
+                if not isinstance(state, dict) or (defense_id == "auto_defense" and state.get("ok") is not True):
+                    raise RuntimeError("Auto Defense API не подтвердил чтение состояния")
+            if mod_id == "treegrow":
+                gateway.jvm.lab.treegrow.TreeGrowClient.current()  # None means idle.
+            names[mod_id] = path.name
+        except Exception as error:
+            if not partial:
+                raise
+            failures[mod_id] = str(error).splitlines()[0][:240]
+    if partial:
+        return names, failures
     return names
 
 

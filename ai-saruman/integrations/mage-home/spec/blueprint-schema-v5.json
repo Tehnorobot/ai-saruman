@@ -1,0 +1,198 @@
+{
+  "contract": "mage_home:local_no_jev_v5",
+  "schema": "mage_home.blueprint/1",
+  "owner": "leader",
+  "status": "FROZEN_FOR_DELEGATION",
+  "description": "The data that the Python package produces and the Java executor consumes. Relative coordinates are relative to the anchor of the run. A block state is written as a vanilla block identifier plus a flat map of state properties; an absent property is a wildcard that the verification accepts in its default value.",
+  "definitions": {
+    "context": {
+      "description": "The world, the anchor and the capabilities of the request.",
+      "world": {
+        "server": "string, required when worldUid is absent; host:port of the server, IPv6 in brackets",
+        "dimension": "string, required; for example minecraft:overworld",
+        "worldUid": "string; the current identity from capabilities, required for a local save; server and dimension remain supported for remote worlds",
+        "seed": "integer, optional"
+      },
+      "anchor": {
+        "x": "integer, required; the world x of the front left bottom cell of the house",
+        "y": "integer, required; the world y of the floor level of the house",
+        "z": "integer, required; the world z of the front left bottom cell of the house"
+      },
+      "siteBounds": "optional {width, depth}; the surveyed footprint, with one extra block on each side for exterior access",
+      "capabilities": {
+        "canBreak": "boolean",
+        "canPlace": "boolean",
+        "canUseItems": "boolean",
+        "canUseCommands": "boolean",
+        "commandLevel": "integer, optional; the operator level the client has on the server",
+        "maxReach": "number, optional; the interaction distance",
+        "supportsScaffolding": "boolean, optional"
+      },
+      "resources": {
+        "description": "Optional snapshot supplied by the caller",
+        "inventory": "map of usable main-inventory item IDs to positive counts",
+        "canSupplyBlocks": "boolean; the caller has a way to supply supported vanilla blocks on demand",
+        "canHangPaintings": "boolean, optional; the executor supports verified painting placement and the caller can use summon"
+      },
+      "player": {"name": "string, optional"}
+    },
+    "startOptions": {
+      "description": "Options of one run.",
+      "mode": "string; blueprint_only or text_to_blueprint; the default is blueprint_only when a blueprint is given and text_to_blueprint otherwise",
+      "allowCommands": "boolean, default true; the builder may supply inventory with /give",
+      "strictPhysical": "boolean, default false; when true /give is disabled as well",
+      "sitePreparation": "boolean, default true; the mandatory PREPARING phase",
+      "continuousRecovery": "boolean, default false; recoverable incidents keep the run resumable and can trigger a local blueprint revision",
+      "restoreRunId": "string, optional; paired with restoreProjectId when the caller continues a saved run after the client restarts",
+      "restoreProjectId": "string, optional; stable project identity from the saved run",
+      "expert": {
+        "enabled": "boolean, default true",
+        "providerProfile": "string, optional; the name of the configured provider profile",
+        "deadlineMillis": "integer, default 30000; zero waits until completion or cancellation",
+        "incidentBudget": "integer, default 3; zero disables expert calls; in continuous recovery positive values permit calls for new evidence without a per-run count limit"
+      },
+      "templateId": "string, optional; the id of a template of spec/house-catalog.json",
+      "palette": "integer, optional; the index of the palette"
+    },
+    "blueprint": {
+      "schema": "mage_home.blueprint/1",
+      "projectId": "string",
+      "revision": "integer; increases with every accepted change of the mandatory requirements",
+      "templateId": "string or null",
+      "description": "string; the original text of the request",
+      "requirements": {
+        "mandatory": "array of strings; the requirements that the result has to satisfy",
+        "assumptions": "array of strings; the decisions that the request did not state",
+        "conflicts": "array of objects {code, detail}; a conflict of the request is a diagnosable result and never a silent choice"
+      },
+      "size": {"x": "integer", "y": "integer", "z": "integer"},
+      "origin": {"x": "integer, default 0", "y": "integer, default 0", "z": "integer, default 0"},
+      "cells": {
+        "description": "The occupied cells of the house and of its permanent site preparation.",
+        "x": "integer, relative to the origin",
+        "y": "integer, relative to the origin",
+        "z": "integer, relative to the origin",
+        "block": "string; the vanilla identifier of the block, for example minecraft:oak_stairs",
+        "state": "object, optional; the flat map of the state properties, for example {facing: north, half: bottom}",
+        "kind": "string; one of structure, furniture, decoration, site_preparation, access",
+        "dependsOn": "array of strings, optional; the ids of the cells that must stand before this cell",
+        "id": "string, optional; a stable id of the cell inside the blueprint"
+      },
+      "requiredAir": {
+        "x": "integer, relative",
+        "y": "integer, relative",
+        "z": "integer, relative",
+        "id": "string, optional"
+      },
+      "accessLevels": "optional array of relative standing heights of occupiable floors",
+      "accessAreas": "optional array of {name, y, area, roomType?}; area contains inclusive [x1,z1,x2,z2] rectangles",
+      "circulationClearance": "optional array of {x, y, z}; points must also belong to requiredAir",
+      "scaffoldAccess": "optional array of up to eight preferred exterior work columns {x, y:0, z} relative to the origin; keep the house and approach clear",
+      "paintings": "optional array of {x, y, z, facing, variant}; one-block vanilla paintings with solid backing, outside circulationClearance",
+      "multiBlockPairs": {
+        "description": "The cells of one multi block object, for example a door or a bed.",
+        "id": "string",
+        "kind": "string; door, bed, chest, ... ",
+        "cells": "array of {x, y, z}"
+      },
+      "entrance": {
+        "x": "integer, relative",
+        "y": "integer, relative",
+        "z": "integer, relative",
+        "facing": "string; north, east, south or west",
+        "outsidePoint": {"x": "integer, relative", "y": "integer, relative", "z": "integer, relative"},
+        "approachCells": "array of {x, y, z}; the cells that have to be reachable"
+      },
+      "exitPoint": {"x": "integer, relative", "y": "integer, relative", "z": "integer, relative"},
+      "materials": {
+        "description": "The item ledger of the house. The materials of the scaffolding, of the platforms and of the tools are counted separately.",
+        "item": "string; the vanilla identifier of the item",
+        "count": "integer",
+        "purpose": "string; house or equipment"
+      },
+      "cleanup": {
+        "description": "The temporary infrastructure of the plan. Every entry has to be removed before READY.",
+        "x": "integer, relative",
+        "y": "integer",
+        "z": "integer",
+        "block": "string",
+        "state": "object, optional",
+        "purpose": "string; scaffold, platform, pillar, temporary_opening",
+        "removeAfter": "string, optional; the id of the cell or of the phase after which it may go"
+      },
+      "restoration": {
+        "description": "The obligations to restore the cells that the module changed on purpose.",
+        "x": "integer, relative",
+        "y": "integer",
+        "z": "integer",
+        "block": "string",
+        "state": "object, optional",
+        "reason": "string"
+      }
+    },
+    "expertRequest": {
+      "description": "The request of the executor to the LLM expert. The executor sends it without holding the game input and with a deadline.",
+      "transport": "The executor starts the Python package as a subprocess and writes one JSON object on its standard input; the package answers with one JSON object on its standard output. The provider of the model is a configuration of the package and never of the executor.",
+      "requestId": "string",
+      "runId": "string",
+      "generation": "integer",
+      "schemaRevision": "integer",
+      "permitGeneration": "integer; the generation of the permit that the executor holds",
+      "incident": {
+        "id": "string",
+        "kind": "string; for example access_lost, world_plan_mismatch, repeated_no_progress, support_removed",
+        "goal": {"cell": "{x, y, z}", "expectedBlock": "string", "expectedState": "object"},
+        "symptoms": "array of strings",
+        "attemptsBudgetUsed": "integer",
+        "attemptsBudgetTotal": "integer"
+      },
+      "worldSnapshot": {
+        "anchor": "{x, y, z}",
+        "cells": "array of {x, y, z, block, state}; the local observation around the goal",
+        "known": "array of {x, y, z}; the cells that were not loaded or not observed",
+        "revision": "string; the identity of the snapshot"
+      },
+      "ownership": {
+        "inputOwner": "builder|unionclef|foreign|none",
+        "controlHeld": "boolean",
+        "availableActions": "array drawn from place_block, break_block, move, observe, scaffold_access",
+        "commandReserveAllowed": "false; legacy field"
+      },
+      "attemptLedger": {
+        "description": "The relevant records only: the successful and the failed attempts of the current goal and the neighbouring routes.",
+        "records": "array of objects; see spec/attempts-schema-v5.json"
+      },
+      "resources": {
+        "scaffoldAccess": "optional array of observed grounded columns {base, stance, blocksNeeded}; coordinates are absolute"
+      },
+      "plan": {
+        "description": "The current plan of the run, so that the expert may reorder the work.",
+        "steps": "array of objects {id, kind, cells, dependsOn, cleanupIds}",
+        "currentStepId": "string or null"
+      },
+      "options": {
+        "allowCommandReserve": "false; legacy field",
+        "deadlineMillis": "integer"
+      }
+    },
+    "expertResponse": {
+      "outcome": "string; one of repair, request_observation, blocked",
+      "reason": "string",
+      "repair": {
+        "description": "A verifiable change of the work plan. It never changes the mandatory requirements of the house.",
+        "steps": "array of objects {id, kind, cells, dependsOn, cleanupIds, note}",
+        "scaffold_access": "one step with an advertised stance as its only cell and empty cleanupIds and route; subsequent goal changes depend on this step",
+        "removedStepIds": "array of strings",
+        "cleanupIds": "array of strings",
+        "route": "array of {x, y, z}; the proposed route of the access, when the incident is about the access",
+        "expects": "object; the observable effect that proves the repair, for example {block: minecraft:air, at: {x, y, z}}"
+      },
+      "observationRequest": {
+        "description": "A concrete observation that the executor has to provide before the work may continue.",
+        "cells": "array of {x, y, z}",
+        "reason": "string"
+      },
+      "blocked": {"reason": "string", "safeFallback": "string; the authorized local fallback, when there is one"}
+    }
+  }
+}

@@ -11,6 +11,7 @@ from pathlib import Path
 
 from saruman.role_settings import pid_alive
 from saruman.activity import emit
+from saruman.automation_extensions import PRIORITY
 
 ROOT = Path(__file__).resolve().parents[2]
 TERMINAL = {"completed", "failed", "cancelled", "uncertain"}
@@ -156,7 +157,7 @@ class GoalStore:
                     else ""
                 )
                 + (
-                    "ORDER BY priority, created LIMIT ?"
+                    "ORDER BY CASE source WHEN 'operator' THEN 0 WHEN 'player' THEN 1 ELSE 2 END, created LIMIT ?"
                     if active
                     else "ORDER BY CASE WHEN state IN ('completed','failed','cancelled','uncertain') THEN 1 ELSE 0 END, priority, CASE WHEN state IN ('completed','failed','cancelled','uncertain') THEN -updated ELSE created END LIMIT ?"
                 ),
@@ -187,12 +188,14 @@ class GoalStore:
             emit('goal.result', status=body['state'], trace=body.get('context_id'), details={'goal': body})
         return body
 
-    def cancel(self, goal_id=None, source=None, *, reason="Cancelled by operator/player"):
+    def cancel(self, goal_id=None, source=None, *, reason="Cancelled by operator/player", requested_by="operator"):
         for goal in self.list(limit=-1):
             if goal["state"] in {"completed", "failed", "cancelled"}:
                 continue
             if goal['kind'] == 'telegram' and goal_id is None:
                 continue  # Pausing a game body does not cancel an authorized publication.
+            if PRIORITY[goal["source"]] > PRIORITY[requested_by]:
+                continue
             if (goal_id is None or goal["id"] == goal_id) and (
                 source is None or goal["source"] == source
             ):
@@ -213,23 +216,30 @@ class GoalStore:
             row = db.execute("SELECT body FROM meta WHERE key=?", (key,)).fetchone()
         return json.loads(row[0]) if row else default
 
-    def lease(self, owner, now, ttl=5):
+    def lease(self, owner, now, ttl=5, *, steady_now=None):
         with self.connection() as db:
             db.execute("BEGIN IMMEDIATE")
             row = db.execute(
                 "SELECT body FROM meta WHERE key='runtime_lease'"
             ).fetchone()
             previous = json.loads(row[0]) if row else {}
-            if previous.get("until", 0) > now and previous.get("owner") != owner:
+            active = previous.get("until", 0) > now
+            steady_start, steady_until = previous.get("steady_start"), previous.get("steady_until")
+            if steady_now is not None and isinstance(steady_start, (int, float)) and isinstance(steady_until, (int, float)):
+                active = steady_start <= steady_now < steady_until
+            if active and previous.get("owner") != owner:
                 # Wall-clock rollback must not leave a dead dispatcher holding
                 # the queue for hours. Reuse the read-only process check; retain
                 # legacy/unknown owners and live owners until their lease expires.
                 pid = previous.get("pid")
                 if type(pid) is not int or pid <= 0 or pid_alive(pid):
                     return False
+            value = {"owner": owner, "pid": os.getpid(), "until": now + ttl}
+            if steady_now is not None:
+                value.update(steady_start=steady_now, steady_until=steady_now + ttl)
             db.execute(
                 "INSERT OR REPLACE INTO meta VALUES ('runtime_lease',?)",
-                (json.dumps({"owner": owner, "pid": os.getpid(), "until": now + ttl}),),
+                (json.dumps(value),),
             )
             return True
 
@@ -247,7 +257,7 @@ def submit_command(game, command, request_token=None):
             "reason": "Commands require a current player/operator request",
         }
     if command.lstrip("@").strip() in {"stop", "cancel"}:
-        GoalStore().cancel()
+        GoalStore().cancel(requested_by=context.get("source", "player"))
         return {"status": "cancel_requested"}
     from saruman.peaceful import guard_command
 

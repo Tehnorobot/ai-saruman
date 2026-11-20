@@ -15,7 +15,6 @@ import traceback
 from datetime import datetime
 from io import StringIO
 from multiprocessing import Manager, Process
-from threading import Thread
 
 if __name__ == "__main__":
     mp.set_start_method("spawn")
@@ -1021,15 +1020,23 @@ def main():
 
     from saruman.managed import control as lab_control, BackgroundAgent
     if lab_control is not None:
+        from redis.exceptions import RedisError
+        from saruman.bridge_health import native_runtime_status
+
         lab_agent_worker=BackgroundAgent(agent_start,lambda:bool(Supervisor and Supervisor.is_running()))
         def lab_start():
             activate_agent(True)
             return lab_agent_worker.start()
 
         def lab_status():
-            from saruman.bridge_health import native_runtime_status
-            game = ctx_swarm.get("game", {})
-            return native_runtime_status(game, bool(Supervisor and Supervisor.is_running()))
+            running = bool(Supervisor and Supervisor.is_running())
+            bridge_alive = MineBridgeProc.is_alive()
+            try:
+                observation = native_runtime_status(ctx_swarm.get("game", {}), running, bridge_alive=bridge_alive)
+            except RedisError:
+                observation = {"agent_running": running, "world_ready": False, "native_fresh": False,
+                               "native_status": "unavailable", "native_error": "Redis недоступен игровому обработчику"}
+            return {**observation, "native_bridge_alive": bridge_alive}
 
         def lab_directive(text,identifier):
             if not hasattr(Supervisor,"submit_admin"):

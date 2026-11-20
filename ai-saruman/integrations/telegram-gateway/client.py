@@ -25,7 +25,7 @@ def validate_url(value: str) -> str:
     return value.rstrip("/")
 
 
-def call(base_url: str, key: str, method: str, path: str, payload=None):
+def call(base_url: str, key: str, method: str, path: str, payload=None, *, timeout=90):
     base_url = validate_url(base_url)
     headers = {"Accept": "application/json"}
     if key:
@@ -37,7 +37,7 @@ def call(base_url: str, key: str, method: str, path: str, payload=None):
     request = Request(base_url + path, data=data, headers=headers, method=method)
     opener = build_opener(ProxyHandler({}), NoRedirect())
     try:
-        with opener.open(request, timeout=90) as response:
+        with opener.open(request, timeout=timeout) as response:
             status, raw = response.status, response.read()
     except HTTPError as error:
         status, raw = error.code, error.read(64 * 1024)

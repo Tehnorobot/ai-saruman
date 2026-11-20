@@ -3,7 +3,9 @@
 ```text
 ai-saruman/
 ├── src/saruman/                 # лаборатория, Python 3.14+
+├── adapters/                    # адаптеры Lab и их описания
 ├── agent-workplace/             # основа автономного персонажа и Markdown-память
+├── integrations/mage-home/      # клиентский мод, проектировщик и игровой эксперт
 ├── integrations/telegram-gateway/ # отдельный текстовый Telegram-шлюз, Python 3.10+
 ├── integrations/saruman/        # игровой runtime, Python 3.10.x
 │   ├── src/saruman/             # launcher, doctor, Codex-адаптер

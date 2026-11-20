@@ -1,7 +1,6 @@
 """One local lifecycle owner; Telegram and the optional game process fail independently."""
 import json
 import os
-from pathlib import Path
 import socket
 import sqlite3
 import subprocess
@@ -15,7 +14,16 @@ from .game_connection import GameConnection
 atomic_json = load("managed").atomic_json
 OwnerLock = load("managed").FileOwnerLock
 NATIVE_MAX_AGE = load("bridge_health").NATIVE_MAX_AGE
+GAME_RECOVERY_GRACE = 20.0
+GAME_RECOVERY_INTERVAL = 60.0
+GAME_RESTART_GRACE = 15.0
 RUNTIME_DEFAULTS = {"minecraft": True, "filter_enabled": True}
+
+
+def stale_native_snapshot(status, now):
+    updated = status.get("native_updated")
+    return status.get("native_fresh") is False or (
+        isinstance(updated, (int, float)) and not 0 <= now-updated <= NATIVE_MAX_AGE)
 
 
 class MinecraftProcess:
@@ -31,6 +39,11 @@ class MinecraftProcess:
         self.filter_enabled = True
         self.applied_filter_enabled = True
         self.restarting = False
+        self.restart_reason = None
+        self.terminate_after = 0
+        self.unhealthy_since = None
+        self.recovery_after = 0
+        self.native_paused = False
         self.directive = None
         self.retry_at = 0
         self.value = {"status": "stopped", "reason": "Minecraft не запрошен"}
@@ -43,6 +56,8 @@ class MinecraftProcess:
 
     def request(self, active):
         self.requested = active
+        self.unhealthy_since = None
+        self.native_paused = False
         if not self.restarting:self.shutdown_requested = False
         self.revision += 1
 
@@ -61,6 +76,36 @@ class MinecraftProcess:
                 "directive": self.directive,
             })
 
+    def begin_restart(self, reason):
+        self.restarting = True
+        self.restart_reason = reason
+        self.terminate_after = self.clock() + GAME_RESTART_GRACE
+        self.shutdown_requested = True
+        self.revision += 1
+
+    def recover_worker(self, status, now):
+        if not self.requested or not self.worker_id or self.restarting:
+            return
+        matching = status.get("worker_id") == self.worker_id
+        healthy = matching and 0 <= now-status.get("updated", 0) < GAME_RECOVERY_GRACE
+        if matching and status.get("phase") == "ready":
+            stale = stale_native_snapshot(status, now)
+            if not stale:
+                self.native_paused = bool(status.get("manual_stop_latched") and status.get("native_stop_kind") != "reset")
+            healthy = healthy and not stale and status.get("native_bridge_alive") is not False
+        elif self.process is None:
+            return
+        if self.native_paused or healthy:
+            self.unhealthy_since = None
+            return
+        if self.unhealthy_since is None:
+            self.unhealthy_since = now
+        if now-self.unhealthy_since < GAME_RECOVERY_GRACE or now < self.recovery_after:
+            return
+        self.recovery_after = now + GAME_RECOVERY_INTERVAL
+        self.unhealthy_since = None
+        self.begin_restart("Игровой обработчик перестал обновлять состояние. Перезапускаем обработчик")
+
     def step(self):
         now, status = self.clock(), self.read("status.json")
         if self.worker_id is None:
@@ -74,9 +119,8 @@ class MinecraftProcess:
         if (self.requested and self.worker_id and not self.restarting
                 and self.filter_enabled != self.applied_filter_enabled):
             # An owned worker must exit before its CLI-only filter mode can change.
-            self.restarting = True
-            self.shutdown_requested = True
-            self.revision += 1
+            self.begin_restart("Перезапуск игрового обработчика для изменения фильтра")
+        self.recover_worker(status, now)
         self.heartbeat()
         if self.process is not None and self.process.poll() is not None:
             code = self.process.returncode
@@ -84,11 +128,13 @@ class MinecraftProcess:
             self.finished_workers.add(self.worker_id)
             self.process = None
             self.worker_id = None
+            self.unhealthy_since = None
+            self.native_paused = False
             if self.restarting or not self.requested:
                 self.restarting = self.shutdown_requested = False
                 self.retry_at = now
                 self.value = {"status":"starting" if self.requested else "stopped",
-                              "reason":"Применяем настройку фильтра" if self.requested else "Игровые действия остановлены"}
+                              "reason":"Запуск нового игрового обработчика" if self.requested else "Игровые действия остановлены"}
                 return
             self.retry_at = now + 30
             self.value = {"status": "retrying", "reason": (reason or f"Игровой процесс завершился: код {code}")+". Повтор проверки через 30 с."}
@@ -96,14 +142,24 @@ class MinecraftProcess:
         live = (self.worker_id and status.get("worker_id") == self.worker_id
                 and 0 <= now-status.get("updated", 0)<3)
         if self.restarting:
+            if self.process is not None and now >= self.terminate_after:
+                self.terminate_after = now + GAME_RESTART_GRACE
+                try:
+                    self.process.terminate()
+                except OSError:
+                    self.restart_reason = "Не удалось остановить зависший игровой обработчик. Lab повторит попытку"
+                else:
+                    self.restart_reason = "Игровой обработчик не подтвердил остановку. Lab завершает его процесс"
             if self.process is not None or live:
-                self.value={"status":"restarting","reason":"Перезапуск игрового обработчика для изменения фильтра"}
+                self.value={"status":"restarting","reason":self.restart_reason}
                 return
             # Adopted workers have no Popen handle. The runtime instance lock still protects
             # against a duplicate if a closing worker outlives its final heartbeat.
             self.finished_workers.add(self.worker_id)
             self.worker_id = None
             self.restarting = self.shutdown_requested = False
+            self.unhealthy_since = None
+            self.native_paused = False
             self.retry_at = now
         if live:
             if not self.requested:
@@ -111,12 +167,10 @@ class MinecraftProcess:
                 self.value = {"status": phase, "reason": "Игровые действия остановлены" if phase=="stopped" else "Останавливаем игровые действия"}
             elif status.get("phase") != "ready":
                 self.value = {"status": status.get("phase", "starting"), "reason": status.get("reason", "Запуск")}
-            elif status.get("native_fresh") is False or (
-                    isinstance(status.get("native_updated"), (int, float))
-                    and not 0 <= now-status["native_updated"] <= NATIVE_MAX_AGE):
+            elif stale_native_snapshot(status, now):
                 self.value = {"status":"unavailable", "reason":status.get("native_error") or "Игровые данные устарели; ожидание восстановления Minecraft"}
             elif status.get("manual_stop_latched") and status.get("native_stop_kind") != "reset":
-                self.value = {"status": "paused", "reason": "Игровые действия приостановлены; состояние модов требует проверки в игровом интерфейсе"}
+                self.value = {"status": "paused", "reason": "Действует ручная пауза Minecraft. Нажмите Start в Lab для продолжения."}
             elif status.get('native_status')=='unavailable':
                 self.value={'status':'unavailable','reason':'Нет связи с игровым API: '+(status.get('native_error') or 'ожидание восстановления адаптера')}
             elif status.get("world_ready") and status.get("player_alive") is False:
@@ -190,6 +244,7 @@ class CharacterRuntime:
         self.replies = None
         self.workflows = None
         self.observer = None
+        self.adapters = None
 
     def publish(self):
         self.store.set_meta("character_runtime", {"active": self.active, "updated": self.clock(),
@@ -205,6 +260,8 @@ class CharacterRuntime:
             if self.active and payload.get("filter_enabled",options["filter_enabled"]) != options["filter_enabled"]:
                 raise BlockingIOError("Нажмите Stop перед изменением фильтра текста")
             self.owner.acquire()
+            if self.workflows:
+                self.workflows.flush_cancellation()
             options.update(payload)
             self.store.set_meta("runtime_options", options)
             self.active = True; self.epoch += 1
@@ -220,7 +277,8 @@ class CharacterRuntime:
                 self.thread.start()
         return self.snapshot()
 
-    def stop(self):
+    def stop(self, *, preserve_projects=False):
+        warnings = []
         with self.lock:
             if self.owner.file:
                 self.active = False; self.epoch += 1
@@ -232,7 +290,14 @@ class CharacterRuntime:
                 except (OSError,sqlite3.Error):
                     self.journal_error=True
                     self.error='Журнал временно недоступен; игровые действия остановлены'
-        return self.snapshot()
+            if self.workflows and not preserve_projects:
+                try:
+                    self.workflows.cancel_pending()
+                except (OSError, sqlite3.Error):
+                    warnings.append('Игровые действия остановлены. Запись отмены будет повторена перед запуском.')
+        if self.adapters:
+            warnings.extend(self.adapters.stop_all(preserve_projects=preserve_projects))
+        return {**self.snapshot(), **({"adapter_warnings": warnings} if warnings else {})}
 
     def step(self):
         with self.lock:
@@ -291,7 +356,7 @@ class CharacterRuntime:
                 "connection":self.connection.value,"game_settings":self.store.meta("game_connection",{"mode":"server","target":"","launcher":"","arguments":[]})}
 
     def close(self):
-        self.stop()
+        self.stop(preserve_projects=True)
         if self.observer:self.observer.close()
         if self.workflows:self.workflows.close()
         if self.owner.file:

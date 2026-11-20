@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import closing
 import importlib.util
 import json
 import os
@@ -12,6 +13,25 @@ import time
 from pathlib import Path
 from urllib.parse import urlparse
 from urllib.request import urlopen
+
+
+def postgres_is_ready() -> bool:
+    import psycopg2
+
+    try:
+        with closing(psycopg2.connect(
+            host=os.getenv("POSTGRES_HOST", "127.0.0.1"),
+            port=os.getenv("POSTGRES_PORT", "5432"),
+            dbname=os.getenv("POSTGRES_DB", "saruman"),
+            user=os.getenv("POSTGRES_USER", "saruman"),
+            password=os.getenv("POSTGRES_PASSWORD", ""),
+            connect_timeout=2,
+            options="-c statement_timeout=2500",
+        )) as connection, connection.cursor() as cursor:
+            cursor.execute("SELECT 1")
+            return cursor.fetchone() == (1,)
+    except (psycopg2.Error, OSError, ValueError):
+        return False
 
 
 def filter_is_ready(base_url: str) -> bool:
@@ -81,10 +101,10 @@ def validate_profile(root: Path) -> list[str]:
     return errors
 
 
-def check(live=False, no_stt=False, no_filter=False, no_redis=False) -> bool:
+def check(live=False, no_stt=False, no_filter=False, no_redis=False, *, failed_checks=None) -> bool:
     from saruman.launcher import ROOT
 
-    failures = []
+    failures = [] if failed_checks is None else failed_checks
 
     def report(label, ok, hint=""):
         print(f"[{'OK' if ok else 'FAIL'}] {label}" + (f": {hint}" if hint else ""))
@@ -218,7 +238,7 @@ def check(live=False, no_stt=False, no_filter=False, no_redis=False) -> bool:
         )
     if not no_redis:
         url = urlparse(os.getenv("REDIS_URL", "redis://127.0.0.1:6379/0"))
-        endpoints.append(("Redis TCP", url.hostname or "127.0.0.1", url.port or 6379))
+        endpoints.append(("Redis", url.hostname or "127.0.0.1", url.port or 6379))
     for label, host, port in endpoints:
         try:
             with socket.create_connection((host, port), timeout=2):
@@ -251,8 +271,11 @@ def check(live=False, no_stt=False, no_filter=False, no_redis=False) -> bool:
                 if os.getenv("SARUMAN_AUTOMATION_MODE", "mods").lower() == "mods":
                     try:
                         from saruman.mod_adapter import probe_native_mods
-                        artifacts = probe_native_mods(gateway)
-                        report("Minecraft: API Auto Defense и TreeGrow", True, ", ".join(artifacts.values()))
+                        artifacts, mod_failures = probe_native_mods(gateway, partial=True)
+                        report("Minecraft: API UnionClef", "altoclef" in artifacts,
+                               artifacts.get("altoclef") or mod_failures.get("altoclef"))
+                        if mod_failures:
+                            print("[INFO] Дополнительные моды: " + ", ".join(mod_failures.values()))
                     except (Py4JError, ValueError, TypeError, RuntimeError, OSError) as error:
                         detail = " ".join(str(error).split())[:500]
                         report("Minecraft: API Auto Defense и TreeGrow", False, detail or "Нужны совместимые JAR; см. native-runtime/IMPLEMENTATION.md")
@@ -265,29 +288,8 @@ def check(live=False, no_stt=False, no_filter=False, no_redis=False) -> bool:
                 "запусти совместимый клиент и войди в мир",
             )
     if importlib.util.find_spec("psycopg2"):
-        try:
-            import psycopg2
-
-            connection = psycopg2.connect(
-                host=os.getenv("POSTGRES_HOST", "127.0.0.1"),
-                port=os.getenv("POSTGRES_PORT", "5432"),
-                dbname=os.getenv("POSTGRES_DB", "saruman"),
-                user=os.getenv("POSTGRES_USER", "saruman"),
-                password=os.getenv("POSTGRES_PASSWORD", ""),
-                connect_timeout=2,
-            )
-            try:
-                with connection.cursor() as cursor:
-                    cursor.execute("SELECT 1")
-                    report("PostgreSQL: авторизация", cursor.fetchone() == (1,))
-            finally:
-                connection.close()
-        except (psycopg2.Error, OSError, ValueError):
-            report(
-                "PostgreSQL: авторизация",
-                False,
-                "проверь настройки; секреты не выводятся",
-            )
+        ready = postgres_is_ready()
+        report("PostgreSQL: авторизация", ready, "" if ready else "проверь настройки; секреты не выводятся")
     print(
         "[NOTE] TCP TTS/STT не проверяет качество/модель. OBS, VTube и слышимость голоса проверь по Windows checklist."
     )

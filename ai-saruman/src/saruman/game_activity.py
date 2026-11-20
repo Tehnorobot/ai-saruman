@@ -133,16 +133,39 @@ class GameActivity:
             elif value['status'] in {'failed','cancelled'}:
                 self.update_goal(goal['id'], state='failed', reason=value.get('detail','Публикация не подтверждена'))
 
-    def raw_log(self, offset=None, size=48*1024):
-        path = self.project/'.saruman/runtime/minecraft/minecraft.log'
-        if not path.is_file():
-            return {'text':'Журнал Minecraft пока пуст', 'offset':0, 'next_offset':0, 'size':0}
-        length = path.stat().st_size
+    def raw_log(self, offset=None, size=48*1024, *, source="runtime"):
+        if source == "runtime":
+            path = self.project / ".saruman/runtime/minecraft/minecraft.log"
+            empty = "Журнал игрового процесса пока пуст"
+        elif source == "client":
+            adapters = getattr(self.runtime, "adapters", None)
+            game = adapters.minecraft_directory() if adapters else None
+            path = (game / "logs/latest.log").resolve() if game else None
+            if path and not path.is_relative_to(game):
+                raise ValueError("Журнал клиента выходит за пределы профиля Minecraft")
+            empty = "Журнал клиента доступен после подключения игрового адаптера к Minecraft"
+        else:
+            raise ValueError("Неизвестный источник журнала")
+        empty_result = {"text": empty, "offset": 0, "next_offset": 0, "size": 0}
+        if not path:
+            return empty_result
         size = max(1024, min(int(size), 128*1024))
-        start = max(0, length-size) if offset is None else max(0, min(int(offset), length))
-        with path.open('rb') as file:
-            file.seek(start)
-            if start:
-                file.readline()
-            start = file.tell(); raw = file.read(size); end = file.tell()
+        try:
+            with path.open("rb") as file:
+                length = file.seek(0, 2)
+                start = max(0, length-size) if offset is None else max(0, min(int(offset), length))
+                if offset is None and start:
+                    file.seek(start - 1)
+                    if file.read(1) != b"\n":
+                        file.readline(size)
+                else:
+                    file.seek(start)
+                start = file.tell()
+                raw = file.read(size)
+                last_line = raw.rfind(b"\n")
+                if start + len(raw) < length and last_line >= 0:
+                    raw = raw[:last_line + 1]
+        except FileNotFoundError:
+            return empty_result
+        end = start + len(raw)
         return {'text':safe_text(raw.decode('utf-8', errors='replace')), 'offset':start, 'next_offset':end, 'size':length}

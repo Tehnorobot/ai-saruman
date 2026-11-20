@@ -10,6 +10,8 @@ from saruman.action_speech import ActionSpeech
 from saruman.autonomy_settings import catalog, load_weights
 from saruman.mod_goals import GoalStore, player_context, public_chat_text
 from saruman.activity import emit
+from saruman.automation_extensions import PRIORITY, managed_directory, native_catalog, read_json
+from saruman.managed import atomic_json
 
 
 class AutomationRuntime:
@@ -24,8 +26,11 @@ class AutomationRuntime:
         announce=None,
         event_sink=None,
         rng=None,
+        tick_clock=None,
     ):
         self.adapter, self.store, self.clock = adapter, store or GoalStore(), clock
+        # Polling uses elapsed time. Wall time remains useful in journals and messages.
+        self.tick_clock = tick_clock or (time.monotonic if clock is time.time else clock)
         self.notify = notify or (lambda goal: None)
         self.server_send = server_send
         self.supply = supply
@@ -45,38 +50,136 @@ class AutomationRuntime:
         self.last_failed_activity = None
         self.activity = {"phase": "starting", "reason": "Проверка игрового состояния"}
         self.last_control = None
+        self.extension_directory = managed_directory()
+        self.default_tasks = [{**task, "extension": item["id"]} for item in native_catalog() for task in item.get("tasks", [])
+                              if task["mode"] == "random"]
+        self.extension_tasks = self.default_tasks
+        self.extension_flags = {}
+        self.extension_revision = None
+        self.replan_revision = None
+        self.adapter_hold = False
+        self.adapter_resume_pending = False
+        self.offer = None
+        self.replan = False
+        self.activity_weights = {}
+        self.adapter_owner = {}
+        self.operator_adapter = None
+        self.operator_adapter_target = None
+        self.handoff = None
+        self.request_source = None
+        self.hunting_until = None
+
+    def reload_extensions(self, snapshot):
+        settings = read_json(self.extension_directory / "extensions.json") if self.extension_directory else {}
+        self.extension_flags = settings.get("native", {})
+        self.extension_tasks = settings.get("tasks", self.default_tasks)
+        self.adapter_hold = settings.get("adapter_hold", False)
+        self.adapter_resume_pending = settings.get("adapter_resume_pending", False)
+        self.adapter_owner = settings.get("adapter_owner") or {}
+        self.operator_adapter = settings.get("operator_adapter")
+        self.operator_adapter_target = settings.get("operator_adapter_target")
+        self.activity_weights = settings.get("weights", {})
+        revision = settings.get("revision")
+        if revision != self.extension_revision:
+            self.extension_revision = revision
+            self.discard_offer()
+        replan = settings.get("replan")
+        if replan != self.replan_revision:
+            self.replan = self.replan_revision is not None
+            self.replan_revision = replan
+        if self.offer and not any(task.get("offer") == self.offer["id"] for task in self.extension_tasks):
+            self.discard_offer()
+        self.extension_flags = {**self.extension_flags, **{
+            key: False for key, present in snapshot.get("extensions", {}).items() if not present}}
+
+    def discard_offer(self):
+        if self.offer:
+            atomic_json(self.extension_directory / "extension-offer.json", {})
+            self.offer = None
+
+    def requested_source(self, game, snapshot, now):
+        sources = [g["source"] for g in self.store.list(active=True)
+                   if g["kind"] not in {"chat", "telegram"} and g["state"] != "cancel_requested"
+                   and g["world"] in {None, snapshot["world"]}]
+        context = player_context(game)
+        if context.get("replying") and context.get("until", 0) > now:
+            sources.append(context.get("source", "player"))
+        elif game.get("mod_player_pending_until", 0) > now:
+            sources.append(game.get("mod_pending_source") or "player")
+        if self.extension_directory:
+            command = read_json(self.extension_directory / "command.json")
+            directive = command.get("directive") or {}
+            identifier = directive.get("id")
+            if identifier and command.get("active") and now < directive.get("priority_until", 0):
+                receipt = read_json(self.extension_directory / "results" / (identifier + ".json"))
+                terminal = {"completed", "failed", "cancelled", "uncertain", "error", "refused", "clarify", "conversation"}
+                if receipt.get("status") not in terminal and receipt.get("request_state") not in {"finished", "error", "superseded", "cancelled"}:
+                    sources.append("operator")
+        return max(sources, key=lambda source: PRIORITY.get(source, 0), default=None)
 
     def hold(self, phase, reason):
+        self.discard_offer()
         self.idle_since = None
         self.activity = {"phase": phase, "reason": reason}
 
     def idle(self, game, snapshot, tools):
         now = self.clock()
-        if self.idle_since is None:
-            self.idle_since = now
+        if self.replan or self.idle_since is None:
+            self.idle_since = now - 20 if self.replan else now
+        self.replan = False
         remaining = max(0, 20 - (now - self.idle_since))
         self.activity = {"phase": "idle", "reason": "Выбор занятия после 20 секунд бездействия",
                          "idle_seconds": now-self.idle_since, "next_in": remaining}
         if remaining or os.getenv("SARUMAN_AUTONOMY_ENABLED", "true").lower() not in {"true", "1", "yes"}:
             return
-        def available(name):
-            return tools is None or name in tools and not tools[name].get("disabled", False)
         weights = load_weights(activities=catalog())
-        choices = []
-        if weights.get("trees", 0) > 0 and game.get("mod_tool_controls", {}).get("grow_trees", True) and available("grow_trees"):
-            choices.append("trees")
         players = [name for name in snapshot.get("players", [])
                    if isinstance(name, str) and re.fullmatch(r"[A-Za-z0-9_]{1,16}", name)]
-        if players and available("agent_action"):
-            choices.append("follow")
+        choices = {}
+        for task in self.extension_tasks:
+            name, tool = task["id"], task.get("tool")
+            if not self.extension_flags.get(task.get("extension"), True):
+                continue
+            if tool and (not game.get("mod_tool_controls", {}).get(tool, True)
+                         or tools is not None and (tool not in tools or tools[tool].get("disabled", False))):
+                continue
+            if task.get("weight") and name not in self.activity_weights and not weights.get(task["weight"], 0):
+                continue
+            if name == "hunt" and not snapshot.get("defense_modes"):
+                continue
+            if task.get("target") == "player" and not players:
+                continue
+            weight = self.activity_weights.get(name, task.get("default_weight", 1))
+            if weight > 0:
+                choices[name] = {**task, "selection_weight": weight}
         if not choices:
-            self.activity["reason"] = "Нет доступного занятия: ожидание игрока или включения посадки"
+            self.activity["reason"] = "Нет доступных фоновых занятий"
             return
         if len(choices) > 1 and self.last_failed_activity in choices:
-            choices.remove(self.last_failed_activity)
-        kind = self.rng.choice(choices)
+            choices.pop(self.last_failed_activity)
+        weights = [task["selection_weight"] for task in choices.values()]
+        kind = ("adapter:" + self.offer["adapter"] if self.offer else
+                self.rng.choice(list(choices)) if len(set(weights)) == 1 else
+                self.rng.choices(list(choices), weights=weights, k=1)[0])
+        if kind == "hunt":
+            result = self.call("defense", snapshot, enabled=True, mode="SEARCH", suppress_native=False)
+            if result.get("status") == "applied":
+                self.hunting_until = now + 20
+                self.hold("hunt", "Поиск враждебного моба")
+            return
+        if kind.startswith("adapter:"):
+            if not self.extension_directory or kind not in choices:
+                self.discard_offer()
+                return
+            self.offer = {"adapter": kind.split(":", 1)[1], "id": choices[kind]["offer"],
+                          "updated": now, "revision": self.extension_revision,
+                          "world": snapshot["world"],
+                          "worker_id": os.getenv("SARUMAN_LAB_WORKER_ID")}
+            atomic_json(self.extension_directory / "extension-offer.json", self.offer)
+            self.activity = {"phase": "queued", "reason": choices[kind]["title"]}
+            return
         self.store.submit(kind, source="planner", request_id=f"planner:{uuid.uuid4().hex}",
-                          target=self.rng.choice(players) if kind == "follow" else None)
+                          target=self.rng.choice(players) if choices[kind].get("target") == "player" else None)
         self.hold("queued", "Выбрана посадка дерева" if kind == "trees" else "Выбрано следование за игроком")
 
     def change(self, goal, **changes):
@@ -101,7 +204,7 @@ class AutomationRuntime:
         return result
 
     def call(self, operation, snapshot, **args):
-        if not self.store.lease(self.owner, self.clock()):
+        if not self.lease(self.clock()):
             raise RuntimeError("Native dispatcher lease was transferred")
         result = self.adapter.call(operation, world=snapshot["world"], **args)
         if result.get("status") == "error":
@@ -113,13 +216,18 @@ class AutomationRuntime:
         if result.get("status") != "halted":
             raise RuntimeError("Native stop unconfirmed: " + str(result.get("reason") or result.get("status")))
 
+    def lease(self, now, *, ttl=5):
+        steady_now = self.tick_clock() if self.tick_clock is not self.clock else None
+        return self.store.lease(self.owner, now, ttl=ttl, steady_now=steady_now)
+
     def tick(self, game, *, enabled, tools=None):
-        now = self.clock()
-        if now < self.next_tick:
+        tick = self.tick_clock()
+        if tick < self.next_tick:
             return
-        self.next_tick = now + 0.25
+        self.next_tick = tick + 0.25
+        now = self.clock()
         try:
-            if not self.store.lease(self.owner, now):
+            if not self.lease(now):
                 return
             if not self.speech_catalogue_loaded:
                 records = game.get("action_voice_records")
@@ -130,6 +238,7 @@ class AutomationRuntime:
             snapshot = self.adapter.call("snapshot")
             if snapshot.get("status") != "ready":
                 raise RuntimeError(snapshot.get("reason", "Native mods unavailable"))
+            self.reload_extensions(snapshot)
             if not enabled and (self.was_enabled or snapshot.get("native_defense_task")):
                 # Stop Lab must also halt independent native chains. Ordinary
                 # player-goal preemption below still cancels only its exact root.
@@ -148,21 +257,45 @@ class AutomationRuntime:
             explicit_start = bool(enabled and start_token is not None and start_token != self.start_token)
             manual_paused = bool(enabled and self.was_enabled and snapshot.get("manual_stop_latched") and not reset and not explicit_start)
             active = bool(enabled and not manual_paused and alive and snapshot["in_world"])
-            if snapshot["defense_enabled"] != active:
-                self.call("defense", snapshot, enabled=active)
+            self.request_source = self.requested_source(game, snapshot, now)
+            adapter_priority = PRIORITY.get(self.adapter_owner.get("source"), 0)
+            priority = max(PRIORITY.get(self.request_source, 0), adapter_priority,
+                           PRIORITY["operator"] if self.operator_adapter else 0)
+            suppress = active and priority >= PRIORITY["player"]
+            defense_active = active and self.extension_flags.get("auto_defense", True) and not suppress
+            if (not defense_active or priority > PRIORITY["planner"] or self.adapter_hold
+                    or self.hunting_until is not None and now >= self.hunting_until):
+                self.hunting_until = None
+            mode = ("SEARCH" if self.hunting_until is not None else "SELF_DEFENSE") if active else snapshot.get("defense_mode")
+            release_stop = bool(explicit_start and active and snapshot.get("manual_stop_latched"))
+            if snapshot.get("defense_modes") or self.extension_directory:
+                if (snapshot["defense_enabled"] != defense_active or snapshot.get("defense_mode", mode) != mode
+                        or snapshot.get("native_suppressed", False) != suppress or release_stop):
+                    response = self.call("defense", snapshot, enabled=defense_active, suppress_native=suppress,
+                                         **({"mode": mode} if mode and snapshot.get("defense_modes") else {}),
+                                         **({"resume": True} if release_stop else {}))
+                    if response.get("status") != "applied":
+                        raise RuntimeError(response.get("reason") or "Minecraft не подтвердил смену режима")
+                    snapshot = self.adapter.call("snapshot")
+                    if snapshot.get("status") != "ready":
+                        raise RuntimeError(snapshot.get("reason", "Control switch not confirmed"))
+                    if release_stop and snapshot.get("manual_stop_latched"):
+                        raise RuntimeError("Minecraft ещё не снял ручную паузу")
+            elif snapshot["defense_enabled"] != defense_active and not suppress:
+                self.call("defense", snapshot, enabled=defense_active)
             if snapshot.get("manual_stop") and not reset and not explicit_start:
                 self.store.cancel(reason="Native task stop")
             self.call(
                 "maintain", snapshot, ack_manual_stop=bool(snapshot.get("manual_stop"))
             )
-            if explicit_start:
+            if explicit_start and active:
                 self.store.set_meta("native_start_token", start_token)
                 self.start_token = start_token
             if not enabled and self.was_enabled:
                 self.store.cancel(reason="Automation stopped")
             self.was_enabled = enabled
             self.reconcile(game, snapshot, active, tools)
-            if active and self.supply is not None:
+            if defense_active and self.supply is not None:
                 self.supply.tick(game, snapshot)
             tree = snapshot.get("tree", {})
             marker = (tree.get("run_id"), tree.get("site"))
@@ -183,6 +316,9 @@ class AutomationRuntime:
                 "updated": now,
                 "status": "paused" if manual_paused else "running" if enabled else "stopped",
                 "activity": self.activity,
+                "request_source": self.request_source,
+                "adapter_grant": self.handoff,
+                "hunt_active": self.hunting_until is not None,
             }
             control = {key:snapshot.get(key) for key in ('world','in_world','player_alive','defense_busy','native_busy','stop_kind','scheduler_busy','scheduler_owner')}
             control.update(phase=self.activity.get('phase'), reason=self.activity.get('reason'))
@@ -191,6 +327,7 @@ class AutomationRuntime:
                 self.last_control = control
             game["mod_goals"] = self.store.list(limit=40)
         except Exception as error:  # noqa: BLE001 - boundary to an optional JVM plugin
+            self.handoff = None
             # A lost response is NOT permission to repeat a world action with a new id.
             self.last_error = f"{type(error).__name__}: {error}"
             self.hold("unavailable", "Ожидание восстановления игрового API")
@@ -230,7 +367,7 @@ class AutomationRuntime:
             if reserved["state"] != "starting":
                 continue
             try:
-                if not self.store.lease(self.owner, self.clock()):
+                if not self.lease(self.clock()):
                     self.change(reserved, state="uncertain", reason="Chat dispatcher ownership changed")
                     continue
                 self.server_send(text)
@@ -243,6 +380,7 @@ class AutomationRuntime:
 
     def reconcile(self, game, snapshot, enabled, tools):
         now, world = self.clock(), snapshot["world"]
+        self.handoff = None
         self.deliver_chat(snapshot, enabled)
         goals = [goal for goal in self.store.list(active=True) if goal["kind"] not in {"chat", "telegram"}]
         defense_busy = bool(snapshot['defense_busy'])
@@ -257,6 +395,9 @@ class AutomationRuntime:
             or game.get("mod_player_pending_until", 0) > now
         )
         player_waiting = replying or any(g["source"] != "planner" for g in goals)
+        requester = PRIORITY.get(self.request_source, 0)
+        if self.operator_adapter:
+            requester = PRIORITY["operator"]
         if replying:
             self.hold("player", "Обращение игрока: собственное занятие прерывается")
         for goal in goals:
@@ -272,10 +413,16 @@ class AutomationRuntime:
                     reason="World changed; confirmed progress retained, no automatic replay",
                 )
                 continue
+            disabled = ((goal["kind"] == "trees" and not self.extension_flags.get("treegrow", True))
+                        or (goal["kind"] == "follow" and not self.extension_flags.get("follow", True)))
+            if disabled and goal["state"] != "cancel_requested":
+                goal = self.store.update(goal, state="cancel_requested", reason="Компонент выключен или недоступен")
             if (
                 goal["state"] == "cancel_requested"
                 or goal["source"] == "planner"
-                and player_waiting
+                and (player_waiting or self.replan)
+                or PRIORITY[goal["source"]] < requester and goal["state"] != "queued"
+                or self.operator_adapter and goal["state"] != "queued"
             ):
                 if busy:
                     self.hold("defense" if defense_busy else "recovery", owner+" удерживает управление; поручение игрока сохранено")
@@ -489,16 +636,30 @@ class AutomationRuntime:
         if snapshot["native_busy"]:
             self.hold("native", "UnionClef выполняет задачу; проверка её завершения")
             return  # Never cancel a task we did not start.
+        if self.operator_adapter:
+            if self.adapter_hold and self.adapter_owner.get("id") != self.operator_adapter_target:
+                self.hold("native", "Ожидание освобождения управления другим адаптером")
+                return
+            self.handoff = self.operator_adapter
+            self.hold("native", "Управление передано поручению адаптера из Lab")
+            return
+        if self.adapter_hold:
+            self.hold("native", "Управление удерживает адаптер")
+            return
+        if self.hunting_until is not None:
+            self.hold("hunt", "Поиск враждебного моба")
+            return
         queued = next(
             (
                 g
                 for g in goals
-                if g["state"] == "queued" and (not replying or g["source"] != "planner")
+                if g["state"] == "queued" and PRIORITY[g["source"]] >= requester
+                and (not replying or g["source"] != "planner")
             ),
             None,
         )
         if queued is None:
-            if not replying and not player_waiting:
+            if not replying and not player_waiting and not self.adapter_resume_pending:
                 self.idle(game, snapshot, tools)
             return
         self.hold("starting", "Запуск посадки дерева" if queued["kind"] == "trees" else "Запуск следования" if queued["kind"] == "follow" else "Запуск поручения игрока")
@@ -542,7 +703,7 @@ class AutomationRuntime:
             self.change(queued, state="failed", reason=response.get("reason"))
 
     def close(self, *, stop=True):
-        if not self.store.lease(self.owner, self.clock()):
+        if not self.lease(self.clock()):
             return
         try:
             if not stop:
@@ -552,4 +713,4 @@ class AutomationRuntime:
             if snapshot.get("status") == "ready":
                 self.halt(snapshot)
         finally:
-            self.store.lease(self.owner, self.clock(), ttl=0)
+            self.lease(self.clock(), ttl=0)

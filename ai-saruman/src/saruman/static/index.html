@@ -13,6 +13,13 @@
 </head>
 <body>
   <div id="app"><div class="boot"><div class="brand-mark">S</div><p>Открываем лабораторию…</p></div></div>
+  <dialog id="readiness-dialog" aria-labelledby="readiness-title">
+    <header class="readiness-header">
+      <h2 id="readiness-title">Готовность Saruman Lab</h2>
+      <form method="dialog"><button class="button" type="submit" autofocus>Закрыть</button></form>
+    </header>
+    <div id="readiness-content" class="readiness-content"></div>
+  </dialog>
   <div id="toast" role="status" aria-live="polite" hidden></div>
 </body>
 </html>

@@ -79,7 +79,8 @@ class RolePanel:
         text += "\n\nИзменение доступно после Stop и окончания текущих запросов. "
         text += "Токены — данные провайдера; ? означает неизвестно. Стоимость API не настроена; подписка Codex не равна стоимости API."
         for row in self.store.totals():
-            text += f"\n\n{LABELS[row['role']]} / {row['provider']}: {row['calls']} запросов, {'≥ ' if row['unknown'] else ''}{row['tokens']} токенов"
+            label = LABELS.get(row["role"], row["role"])
+            text += f"\n\n{label} / {row['provider']}: {row['calls']} запросов, {'≥ ' if row['unknown'] else ''}{row['tokens']} токенов"
             if row["unknown"]:
                 text += f"; неполный учёт у {row['unknown']} запросов"
         if game.get("role_error"):

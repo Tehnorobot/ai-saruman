@@ -1,0 +1,7 @@
+{
+  "required": true,
+  "package": "dev.magehome.client.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "client": ["CompletionPhotoMixin", "CompletionPhotoOverlayMixin"],
+  "injectors": {"defaultRequire": 1}
+}

@@ -1,18 +1,39 @@
 """Readiness/API compatibility checks without starting an agent or issuing game actions."""
 import hashlib
 import json
+import os
 from pathlib import Path
 import tempfile
 from types import SimpleNamespace as N
 import unittest
 from unittest.mock import Mock, patch
 
-from saruman.doctor import wait_for_filter
+from saruman.doctor import check, wait_for_filter
 from saruman.mod_adapter import normalize_snapshot, probe_native_mods,NativeMods
 from py4j.protocol import Py4JError
+from psycopg2 import OperationalError
 
 
 class PreflightTests(unittest.TestCase):
+    def test_database_failure_is_reported_after_checking_the_open_world(self):
+        profile = {"provider": "codex", "model": "test-model", "reasoning": "default"}
+        failures = []
+        with (
+            patch.dict(os.environ, {"SARUMAN_AUTOMATION_MODE": "mods", "POSTGRES_PASSWORD": "fixture"}),
+            patch("saruman.role_settings.read_profiles", return_value={"persona": profile, "action": profile}),
+            patch("saruman.doctor.shutil.which", return_value=None),
+            patch("saruman.doctor.validate_profile", return_value=[]),
+            patch("saruman.doctor.socket.create_connection"),
+            patch("py4j.java_gateway.JavaGateway") as gateway,
+            patch("saruman.mod_adapter.probe_native_mods", return_value=({"altoclef": "unionclef.jar"}, {})),
+            patch("psycopg2.connect", side_effect=OperationalError("offline database")),
+            patch("builtins.print"),
+        ):
+            gateway.return_value.entry_point.inGame.return_value = True
+            self.assertFalse(check(live=True, no_filter=True, failed_checks=failures))
+        self.assertIn("PostgreSQL: авторизация", failures)
+        self.assertNotIn("Minecraft: мир открыт", failures)
+
     def test_snapshot_rebinds_stale_java_handles_before_read_retry(self):
         adapter=NativeMods.__new__(NativeMods)
         adapter._invoke=Mock(side_effect=[Py4JError('Target Object ID does not exist'),{'status':'ready'}])

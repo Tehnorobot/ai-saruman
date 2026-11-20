@@ -77,6 +77,12 @@ class DispatcherLeaseTests(unittest.TestCase):
         self.assertFalse(self.store.lease("new", 100))
         self.assertTrue(self.store.lease("new", 20_006))
 
+    def test_elapsed_lease_expires_without_trusting_wall_clock(self):
+        self.assertTrue(self.store.lease("old", 20_000, steady_now=10))
+        with patch("saruman.mod_goals.pid_alive", return_value=True):
+            self.assertFalse(self.store.lease("new", 30_000, steady_now=12))
+            self.assertTrue(self.store.lease("new", 100, steady_now=15))
+
 
 class BridgeHealthTests(unittest.TestCase):
     def setUp(self):
@@ -106,6 +112,14 @@ class BridgeHealthTests(unittest.TestCase):
         self.assertFalse(value["world_ready"])
         self.assertIsNone(value["player_alive"])
 
+    def test_exited_bridge_revokes_the_last_snapshot_immediately(self):
+        self.game["mod_runtime"].update(updated=120, adapter_grant="old-request")
+        value = native_runtime_status(self.game, True, clock=lambda: 120, bridge_alive=False)
+        self.assertFalse(value["native_fresh"])
+        self.assertFalse(value["world_ready"])
+        self.assertIsNone(value["adapter_grant"])
+        self.assertIn("MineBridge", value["native_error"])
+
     def test_new_observation_restores_world_without_replaying_work(self):
         self.health.unavailable(ConnectionError("closed"))
         self.game["mod_runtime"] = {"status": "running", "in_world": True, "updated": 120}
@@ -113,6 +127,22 @@ class BridgeHealthTests(unittest.TestCase):
         value = native_runtime_status(self.game, True, clock=lambda: 120)
         self.assertTrue(value["world_ready"])
         self.assertTrue(value["native_fresh"])
+
+    def test_dispatcher_still_observes_world_after_clock_rollback(self):
+        with tempfile.TemporaryDirectory() as directory:
+            wall, elapsed = [20_000.0], [100.0]
+            mods = FakeMods()
+            runtime = AutomationRuntime(mods, GoalStore(Path(directory)/'goals.sqlite'),
+                                        clock=lambda: wall[0], tick_clock=lambda: elapsed[0])
+            runtime.tick(self.game, enabled=True)
+            self.assertEqual(self.game['mod_runtime']['updated'], 20_000)
+            wall[0] = 100
+            runtime.tick(self.game, enabled=True)
+            self.assertEqual(self.game['mod_runtime']['updated'], 20_000)
+            elapsed[0] += .3
+            runtime.tick(self.game, enabled=True)
+            self.assertEqual(self.game['mod_runtime']['updated'], 100)
+            self.assertTrue(native_runtime_status(self.game, True, clock=lambda: wall[0])['world_ready'])
 
     def test_cleanup_failure_cannot_keep_callback_port_open(self):
         gateway = JavaGateway(gateway_parameters=GatewayParameters(port=1),
@@ -199,13 +229,13 @@ class BridgeHealthTests(unittest.TestCase):
             runtime.was_enabled = True
             request = store.submit("trees", source="operator")
             self.game["native_start_token"] = "operator-start"
-            mods.snapshot.update(manual_stop=True, manual_stop_latched=True, defense_enabled=False)
+            mods.snapshot.update(manual_stop=True, manual_stop_latched=True, defense_enabled=False, defense_modes=True)
             runtime.tick(self.game, enabled=True)
-            self.assertTrue(any(op == "defense" and args["enabled"] for op, args in mods.calls))
+            self.assertTrue(any(op == "defense" and args.get("resume") for op, args in mods.calls))
             self.assertEqual(next(g for g in store.list() if g["id"] == request["id"])["state"], "running")
             mods.calls.clear()
             mods.snapshot.update(manual_stop=True, manual_stop_latched=True, defense_enabled=False)
             now[0] += 1
             runtime.tick(self.game, enabled=True)
             self.assertEqual(self.game["mod_runtime"]["status"], "paused")
-            self.assertFalse(any(op == "defense" and args["enabled"] for op, args in mods.calls))
+            self.assertFalse(any(op == "defense" and args.get("resume") for op, args in mods.calls))

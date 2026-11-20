@@ -1,0 +1,164 @@
+{
+  "contract": "mage_home:local_no_jev_v5",
+  "api": "mage_home.api/1",
+  "owner": "leader",
+  "status": "FROZEN_FOR_DELEGATION",
+  "description": "Versioned public boundary of the Mage Home building module. The Python package, the Java/Fabric executor and the Steve controller speak exactly this contract. Changing an operation, a field name or an error code requires the agreement of every consumer before a change.",
+  "transport": {
+    "kind": "tcp-json-lines",
+    "bind": "127.0.0.1",
+    "port": "ephemeral; the effective port is published in <gameDir>/config/mage_home/control-port.json",
+    "framing": "one request and one response per connection; UTF-8 JSON, LF separated; no embedded raw newlines",
+    "authentication": "The private control-port.json also carries a per-client random token. Pass it in the envelope; do not copy the receipt into logs or reports.",
+    "request_fields": ["api", "op", "requestId", "token", "payload"],
+    "response_fields": ["api", "op", "requestId", "ok", "result", "error"],
+    "note": "The transport is an implementation detail of this contract revision. The operation names, the payload fields and the error codes below are the contract."
+  },
+  "operations": {
+    "start": {
+      "summary": "Accepts a building request quickly and returns projectId/runId without waiting for the work.",
+      "request": {
+        "requestId": "string, required, unique per logical request; a repeated requestId with an identical payload returns the existing run",
+        "description": "string, optional; the free text of the house; mutually usable with blueprint",
+        "blueprint": "object, optional; an already compiled blueprint (see spec/blueprint-schema-v5.json)",
+        "context": "object, required; the world identity, the anchor and the available capabilities (see spec/blueprint-schema-v5.json#/definitions/context)",
+        "options": "object, optional; run options (see spec/blueprint-schema-v5.json#/definitions/startOptions)"
+      },
+      "response_result": {
+        "projectId": "string",
+        "runId": "string",
+        "accepted": "boolean; true when the request was taken, false when it was rejected",
+        "duplicate": "boolean; true when requestId already existed and the existing run was preserved",
+        "state": "run state at the moment of the answer",
+        "generation": "integer; the generation of the run, incremented on every resume",
+        "schemaRevision": "integer; the revision of the blueprint this run is bound to",
+        "controlRequested": "boolean"
+      },
+      "rejections": {
+        "stale_world": "the context names a world that is not the world of the client right now",
+        "unsupported_operation": "the request asks for something the module does not do",
+        "invalid_request": "a required field is missing or malformed",
+        "duplicate_conflict": "the requestId exists with a different payload",
+        "module_disabled": "the module is disabled",
+        "not_initialized": "the client is not ready to accept work"
+      }
+    },
+    "status": {
+      "summary": "Returns the last snapshot of a run. It never starts work.",
+      "request": {"runId": "string, required; the empty string means the current run"},
+      "response_result": {
+        "runId": "string",
+        "projectId": "string",
+        "state": "IDLE|PLANNING|PREPARING|BUILDING|VERIFYING|CLEANUP|EXITING|READY|PAUSED|STOPPED|BLOCKED|FAILED",
+        "phase": "the current phase of the run",
+        "generation": "integer",
+        "schemaRevision": "integer",
+        "sitePreparation": {
+          "state": "NOT_STARTED|PLANNED|RUNNING|PAUSED|DONE|BLOCKED|UNKNOWN",
+          "plannedMutations": "integer",
+          "confirmedMutations": "integer",
+          "remainingMutations": "integer",
+          "clearance": "integer; confirmed cleared cells",
+          "foundation": "integer; confirmed foundation cells",
+          "access": "string; the confirmed state of the entrance access"
+        },
+        "progress": {
+          "targetCells": "integer",
+          "confirmedCells": "integer",
+          "requiredAirCells": "integer",
+          "confirmedAirCells": "integer"
+        },
+        "waitingReason": "string or null; why the run does not act right now",
+        "inputOwner": "builder|unionclef|foreign|none",
+        "controlReleased": "boolean; true when the module holds no game input",
+        "cleanupDebt": {"temporaryBlocks": "integer", "obligations": "integer"},
+        "mutations": {"physical": "integer", "commands": "integer", "teleports": "integer"},
+        "expert": {"state": "IDLE|PENDING|APPLIED|REJECTED|TIMEOUT|BLOCKED", "incidentId": "string or null"},
+        "updatedAtTick": "integer"
+      }
+    },
+    "pause": {
+      "summary": "Stops new game actions and revokes the permission of the module. The progress, the plan and the equipment are kept.",
+      "request": {"runId": "string, required"},
+      "response_result": {
+        "accepted": "boolean; the request was understood",
+        "controlReleased": "boolean; the module released its game input",
+        "state": "the state after the request",
+        "releaseLatencyTicks": "integer; the processed client ticks between the request and the release"
+      },
+      "note": "accepted is not controlReleased. The release must happen within two processed client ticks and must not wait for a task, for a cleanup, for a disk write or for a network answer."
+    },
+    "resume": {
+      "summary": "Continues the same run after the world and the control availability were checked again.",
+      "request": {"runId": "string, required"},
+      "response_result": {"accepted": "boolean", "state": "the state after the request", "generation": "integer"},
+      "rejections": {"run_terminal": "the run was stopped; a stopped project needs a new explicit start", "world_mismatch": "the world changed"}
+    },
+    "stop": {
+      "summary": "Makes the run terminal and revokes new actions. The cleanup debt is kept.",
+      "request": {"runId": "string, required"},
+      "response_result": {
+        "accepted": "boolean",
+        "controlReleased": "boolean",
+        "state": "STOPPED",
+        "cancellationReason": "string; the structured reason of the stop",
+        "releaseLatencyTicks": "integer"
+      },
+      "note": "A stopped run is never revived by a late model answer, by the end of a fight or by a reconnect. Continuing a stopped project requires a new explicit start."
+    },
+    "moduleStop": {
+      "summary": "Stops the current builder run if it has not ended. Does not change moduleEnabled or touch other addons.",
+      "request": {},
+      "response_result": {"accepted": "boolean", "moduleEnabled": "boolean", "runId": "string or null", "controlReleased": "boolean", "state": "current run state"}
+    },
+    "disable": {
+      "summary": "Performs moduleStop and prevents new builder runs until enable.",
+      "request": {},
+      "response_result": {"accepted": "boolean", "moduleEnabled": "false", "runId": "string or null", "controlReleased": "boolean", "state": "current run state"}
+    },
+    "enable": {
+      "summary": "Permits future explicit starts. Never resumes or starts any run.",
+      "request": {},
+      "response_result": {"accepted": "boolean", "moduleEnabled": "true", "runId": "string or null", "controlReleased": "boolean", "state": "current run state"}
+    },
+    "capabilities": {
+      "summary": "Describes what the module can do in the client right now.",
+      "request": {},
+      "response_result": {
+        "api": "string",
+        "moduleEnabled": "boolean",
+        "engine": "string or null; selected client executor, for lab diagnostics",
+        "interiorProtocol": "integer, optional; 1 supports painting verification",
+        "unionClef": {"loaded": "boolean", "taskChain": "boolean", "slotHandler": "boolean", "version": "string or null",
+                      "currentChain": "string or null; the chain that the scheduler of UnionClef selected",
+                      "userChainHeld": "boolean; true when the user chain of UnionClef is the selected one",
+                      "currentTask": "string or null; the task that the user chain holds"},
+        "world": {"server": "string or null", "dimension": "string or null", "connected": "boolean"},
+        "player": "string or null",
+        "ui": {
+          "screenOpen": "boolean; the module pauses while a screen is open",
+          "screen": "string or null; the class of the open screen",
+          "playerPresent": "boolean"
+        },
+        "allowedOperations": "array of strings",
+        "states": "array of strings"
+      }
+    }
+  },
+  "error_envelope": {
+    "ok": "false",
+    "error": {
+      "code": "one of the rejection codes of the operation",
+      "message": "human readable detail",
+      "retryable": "boolean"
+    }
+  },
+  "global_rules": {
+    "idempotency": "A repeated requestId with an identical payload preserves the existing run and reports duplicate=true. A repeated requestId with a different payload is rejected with duplicate_conflict.",
+    "world_binding": "A run is bound to the world identity of its context. A run whose context names another world is rejected before any mutation.",
+    "control_budget": "Pause and Stop release the game input of the module within two processed client ticks.",
+    "tokens": "Every run carries a run token, a generation and a lease. A callback of an older generation or of an ended run never receives a new permit.",
+    "ownership": "A module-wide stop affects only the jobs of the builder. The global control of other addons belongs to the caller.",
+    "terminal_states": "STOPPED, BLOCKED, FAILED and READY are terminal for the run of that generation."
+  }
+}

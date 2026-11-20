@@ -1,0 +1,18 @@
+{
+  "requestId":"request-access", "runId":"run-example", "generation":3, "schemaRevision":1, "permitGeneration":7,
+  "incident":{"id":"access-1", "kind":"access_lost", "goal":{"cell":{"x":10,"y":-58,"z":20},"expectedBlock":"minecraft:stone_bricks","expectedState":{}},"symptoms":["prior stance no longer reachable"],"attemptsBudgetUsed":0,"attemptsBudgetTotal":3},
+  "worldSnapshot":{"anchor":{"x":10,"y":-60,"z":20},"revision":"world-r43","known":[],"cells":[
+    {"x":10,"y":-58,"z":20,"block":"minecraft:air","state":{}},
+    {"x":10,"y":-60,"z":21,"block":"minecraft:stone","state":{}}, {"x":10,"y":-59,"z":21,"block":"minecraft:air","state":{}}, {"x":10,"y":-58,"z":21,"block":"minecraft:air","state":{}},
+    {"x":11,"y":-60,"z":21,"block":"minecraft:stone","state":{}}, {"x":11,"y":-59,"z":21,"block":"minecraft:air","state":{}}, {"x":11,"y":-58,"z":21,"block":"minecraft:air","state":{}},
+    {"x":9,"y":-60,"z":20,"block":"minecraft:stone","state":{}}, {"x":9,"y":-59,"z":20,"block":"minecraft:air","state":{}}, {"x":9,"y":-58,"z":20,"block":"minecraft:stone_bricks","state":{}}
+  ]},
+  "ownership":{"inputOwner":"none","controlHeld":false,"availableActions":["move","place_block","send_command","observe"],"commandReserveAllowed":true},
+  "attemptLedger":{"records":[
+    {"id":"route-north","type":"route","runId":"run-example","projectId":"project-example","worldUid":"world-example","goal":{"x":11,"y":-58,"z":20},"cells":[{"x":11,"y":-59,"z":21},{"x":10,"y":-59,"z":21}],"status":"working","supports":[{"x":10,"y":-60,"z":21,"block":"minecraft:stone"}],"observedAtTick":15,"revision":"world-r31","note":"actually observed north approach"},
+    {"id":"route-west","type":"route","runId":"run-example","projectId":"project-example","worldUid":"world-example","goal":{"x":10,"y":-58,"z":20},"cells":[{"x":9,"y":-59,"z":20}],"status":"blocked","supports":[{"x":9,"y":-60,"z":20,"block":"minecraft:stone"}],"observedAtTick":19,"revision":"world-r39","note":"head clearance blocked by a wall"},
+    {"id":"route-south","type":"route","runId":"run-example","projectId":"project-example","worldUid":"world-example","goal":{"x":10,"y":-58,"z":20},"cells":[{"x":12,"y":-59,"z":20}],"status":"interrupted","supports":[],"observedAtTick":20,"revision":"world-r41","note":"defense displacement"}
+  ]},
+  "plan":{"currentStepId":"building-goal","steps":[{"id":"building-goal","kind":"place_block","cells":[{"x":10,"y":-58,"z":20}],"dependsOn":[],"cleanupIds":[]}]},
+  "options":{"allowCommandReserve":true,"deadlineMillis":3000}
+}

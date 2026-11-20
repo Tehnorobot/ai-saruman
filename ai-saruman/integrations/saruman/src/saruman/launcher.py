@@ -117,16 +117,20 @@ def main(argv=None) -> int:
         if cancelled():return 0
 
         # Run always validates services, but never requests a model generation.
+        failed_checks = []
         healthy = check(
             live=args.live or args.command == "run",
             no_stt=args.no_stt,
             no_filter=args.no_filter,
             no_redis=args.no_redis,
+            failed_checks=failed_checks,
         )
         if cancelled():return 0
         if not healthy:
             if managed:
-                managed.phase_changed("waiting_services", "Игровая проверка не пройдена; проверьте Doctor и службы")
+                findings = ", ".join(failed_checks)
+                reason = f"Игровая проверка не пройдена ({findings})" if findings else "Игровая проверка не пройдена"
+                managed.phase_changed("waiting_services", reason)
                 managed.step()
             return 1
         if args.command == "doctor":

@@ -541,6 +541,7 @@ class HybridAgent:
         self.save_intent(request)
         game = self.ctx_swarm["game"]
         game["mod_player_pending_until"] = self.clock() + 30
+        game["mod_pending_source"] = request["source"]
         role = route_request(raw, event.type == "directive")
         if role == "action":
             request["action_sent"], request["state"] = True, "deciding"
@@ -803,10 +804,11 @@ class HybridAgent:
         self.maybe_remark()
         # Do not occupy the single speech worker with a speculative acknowledgement:
         # a slow provider would delay the actual decision/result behind stale speech.
-        has_player_work = any(
-            r["state"] in {"deciding", "waiting"} and self.active(r)
-            for r in self.requests.values()
-        )
+        pending_sources = {r["source"] for r in self.requests.values()
+                           if r["state"] in {"deciding", "waiting"} and self.active(r)}
+        has_player_work = bool(pending_sources)
+        self.ctx_swarm["game"]["mod_pending_source"] = (
+            "operator" if "operator" in pending_sources else "player" if pending_sources else "")
         self.ctx_swarm["game"]["mod_player_pending_until"] = (
             self.clock() + 10 if has_player_work else 0
         )

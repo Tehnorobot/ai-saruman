@@ -122,10 +122,10 @@ def validate_profile(value, options=None):
     return dict(value)
 
 
-def read_profiles(path=None):
+def read_profiles(path=None, adapter_roles=()):
     """Read-only doctor support, including before the first UI startup."""
     path = Path(path or os.getenv("SARUMAN_ROLE_DB", ROOT / "data/role-models.sqlite"))
-    result = {role: {**default_profile(), "revision": 0} for role in ROLES}
+    result = {role: {**default_profile(), "revision": 0} for role in (*ROLES, *adapter_roles)}
     if not path.exists():
         return result
     options = catalogue(path)
@@ -133,7 +133,9 @@ def read_profiles(path=None):
         for role, revision, body in db.execute(
             "SELECT role,revision,body FROM profiles"
         ):
-            if role not in ROLES:
+            if role not in result and role.startswith("adapter:"):
+                continue  # Adapter profiles are owned by Lab, shared storage also serves the game runtime.
+            if role not in result:
                 raise ValueError("Неизвестная сохранённая роль")
             result[role] = {**validate_profile(json.loads(body), options), "revision": revision}
     return result
@@ -173,12 +175,17 @@ def pid_alive(pid):
     return True
 
 
+class RoleBudgetExceeded(RuntimeError):
+    pass
+
+
 class RoleStore:
-    def __init__(self, path=None):
+    def __init__(self, path=None, adapter_roles=()):
         self.path = Path(
             path or os.getenv("SARUMAN_ROLE_DB", ROOT / "data/role-models.sqlite")
         )
         self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.adapter_roles = tuple(adapter_roles)
         with self.connect() as db:
             db.execute(
                 "CREATE TABLE IF NOT EXISTS profiles (role TEXT PRIMARY KEY, revision INTEGER, body TEXT)"
@@ -204,10 +211,10 @@ class RoleStore:
             yield db
 
     def profiles(self):
-        return read_profiles(self.path)
+        return read_profiles(self.path, self.adapter_roles)
 
     def save(self, role, profile, *, paused, expected_revision=None):
-        if role not in ROLES or not paused:
+        if role not in (*ROLES, *self.adapter_roles) or not paused:
             raise ValueError(
                 "Для изменения модели нажмите Stop и дождитесь завершения запросов"
             )
@@ -250,17 +257,21 @@ class RoleStore:
                 "INSERT OR IGNORE INTO sessions VALUES (?,?)", (session, os.getpid())
             )
             rows = db.execute(
-                "SELECT state,usage,reserve FROM requests WHERE session=? AND role=?",
+                "SELECT state,usage,reserve,provider,reason FROM requests WHERE session=? AND role=?",
                 (session, role),
             ).fetchall()
             if len(rows) >= profile["max_calls"]:
-                raise RuntimeError("Исчерпан лимит запросов роли за запуск")
+                raise RoleBudgetExceeded("Исчерпан лимит запросов роли за запуск")
             consumed = 0
             for row in rows:
                 usage = json.loads(row["usage"] or "{}")
-                consumed += usage.get("total_tokens", row["reserve"])
+                if "total_tokens" in usage:
+                    consumed += usage["total_tokens"]
+                elif not (row["state"] == "error" and row["provider"] == "codex"
+                          and (row["reason"] or "").startswith("RuntimeError: Codex account/read:")):
+                    consumed += row["reserve"]
             if consumed + estimate > profile["token_budget"]:
-                raise RuntimeError(
+                raise RoleBudgetExceeded(
                     "Недостаточно остатка бюджета роли для этого запроса"
                 )
             db.execute(

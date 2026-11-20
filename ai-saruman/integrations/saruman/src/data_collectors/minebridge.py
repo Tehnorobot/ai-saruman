@@ -11,6 +11,8 @@ import traceback
 from datetime import datetime
 
 from py4j.java_gateway import JavaGateway
+from py4j.protocol import Py4JNetworkError
+from redis.exceptions import RedisError
 
 if __name__ == "__main__":
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
@@ -846,6 +848,10 @@ def mine_bridge_handler(ctx_swarm: CtxSwarmType, debug: bool = False):
                     listner_thread.join()
                     print(f"Phase {str(i)} ended. Running next")
             updaterThread.join()
+        except Py4JNetworkError as err:
+            health.unavailable(err)
+            print("[Mine Bridge] Клиент Minecraft / UnionClef недоступен. Повтор через 5 с.")
+            time.sleep(5)
         except Exception as err:
             health.unavailable(err)
             print("Mine Bridge Произошла большая ошибка >", err)
@@ -863,8 +869,12 @@ def mine_bridge_handler(ctx_swarm: CtxSwarmType, debug: bool = False):
                 if java_gateway is not None:
                     if mod_runtime is not None:
                         native_was_enabled = mod_runtime.was_enabled
+                    try:
+                        preserve_goals = bool(ctx_env["actived"] and ctx_env.get("agent_enabled"))
+                    except (KeyError, RedisError):
+                        preserve_goals = True
                     close_bridge(java_gateway, native=mod_runtime, water=water_safety, combat=combat_reflex,
-                                 preserve_goals=bool(ctx_env["actived"] and ctx_env.get("agent_enabled")))
+                                 preserve_goals=preserve_goals)
                     if chat_queue_thread is not None:
                         chat_queue_thread.join(6)
                     time.sleep(1)

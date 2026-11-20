@@ -9,9 +9,10 @@ import unittest
 from unittest.mock import Mock, MagicMock, patch
 from types import SimpleNamespace
 
-from saruman.runtime import CharacterRuntime, MinecraftProcess, atomic_json
+from saruman.runtime import GAME_RECOVERY_GRACE, GAME_RESTART_GRACE, CharacterRuntime, MinecraftProcess, atomic_json
 from saruman.telegram import Director, Store
 from saruman.roles import load
+from saruman.workflows import Workflows
 
 
 class FakeGame:
@@ -96,6 +97,17 @@ class LifecycleTests(unittest.TestCase):
         with patch.object(self.store,'set_meta',side_effect=sqlite3.OperationalError('database is locked')):
             result=self.runtime.stop()
         self.assertFalse(result['active']);self.assertFalse(self.game.active);self.assertIsNone(self.game.directive)
+
+    def test_stop_cancels_saved_game_work_even_when_start_is_pressed_again(self):
+        flow = self.runtime.workflows = Workflows(self.root, self.store, self.runtime, Mock())
+        flow.start = Mock()
+        self.runtime.start({'minecraft':False})
+        flow.create('old-build', [{'operation':'game_task','text':'Построй дом'}], 'Построй дом')
+        self.runtime.stop()
+        self.runtime.start({'minecraft':False})
+        flow.step()
+        self.assertIsNone(self.runtime.game.directive)
+        self.assertEqual(flow.get('old-build')['status'], 'cancelled')
 
     def test_cached_running_state_is_not_shown_when_lifecycle_thread_died(self):
         self.runtime.active=True;self.runtime.last_tick=time.time()
@@ -374,6 +386,104 @@ class FilterProcessTests(unittest.TestCase):
         self.game.process.poll.return_value=0;self.game.step()
         with patch('saruman.runtime.subprocess.Popen') as spawn:self.game.step()
         spawn.assert_not_called();self.assertEqual(self.game.value['status'],'stopped')
+
+    def observation(self, **fields):
+        atomic_json(self.game.directory/'status.json', {
+            'worker_id':'owned', 'updated':self.now, 'phase':'ready',
+            'agent_running':True, 'native_updated':self.now, **fields,
+        })
+        self.game.step()
+
+    def test_stale_native_state_recovers_with_orderly_worker_restart(self):
+        self.ready()
+        old_observation = self.now - 100
+        self.observation(native_updated=old_observation, native_fresh=False)
+        self.assertEqual(self.game.value['status'], 'unavailable')
+        self.now += GAME_RECOVERY_GRACE
+        self.observation(native_updated=old_observation, native_fresh=False)
+        command = self.game.read('command.json')
+        self.assertEqual(command['worker_id'], 'owned')
+        self.assertFalse(command['active'])
+        self.assertTrue(command['shutdown'])
+        self.assertEqual(self.game.value['status'], 'restarting')
+
+        self.game.process.poll.return_value = 0
+        self.game.step()
+        self.assertIsNone(self.game.worker_id)
+        self.assertTrue(self.game.requested)
+        self.assertIn('owned', self.game.finished_workers)
+
+        game_root = self.root/'integrations/saruman'
+        python = game_root/'.venv/Scripts/python.exe'
+        python.parent.mkdir(parents=True)
+        python.touch()
+        (game_root/'.env.saruman').touch()
+        def connect(address, **_):
+            if address[1] == 22228:
+                raise OSError('old worker is gone')
+            return MagicMock()
+        with (patch('saruman.runtime.os', SimpleNamespace(name='nt', environ={})),
+              patch('saruman.runtime.socket.create_connection', side_effect=connect),
+              patch('saruman.runtime.subprocess.Popen') as spawn):
+            self.game.step()
+        spawn.assert_called_once()
+        new_owner = self.game.read('command.json')
+        self.assertNotEqual(new_owner['worker_id'], 'owned')
+        self.assertTrue(new_owner['active'])
+        self.assertFalse(new_owner['shutdown'])
+
+    def test_brief_disconnect_and_fresh_menu_do_not_trigger_restart(self):
+        self.ready()
+        self.observation(native_fresh=False)
+        self.now += GAME_RECOVERY_GRACE - 1
+        self.observation(native_fresh=True, world_ready=False, native_bridge_alive=True)
+        self.now += GAME_RECOVERY_GRACE + 1
+        self.observation(native_fresh=True, world_ready=False, native_bridge_alive=True)
+        self.assertEqual(self.game.value['status'], 'waiting_world')
+        self.assertFalse(self.game.read('command.json')['shutdown'])
+
+    def test_unresponsive_owned_worker_is_terminated_before_replacement(self):
+        self.ready()
+        self.observation(native_fresh=False)
+        self.now += GAME_RECOVERY_GRACE
+        self.observation(native_fresh=False)
+        self.now += GAME_RESTART_GRACE - 1
+        self.game.step()
+        self.game.process.terminate.assert_not_called()
+        self.now += 1
+        with patch('saruman.runtime.subprocess.Popen') as spawn:
+            self.game.step()
+        self.game.process.terminate.assert_called_once()
+        spawn.assert_not_called()
+        self.assertTrue(self.game.read('command.json')['shutdown'])
+        self.assertEqual(self.game.value['status'], 'restarting')
+
+    def test_watchdog_recovers_a_worker_that_never_publishes_startup_state(self):
+        self.game.request(True)
+        self.game.worker_id = 'owned'
+        self.game.process = Mock()
+        self.game.process.poll.return_value = None
+        self.game.step()
+        self.now += GAME_RECOVERY_GRACE
+        self.game.step()
+        self.assertEqual(self.game.value['status'], 'restarting')
+        self.game.process.terminate.assert_not_called()
+
+    def test_waiting_for_a_service_with_live_heartbeat_does_not_restart_worker(self):
+        self.ready()
+        for _ in range(3):
+            self.observation(phase='starting')
+            self.now += GAME_RECOVERY_GRACE + 1
+        self.assertFalse(self.game.read('command.json')['shutdown'])
+        self.game.process.terminate.assert_not_called()
+
+    def test_stale_state_does_not_override_native_manual_pause(self):
+        self.ready()
+        self.observation(manual_stop_latched=True, native_stop_kind='manual')
+        self.observation(native_fresh=False, native_bridge_alive=False)
+        self.now += GAME_RECOVERY_GRACE
+        self.observation(native_fresh=False, native_bridge_alive=False)
+        self.assertFalse(self.game.read('command.json')['shutdown'])
 
     def test_disabled_filter_adds_cli_flag_only_after_explicit_selection(self):
         game_root=self.root/'integrations/saruman'
